@@ -2,6 +2,7 @@
 
 ```shell
 $ git checkout rocm-v1
+
 $ ./configure 
 You have bazel 0.5.4 installed.
 Please specify the location of python. [Default is /usr/bin/python]: 
@@ -33,5 +34,7 @@ CUDA support will be enabled for TensorFlow
 Do you wish to build TensorFlow with MPI support? [y/N] n
 MPI support will not be enabled for TensorFlow
 Configuration finished
+
+$ bazel build --config=opt --config=rocm //tensorflow/tools/pip_package:build_pip_package 
 
 ```
