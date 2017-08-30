@@ -65,3 +65,30 @@ cc_library(
     ]),
     alwayslink = 1,
 )
+
+cc_library(
+    name = "rocm_platform",
+    srcs = if_rocm_is_configured(
+        glob(
+            [
+                "rocm/*.cc",
+            ],
+            exclude = ["rocm/rocm_platform_id.cc"],
+        ),
+    ),
+    linkopts = select({
+        "//tensorflow:freebsd": [],
+        "//conditions:default": ["-ldl"],
+    }),
+    visibility = ["//visibility:public"],
+    deps = [
+        ":stream_executor",
+        "//tensorflow/core:lib",
+        "@local_config_rocm//rocm:rocm_headers",
+    ] + if_rocm_is_configured([
+        "//tensorflow/core:rocm",
+        "@local_config_rocm//cuda:rocblas",
+        "@local_config_rocm//cuda:rocm_driver",
+    ]),
+    alwayslink = 1,
+)

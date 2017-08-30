@@ -1,6 +1,7 @@
 # TensorFlow external dependencies that can be loaded in WORKSPACE files.
 
 load("//third_party/gpus:cuda_configure.bzl", "cuda_configure")
+load("//third_party/gpus:rocm_configure.bzl", "rocm_configure")
 load("//third_party/sycl:sycl_configure.bzl", "sycl_configure")
 load("@io_bazel_rules_closure//closure/private:java_import_external.bzl", "java_import_external")
 load("@io_bazel_rules_closure//closure:defs.bzl", "filegroup_external")
@@ -138,6 +139,7 @@ def tf_workspace(path_prefix="", tf_repo_name=""):
   # version we require here.
   check_version("0.4.5")
   cuda_configure(name="local_config_cuda")
+  rocm_configure(name="local_config_rocm")
   sycl_configure(name="local_config_sycl")
   python_configure(name="local_config_python")
   if path_prefix:

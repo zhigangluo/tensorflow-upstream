@@ -445,6 +445,21 @@ done
 export TF_NEED_CUDA
 write_action_env_to_bazelrc "TF_NEED_CUDA" "$TF_NEED_CUDA"
 
+while [ "$TF_NEED_ROCM" == "" ]; do
+  read -p "Do you wish to build TensorFlow with ROCM support? [y/N] " INPUT
+  case $INPUT in
+    [Yy]* ) echo "CUDA support will be enabled for TensorFlow"; TF_NEED_ROCM=1;;
+    [Nn]* ) echo "No CUDA support will be enabled for TensorFlow"; TF_NEED_ROCM=0;;
+    "" ) echo "No CUDA support will be enabled for TensorFlow"; TF_NEED_ROCM=0;;
+    * ) echo "Invalid selection: " $INPUT;;
+  esac
+done
+
+export TF_NEED_ROCM
+write_action_env_to_bazelrc "TF_NEED_ROCM" "$TF_NEED_ROCM"
+write_action_env_to_bazelrc "ROCM_TOOLKIT_PATH" "/opt/rocm"
+
+
 export TF_NEED_OPENCL
 write_action_env_to_bazelrc "TF_NEED_OPENCL" "$TF_NEED_OPENCL"
 
@@ -549,6 +564,10 @@ done
 
 export TF_CUDA_VERSION
 write_action_env_to_bazelrc "TF_CUDA_VERSION" "$TF_CUDA_VERSION"
+
+
+# Find out where the CUDA toolkit is installed
+
 
 # Set up which gcc nvcc should use as the host compiler
 # No need to set this on Windows
