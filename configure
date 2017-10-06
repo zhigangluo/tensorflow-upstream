@@ -376,11 +376,11 @@ fi
 
 ## Enable XLA.
 while [[ "$TF_ENABLE_XLA" == "" ]]; do
-  read -p "Do you wish to build TensorFlow with the XLA just-in-time compiler (experimental)? [y/N] " INPUT
+  read -p "Do you wish to build TensorFlow with the XLA just-in-time compiler (experimental)? [Y/n] " INPUT
   case $INPUT in
     [Yy]* ) echo "XLA JIT support will be enabled for TensorFlow"; TF_ENABLE_XLA=1;;
     [Nn]* ) echo "No XLA JIT support will be enabled for TensorFlow"; TF_ENABLE_XLA=0;;
-    "" ) echo "No XLA support will be enabled for TensorFlow"; TF_ENABLE_XLA=0;;
+    "" ) echo "XLA support will be enabled for TensorFlow"; TF_ENABLE_XLA=1;;
     * ) echo "Invalid selection: " $INPUT;;
   esac
 done
@@ -442,23 +442,22 @@ while [ "$TF_NEED_CUDA" == "" ]; do
   esac
 done
 
-export TF_NEED_CUDA
-write_action_env_to_bazelrc "TF_NEED_CUDA" "$TF_NEED_CUDA"
-
 while [ "$TF_NEED_ROCM" == "" ]; do
-  read -p "Do you wish to build TensorFlow with ROCM support? [y/N] " INPUT
+  read -p "Do you wish to build TensorFlow with ROCM support? [Y/n] " INPUT
   case $INPUT in
-    [Yy]* ) echo "CUDA support will be enabled for TensorFlow"; TF_NEED_ROCM=1;;
-    [Nn]* ) echo "No CUDA support will be enabled for TensorFlow"; TF_NEED_ROCM=0;;
-    "" ) echo "No CUDA support will be enabled for TensorFlow"; TF_NEED_ROCM=0;;
+    [Yy]* ) echo "ROCM support will be enabled for TensorFlow"; TF_NEED_ROCM=1;;
+    [Nn]* ) echo "No ROCM support will be enabled for TensorFlow"; TF_NEED_ROCM=0;;
+    "" ) echo "ROCM support will be enabled for TensorFlow"; TF_NEED_ROCM=1;;
     * ) echo "Invalid selection: " $INPUT;;
   esac
 done
 
+export TF_NEED_CUDA
+write_action_env_to_bazelrc "TF_NEED_CUDA" "$TF_NEED_CUDA"
+
 export TF_NEED_ROCM
 write_action_env_to_bazelrc "TF_NEED_ROCM" "$TF_NEED_ROCM"
 write_action_env_to_bazelrc "ROCM_TOOLKIT_PATH" "/opt/rocm"
-
 
 export TF_NEED_OPENCL
 write_action_env_to_bazelrc "TF_NEED_OPENCL" "$TF_NEED_OPENCL"
