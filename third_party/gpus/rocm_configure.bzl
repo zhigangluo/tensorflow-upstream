@@ -135,7 +135,7 @@ def _find_libs(repository_ctx, rocm_config):
           "hip_hcc_static", repository_ctx, cpu_value,
           rocm_config.rocm_toolkit_path, static=True),
       "rocblas": _find_rocm_lib(
-          "rocblas-hcc", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path),
+          "rocblas", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path),
   }
 
 
