@@ -1,6 +1,7 @@
 licenses(["restricted"])
 
 load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda_is_configured")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm_is_configured")
 
 cc_library(
     name = "stream_executor",

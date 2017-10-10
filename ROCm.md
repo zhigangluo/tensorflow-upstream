@@ -1,4 +1,4 @@
-# How to use on ROCM Machine
+# How to use on ROCm Machine
 
 ```shell
 $ git checkout rocm-v1
@@ -29,7 +29,7 @@ Do you wish to build TensorFlow with OpenCL support? [y/N] n
 No OpenCL support will be enabled for TensorFlow
 Do you wish to build TensorFlow with CUDA support? [y/N] n
 No CUDA support will be enabled for TensorFlow
-Do you wish to build TensorFlow with ROCM support? [y/N] y
+Do you wish to build TensorFlow with ROCm support? [y/N] y
 CUDA support will be enabled for TensorFlow
 Do you wish to build TensorFlow with MPI support? [y/N] n
 MPI support will not be enabled for TensorFlow

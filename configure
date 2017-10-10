@@ -443,11 +443,11 @@ while [ "$TF_NEED_CUDA" == "" ]; do
 done
 
 while [ "$TF_NEED_ROCM" == "" ]; do
-  read -p "Do you wish to build TensorFlow with ROCM support? [Y/n] " INPUT
+  read -p "Do you wish to build TensorFlow with ROCm support? [Y/n] " INPUT
   case $INPUT in
-    [Yy]* ) echo "ROCM support will be enabled for TensorFlow"; TF_NEED_ROCM=1;;
-    [Nn]* ) echo "No ROCM support will be enabled for TensorFlow"; TF_NEED_ROCM=0;;
-    "" ) echo "ROCM support will be enabled for TensorFlow"; TF_NEED_ROCM=1;;
+    [Yy]* ) echo "ROCm support will be enabled for TensorFlow"; TF_NEED_ROCM=1;;
+    [Nn]* ) echo "No ROCm support will be enabled for TensorFlow"; TF_NEED_ROCM=0;;
+    "" ) echo "ROCm support will be enabled for TensorFlow"; TF_NEED_ROCM=1;;
     * ) echo "Invalid selection: " $INPUT;;
   esac
 done
