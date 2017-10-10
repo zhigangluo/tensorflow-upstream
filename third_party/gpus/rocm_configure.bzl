@@ -549,6 +549,7 @@ def _create_local_rocm_repository(repository_ctx):
            "%{rocm_include_path}": _rocm_include_path(repository_ctx,
                                                       rocm_config),
            "%{host_compiler_includes}": host_compiler_includes,
+           "%{clang_path}": str(cc),
        }
 
   _tpl(repository_ctx, "crosstool:CROSSTOOL_clang", rocm_defines, out="crosstool/CROSSTOOL")
