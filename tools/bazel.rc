@@ -1,7 +1,7 @@
 build:cuda --crosstool_top=@local_config_cuda//crosstool:toolchain
 build:cuda --define=using_cuda=true --define=using_cuda_nvcc=true
 
-build:rocm --crosstool_top=@local_config_rocm
+build:rocm --crosstool_top=@local_config_rocm//crosstool:toolchain
 build:rocm --define=using_rocm=true
 
 build:cuda_clang --crosstool_top=@local_config_cuda//crosstool:toolchain

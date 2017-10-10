@@ -550,6 +550,8 @@ def _create_local_rocm_repository(repository_ctx):
                                                       rocm_config),
            "%{host_compiler_includes}": host_compiler_includes,
        }
+
+  _tpl(repository_ctx, "crosstool:CROSSTOOL_clang", rocm_defines, out="crosstool/CROSSTOOL")
   _tpl(repository_ctx,
        "crosstool:clang/bin/crosstool_wrapper_driver_is_not_gcc",
        {
