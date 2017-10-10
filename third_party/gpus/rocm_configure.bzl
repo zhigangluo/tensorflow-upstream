@@ -1,3 +1,24 @@
+# -*- Python -*-
+"""Repository rule for ROCm autoconfiguration.
+
+`rocm_configure` depends on the following environment variables:
+
+  * `TF_NEED_CUDA`: Whether to enable building with CUDA.
+  * `GCC_HOST_COMPILER_PATH`: The GCC host compiler path
+  * `TF_CUDA_CLANG`: Whether to use clang as a cuda compiler.
+  * `CLANG_CUDA_COMPILER_PATH`: The clang compiler path that will be used for
+    both host and device code compilation if TF_CUDA_CLANG is 1.
+  * `CUDA_TOOLKIT_PATH`: The path to the CUDA toolkit. Default is
+    `/usr/local/cuda`.
+  * `TF_CUDA_VERSION`: The version of the CUDA toolkit. If this is blank, then
+    use the system default.
+  * `TF_CUDNN_VERSION`: The version of the cuDNN library.
+  * `CUDNN_INSTALL_PATH`: The path to the cuDNN library. Default is
+    `/usr/local/cuda`.
+  * `TF_CUDA_COMPUTE_CAPABILITIES`: The CUDA compute capabilities. Default is
+    `3.5,5.2`.
+"""
+
 _GCC_HOST_COMPILER_PATH = "GCC_HOST_COMPILER_PATH"
 _ROCM_TOOLKIT_PATH = "ROCM_TOOLKIT_PATH"
 _DEFAULT_ROCM_TOOLKIT_PATH = "/opt/rocm"
@@ -565,3 +586,14 @@ rocm_configure = repository_rule(
     ],
 )
 
+"""Detects and configures the local ROCm toolchain.
+
+Add the following to your WORKSPACE FILE:
+
+```python
+rocm_configure(name = "local_config_rocm")
+```
+
+Args:
+  name: A unique name for this workspace rule.
+"""
