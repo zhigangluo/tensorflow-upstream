@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-bazel build --config=opt --config=rocm //tensorflow/tools/pip_package:build_pip_package
+bazel build --config=opt --config=rocm //tensorflow/tools/pip_package:build_pip_package --keep_going --verbose_failures
