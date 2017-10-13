@@ -19,7 +19,7 @@ namespace perftools {
 namespace gputools {
 namespace rocm {
 
-PLATFORM_DEFINE_ID(kRocmPlatformId);
+PLATFORM_DEFINE_ID(kROCmPlatformId);
 
 }  // namespace rocm
 }  // namespace gputools

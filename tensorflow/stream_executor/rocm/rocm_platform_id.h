@@ -22,15 +22,15 @@ namespace perftools {
 namespace gputools {
 namespace rocm {
 
-// Opaque and unique identifier for the cuda platform.
+// Opaque and unique identifier for the ROCm platform.
 // This is needed so that plugins can refer to/identify this platform without
-// instantiating a CudaPlatform object.
-// This is broken out here to avoid a circular dependency between CudaPlatform
-// and CudaExecutor.
-extern const Platform::Id kRocmPlatformId;
+// instantiating a ROCmPlatform object.
+// This is broken out here to avoid a circular dependency between ROCmPlatform
+// and ROCmExecutor.
+extern const Platform::Id kROCmPlatformId;
 
 }  // namespace rocm
 }  // namespace gputools
 }  // namespace perftools
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_PLATFORM_ID_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_PLATFORM_ID_H_
