@@ -196,7 +196,7 @@ cc_library(
     deps = [
         "//tensorflow/core:framework",
         "//tensorflow/core:lib",
-        "//third_party/py/numpy:headers",
+        #"//third_party/py/numpy:headers",
         "//util/python:python_headers",
     ],
 )
@@ -235,7 +235,7 @@ cc_library(
         "//tensorflow/core:lib",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:script_ops_op_lib",
-        "//third_party/py/numpy:headers",
+        #"//third_party/py/numpy:headers",
         "//util/python:python_headers",
     ],
 )
@@ -2747,7 +2747,7 @@ tf_cuda_library(
         "//tensorflow/core:framework_internal",
         "//tensorflow/core:lib",
         "//tensorflow/core:protos_all_cc",
-        "//third_party/py/numpy:headers",
+        #"//third_party/py/numpy:headers",
         "//util/python:python_headers",
     ],
 )
