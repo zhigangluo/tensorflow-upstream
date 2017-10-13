@@ -35,6 +35,8 @@ cc_library(
     deps = [
         "//tensorflow/core:lib",
         "@local_config_cuda//cuda:cuda_headers",
+        # FIXME need to fix rocm_configure.bzl before turn this on
+        #"@local_config_rocm//rocm:rocm_headers",
     ],
     alwayslink = 1,
 )
@@ -90,8 +92,8 @@ cc_library(
         "@local_config_rocm//rocm:rocm_headers",
     ] + if_rocm_is_configured([
         "//tensorflow/core:rocm",
-        "@local_config_rocm//cuda:rocblas",
-        "@local_config_rocm//cuda:rocm_driver",
+        "@local_config_rocm//rocm:rocblas",
+        "@local_config_rocm//rocm:rocm_driver",
     ]),
     alwayslink = 1,
 )
