@@ -10,6 +10,7 @@ cc_library(
             "*.cc",
             "host/*.cc",
             "cuda/cuda_platform_id.cc",
+            "rocm/rocm_platform_id.cc",
             "lib/*.cc",
             "platform/default/*.cc",
         ],
@@ -20,6 +21,7 @@ cc_library(
     hdrs = glob([
         "*.h",
         "cuda/*.h",
+        "rocm/*.h",
         "host/*.h",
         "lib/*.h",
         "lib/gtl/*.h",
