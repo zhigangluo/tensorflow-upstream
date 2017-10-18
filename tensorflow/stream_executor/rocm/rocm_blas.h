@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// ROCM-specific support for BLAS functionality -- this wraps the cuBLAS library
+// ROCM-specific support for BLAS functionality -- this wraps the HIPBLAS library
 // capabilities, and is only included into ROCM implementation code -- it will
 // not introduce rocm headers into other code.
 
@@ -27,8 +27,6 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform/thread_annotations.h"
 #include "tensorflow/stream_executor/plugin_registry.h"
 
-typedef struct cublasContext *cublasHandle_t;
-
 namespace perftools {
 namespace gputools {
 
@@ -36,18 +34,18 @@ class Stream;
 
 namespace rocm {
 
-// Opaque and unique identifier for the cuBLAS plugin.
-extern const PluginId kCuBlasPlugin;
+// Opaque and unique identifier for the HIPBLAS plugin.
+extern const PluginId kHipBlasPlugin;
 
 class ROCMExecutor;
 
-// BLAS plugin for ROCM platform via cuBLAS library.
+// BLAS plugin for ROCM platform via HIPBLAS library.
 //
 // This satisfies the platform-agnostic BlasSupport interface.
 //
-// Note that the cuBLAS handle that this encapsulates is implicitly tied to the
+// Note that the HIPBLAS handle that this encapsulates is implicitly tied to the
 // context (and, as a result, the device) that the parent ROCMExecutor is tied
-// to. This simply happens as an artifact of creating the cuBLAS handle when a
+// to. This simply happens as an artifact of creating the HIPBLAS handle when a
 // ROCM context is active.
 //
 // Thread-safe post-initialization.
@@ -55,49 +53,49 @@ class ROCMBlas : public blas::BlasSupport {
  public:
   explicit ROCMBlas(ROCMExecutor *parent);
 
-  // Allocates a cuBLAS handle.
+  // Allocates a HIPBLAS handle.
   bool Init();
 
-  // Releases the cuBLAS handle, if present.
+  // Releases the HIPBLAS handle, if present.
   ~ROCMBlas() override;
 
   TENSORFLOW_STREAM_EXECUTOR_GPU_BLAS_SUPPORT_OVERRIDES
 
  private:
-  // Tells cuBLAS to enqueue the BLAS operation onto a particular Stream.
+  // Tells HIPBLAS to enqueue the BLAS operation onto a particular Stream.
   //
-  // cuBLAS is stateful, and only be associated with one stream (in order to
+  // HIPBLAS is stateful, and only be associated with one stream (in order to
   // enqueue dispatch) at a given time. As a result, this generally must be
-  // invoked before calling into cuBLAS.
+  // invoked before calling into HIPBLAS.
   bool SetStream(Stream *stream) EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
-  // A helper function that calls the real cuBLAS function together with error
+  // A helper function that calls the real HIPBLAS function together with error
   // handling.
   //
-  // cublas_func:        cuBLAS function pointer.
-  // cublas_name:        cuBLAS function name.
+  // hipblas_func:        HIPBLAS function pointer.
+  // hipblas_name:        HIPBLAS function name.
   // stream:             Stream to enqueue the BLAS operation onto.
   // pointer_mode_host:  Indicate if the pointer to a scalar value is from host
   //                     (true) or device (false).
-  // err_on_failure:     Whether to print an error if the cublas function fails.
-  // args:               Arguments of cuBLAS function.
+  // err_on_failure:     Whether to print an error if the hipblas function fails.
+  // args:               Arguments of HIPBLAS function.
   template <typename FuncT, typename... Args>
-  bool DoBlasInternalImpl(FuncT cublas_func, Stream *stream,
+  bool DoBlasInternalImpl(FuncT hipblas_func, Stream *stream,
                           bool pointer_mode_host, bool err_on_failure,
                           Args... args);
 
   // Convenience functions that call DoBlasInternalImpl with different values
   // for err_on_failure.
   template <typename FuncT, typename... Args>
-  bool DoBlasInternal(FuncT cublas_func, Stream *stream, bool pointer_mode_host,
+  bool DoBlasInternal(FuncT hipblas_func, Stream *stream, bool pointer_mode_host,
                       Args... args) {
-    return DoBlasInternalImpl(cublas_func, stream, pointer_mode_host,
+    return DoBlasInternalImpl(hipblas_func, stream, pointer_mode_host,
                               /*err_on_failure=*/true, args...);
   }
   template <typename FuncT, typename... Args>
-  bool DoBlasInternalFailureOK(FuncT cublas_func, Stream *stream,
+  bool DoBlasInternalFailureOK(FuncT hipblas_func, Stream *stream,
                                bool pointer_mode_host, Args... args) {
-    return DoBlasInternalImpl(cublas_func, stream, pointer_mode_host,
+    return DoBlasInternalImpl(hipblas_func, stream, pointer_mode_host,
                               /*err_on_failure=*/false, args...);
   }
 
@@ -105,7 +103,7 @@ class ROCMBlas : public blas::BlasSupport {
   // types.
   template <typename T, typename FuncT>
   port::Status DoBlasGemmBatchedInternal(
-      FuncT cublas_func, Stream *stream, blas::Transpose transa,
+      FuncT hipblas_func, Stream *stream, blas::Transpose transa,
       blas::Transpose transb, uint64 m, uint64 n, uint64 k, T alpha,
       const port::ArraySlice<DeviceMemory<T> *> &a_array, int lda,
       const port::ArraySlice<DeviceMemory<T> *> &b_array, int ldb, T beta,
@@ -116,7 +114,7 @@ class ROCMBlas : public blas::BlasSupport {
   //
   // We take alpha and beta by const reference because T might be Eigen::half,
   // and we want to avoid pulling in a dependency on Eigen.  When we pass the
-  // references to cublas, we essentially reinterpret_cast to __half, which is
+  // references to hipblas, we essentially reinterpret_cast to __half, which is
   // safe because Eigen::half inherits from __half.
   template <typename InT, typename OutT, typename CompT>
   bool DoBlasGemmWithAlgorithmImpl(
@@ -127,15 +125,15 @@ class ROCMBlas : public blas::BlasSupport {
       blas::AlgorithmType algorithm,
       blas::ProfileResult *output_profile_result);
 
-  // mutex that guards the cuBLAS handle for this device.
+  // mutex that guards the HIPBLAS handle for this device.
   mutex mu_;
 
   // ROCMExecutor which instantiated this ROCMBlas.
   // Immutable post-initialization.
   ROCMExecutor *parent_;
 
-  // cuBLAS library handle on the device.
-  cublasHandle_t blas_ GUARDED_BY(mu_);
+  // HIPBLAS library handle on the device.
+  hipblasHandle_t blas_ GUARDED_BY(mu_);
 
   SE_DISALLOW_COPY_AND_ASSIGN(ROCMBlas);
 };
