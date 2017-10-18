@@ -13,9 +13,11 @@ def src_to_test_name(src):
 load(
     "//tensorflow/core:platform/default/build_config_root.bzl",
     "tf_cuda_tests_tags",
+    "tf_rocm_tests_tags",
     "tf_sycl_tests_tags",
     "tf_additional_xla_deps_py",)
 load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda", "cuda_default_copts")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm", "rocm_default_copts")
 
 load(
     "//third_party/mkl:build_defs.bzl",
