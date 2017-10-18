@@ -495,11 +495,8 @@ def _genrule(src_dir, genrule_name, command, outs):
 
 
 def _create_local_rocm_repository(repository_ctx):
-  """Creates the repository containing files set up to build with CUDA."""
+  """Creates the repository containing files set up to build with ROCm."""
   rocm_config = _get_rocm_config(repository_ctx)
-
-#  cudnn_header_dir = _find_cudnn_header_dir(repository_ctx,
-#                                            rocm_config.cudnn_install_basedir)
 
   # Set up symbolic links for the rocm toolkit by creating genrules to do
   # symlinking. We create one genrule for each directory we want to track under
@@ -518,8 +515,6 @@ def _create_local_rocm_repository(repository_ctx):
   genrules.append(_symlink_genrule_for_dir(repository_ctx, None, "", "rocm-lib",
                                        rocm_lib_src, rocm_lib_dest))
 
-  # Set up the symbolic links for cudnn if cudnn was was not installed to
-  # CUDA_TOOLKIT_PATH.
   included_files = _read_dir(repository_ctx, rocm_include_path).replace(
       rocm_include_path, '').splitlines()
 
@@ -539,7 +534,8 @@ def _create_local_rocm_repository(repository_ctx):
                rocm_config.cpu_value),
            "%{rocmrt_lib}": rocm_libs["rocmrt"].file_name,
            "%{rocblas_lib}": rocm_libs["rocblas"].file_name,
-           "%{rocm_headers}": ('":rocm-include",\n')
+           "%{rocm_include_genrules}": '',
+           "%{rocm_headers}": '',
        })
   # Set up crosstool/
   _file(repository_ctx, "crosstool:BUILD")
