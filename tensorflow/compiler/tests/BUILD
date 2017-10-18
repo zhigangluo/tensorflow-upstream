@@ -18,7 +18,7 @@ package(
     default_visibility = [":internal"],
 )
 
-load("//tensorflow:tensorflow.bzl", "tf_cuda_cc_test")
+load("//tensorflow:tensorflow.bzl", "tf_gpu_cc_test")
 load("//tensorflow:tensorflow.bzl", "cuda_py_test")
 load("//tensorflow/compiler/aot:tfcompile.bzl", "tf_library")
 load("//tensorflow/compiler/tests:build_defs.bzl", "tf_xla_py_test")
@@ -502,7 +502,7 @@ cc_library(
     ],
 )
 
-tf_cuda_cc_test(
+tf_gpu_cc_test(
     name = "randomized_tests",
     # This test is randomized, so only run it if explicitly requested.
     tags = [

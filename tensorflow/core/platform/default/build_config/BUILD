@@ -10,9 +10,7 @@ exports_files(["LICENSE"])
 load("//tensorflow:tensorflow.bzl", "if_cuda")
 load("//tensorflow:tensorflow.bzl", "if_rocm")
 load("//tensorflow:tensorflow.bzl", "tf_copts")
-load("//tensorflow:tensorflow.bzl", "tf_cuda_library")
-# XXX enable this after tf_rocm_library is implemented
-#load("//tensorflow:tensorflow.bzl", "tf_rocm_library")
+load("//tensorflow:tensorflow.bzl", "tf_gpu_library")
 load("@local_config_sycl//sycl:platform.bzl", "sycl_library_path")
 
 cc_library(
@@ -31,29 +29,19 @@ cc_library(
     deps = [],
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "stream_executor",
     deps = [
         "//tensorflow/stream_executor",
     ] + if_cuda(
         ["//tensorflow/stream_executor:cuda_platform"],
+    ) + if_rocm(
+        ["//tensorflow/stream_executor:rocm_platform"],
     ) + select({
         "@local_config_cuda//cuda:darwin": ["IOKit"],
         "//conditions:default": [],
     }),
 )
-
-# XXX enable this after tf_rocm_library is implemented
-#tf_rocm_library(
-#    name = "stream_executor",
-#    deps = [
-#        "//tensorflow/stream_executor",
-#    ] + if_rocm(
-#        ["//tensorflow/stream_executor:rocm_platform"],
-#    ) + select({
-#        "//conditions:default": [],
-#    }),
-#)
 
 cc_library(
     name = "stream_executor_cuda",
@@ -196,10 +184,15 @@ cc_library(
     ],
 )
 
-# XXX FIXME add cc_library(name = "rocm", ...)
-# cc_library(
-#     name = "rocm",
-# )
+cc_library(
+    name = "rocm",
+    data = [],
+    linkopts = select({
+      "//conditions:default": [
+      ],
+    }),
+    deps = [],
+)
 
 cc_library(
     name = "sycl",

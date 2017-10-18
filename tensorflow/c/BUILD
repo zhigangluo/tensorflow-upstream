@@ -7,7 +7,7 @@ load(
     "//tensorflow:tensorflow.bzl",
     "tf_cc_test",
     "tf_copts",
-    "tf_cuda_library",
+    "tf_gpu_library",
     "tf_custom_op_library",
 )
 
@@ -26,7 +26,7 @@ filegroup(
     visibility = ["//tensorflow:__subpackages__"],
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "c_api_internal",
     srcs = ["c_api.h"],
     hdrs = ["c_api_internal.h"],
@@ -42,7 +42,7 @@ tf_cuda_library(
     }),
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "c_api",
     srcs = ["c_api.cc"],
     hdrs = ["c_api.h"],
@@ -76,7 +76,7 @@ exports_files(
     visibility = ["//visibility:public"],
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "tf_status_helper",
     srcs = ["tf_status_helper.cc"],
     hdrs = ["tf_status_helper.h"],
@@ -87,7 +87,7 @@ tf_cuda_library(
     ],
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "checkpoint_reader",
     srcs = ["checkpoint_reader.cc"],
     hdrs = ["checkpoint_reader.h"],
@@ -147,7 +147,7 @@ tf_custom_op_library(
 # -----------------------------------------------------------------------------
 # Python API target
 
-tf_cuda_library(
+tf_gpu_library(
     name = "python_api",
     srcs = ["python_api.cc"],
     hdrs = ["python_api.h"],
