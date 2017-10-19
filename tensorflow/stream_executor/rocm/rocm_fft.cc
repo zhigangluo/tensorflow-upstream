@@ -35,7 +35,7 @@ namespace perftools {
 namespace gputools {
 namespace rocm {
 
-PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kCuFftPlugin);
+PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kHipFftPlugin);
 
 namespace wrap {
 
@@ -551,7 +551,7 @@ REGISTER_MODULE_INITIALIZER(register_hipfft, {
   gpu::port::Status status =
       gpu::PluginRegistry::Instance()
           ->RegisterFactory<gpu::PluginRegistry::FftFactory>(
-              gpu::rocm::kROCmPlatformId, gpu::rocm::kCuFftPlugin, "hipFFT",
+              gpu::rocm::kROCmPlatformId, gpu::rocm::kHipFftPlugin, "hipFFT",
               [](gpu::internal::StreamExecutorInterface
                      *parent) -> gpu::fft::FftSupport * {
                 gpu::rocm::ROCMExecutor *rocm_executor =
@@ -572,5 +572,5 @@ REGISTER_MODULE_INITIALIZER(register_hipfft, {
 
   gpu::PluginRegistry::Instance()->SetDefaultFactory(gpu::rocm::kROCmPlatformId,
                                                      gpu::PluginKind::kFft,
-                                                     gpu::rocm::kCuFftPlugin);
+                                                     gpu::rocm::kHipFftPlugin);
 });
