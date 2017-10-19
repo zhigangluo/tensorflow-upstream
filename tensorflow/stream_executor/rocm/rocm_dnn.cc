@@ -248,7 +248,7 @@ port::Status MIOpenSupport::Init() {
   }
 
   LOG(ERROR) << "could not create miopen handle: " << ToString(status);
-  if (status == MIOPEN_STATUS_NOT_INITIALIZED) {
+  if (status == miopenStatusNotInitialized) {
     auto result = rocm::Diagnostician::FindKernelDriverVersion();
     if (!result.ok()) {
       LOG(ERROR) << "error retrieving driver version: "
@@ -257,13 +257,6 @@ port::Status MIOpenSupport::Init() {
       const auto& version = result.ValueOrDie();
       LOG(INFO) << "possibly insufficient driver version: "
                 << DriverVersionToString(version);
-      // OS X kernel driver does not report version accurately
-#if !defined(__APPLE__)
-      if (std::get<0>(version) < 340) {
-        LOG(ERROR)
-            << "miopen library is only supported on 340.XX+ driver versions";
-      }
-#endif
     }
   }
 
