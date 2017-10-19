@@ -2199,8 +2199,8 @@ port::Status ROCMBlas::DoBlasGemmBatchedInternal(
     bool ok = DoBlasInternal(
             hipblas_func, stream, true /* = pointer_mode_host */,
             HIPBlasTranspose(transa), HIPBlasTranspose(transb), m, n, k,
-            CUDAComplex(&alpha), a_raw_ptrs[ 0 ], lda, bsa,
-            b_raw_ptrs[ 0 ], ldb, bsb, CUDAComplex(&beta),
+            ROCMComplex(&alpha), a_raw_ptrs[ 0 ], lda, bsa,
+            b_raw_ptrs[ 0 ], ldb, bsb, ROCMComplex(&beta),
             c_raw_ptrs[ 0 ], ldc, bsc, batch_count);
 
       if (ok) {

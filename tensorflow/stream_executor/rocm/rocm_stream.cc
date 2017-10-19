@@ -53,7 +53,7 @@ ROCMStream *AsROCMStream(Stream *stream) {
   return static_cast<ROCMStream *>(stream->implementation());
 }
 
-CUstream AsROCMStreamValue(Stream *stream) {
+hipStream_t AsROCMStreamValue(Stream *stream) {
   DCHECK(stream != nullptr);
   return AsROCMStream(stream)->rocm_stream();
 }

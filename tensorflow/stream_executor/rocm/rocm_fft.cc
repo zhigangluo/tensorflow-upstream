@@ -44,63 +44,63 @@ namespace wrap {
 // manner on first use. This dynamic loading technique is used to avoid DSO
 // dependencies on vendor libraries which may or may not be available in the
 // deployed binary environment.
-#define PERFTOOLS_GPUTOOLS_CUFFT_WRAP(__name)                    \
+#define PERFTOOLS_GPUTOOLS_HIPFFT_WRAP(__name)                    \
   struct WrapperShim__##__name {                                 \
     template <typename... Args>                                  \
-    cufftResult operator()(ROCMExecutor *parent, Args... args) { \
+    hipfftResult operator()(ROCMExecutor *parent, Args... args) { \
       rocm::ScopedActivateExecutorContext sac{parent};           \
       return ::__name(args...);                                  \
     }                                                            \
   } __name;
 
-#define CUFFT_ROUTINE_EACH(__macro)                                            \
-  __macro(cufftDestroy) __macro(cufftSetStream) __macro(cufftPlan1d)           \
-      __macro(cufftPlan2d) __macro(cufftPlan3d) __macro(cufftPlanMany)         \
-          __macro(cufftExecD2Z) __macro(cufftExecZ2D) __macro(cufftExecC2C)    \
-              __macro(cufftExecC2R) __macro(cufftExecZ2Z)                      \
-                  __macro(cufftExecR2C) __macro(cufftCreate)                   \
-                      __macro(cufftSetAutoAllocation)                          \
-                          __macro(cufftSetWorkArea) __macro(cufftGetSize1d)    \
-                              __macro(cufftMakePlan1d) __macro(cufftGetSize2d) \
-                                  __macro(cufftMakePlan2d)                     \
-                                      __macro(cufftGetSize3d)                  \
-                                          __macro(cufftMakePlan3d)             \
-                                              __macro(cufftGetSizeMany)        \
-                                                  __macro(cufftMakePlanMany)
+#define HIPFFT_ROUTINE_EACH(__macro)                                            \
+  __macro(hipfftDestroy) __macro(hipfftSetStream) __macro(hipfftPlan1d)           \
+      __macro(hipfftPlan2d) __macro(hipfftPlan3d) __macro(hipfftPlanMany)         \
+          __macro(hipfftExecD2Z) __macro(hipfftExecZ2D) __macro(hipfftExecC2C)    \
+              __macro(hipfftExecC2R) __macro(hipfftExecZ2Z)                      \
+                  __macro(hipfftExecR2C) __macro(hipfftCreate)                   \
+                      __macro(hipfftSetAutoAllocation)                          \
+                          __macro(hipfftSetWorkArea) __macro(hipfftGetSize1d)    \
+                              __macro(hipfftMakePlan1d) __macro(hipfftGetSize2d) \
+                                  __macro(hipfftMakePlan2d)                     \
+                                      __macro(hipfftGetSize3d)                  \
+                                          __macro(hipfftMakePlan3d)             \
+                                              __macro(hipfftGetSizeMany)        \
+                                                  __macro(hipfftMakePlanMany)
 
-CUFFT_ROUTINE_EACH(PERFTOOLS_GPUTOOLS_CUFFT_WRAP)
+HIPFFT_ROUTINE_EACH(PERFTOOLS_GPUTOOLS_HIPFFT_WRAP)
 
 }  // namespace wrap
 
 namespace {
 
-// A helper function transforming gpu_fft arguments into cuFFT arguments.
-cufftType ROCMFftType(fft::Type type) {
+// A helper function transforming gpu_fft arguments into hipFFT arguments.
+hipfftType ROCMFftType(fft::Type type) {
   switch (type) {
     case fft::Type::kC2CForward:
     case fft::Type::kC2CInverse:
-      return CUFFT_C2C;
+      return HIPFFT_C2C;
     case fft::Type::kC2R:
-      return CUFFT_C2R;
+      return HIPFFT_C2R;
     case fft::Type::kR2C:
-      return CUFFT_R2C;
+      return HIPFFT_R2C;
     case fft::Type::kZ2ZForward:
     case fft::Type::kZ2ZInverse:
-      return CUFFT_Z2Z;
+      return HIPFFT_Z2Z;
     case fft::Type::kZ2D:
-      return CUFFT_Z2D;
+      return HIPFFT_Z2D;
     case fft::Type::kD2Z:
-      return CUFFT_D2Z;
+      return HIPFFT_D2Z;
     default:
       LOG(FATAL) << "Invalid value of fft::Type.";
   }
 }
 
-// Associates the given stream with the given cuFFT plan.
-bool SetStream(ROCMExecutor *parent, cufftHandle plan, Stream *stream) {
-  auto ret = wrap::cufftSetStream(parent, plan, AsROCMStreamValue(stream));
-  if (ret != CUFFT_SUCCESS) {
-    LOG(ERROR) << "failed to run cuFFT routine cufftSetStream: " << ret;
+// Associates the given stream with the given hipFFT plan.
+bool SetStream(ROCMExecutor *parent, hipfftHandle plan, Stream *stream) {
+  auto ret = wrap::hipfftSetStream(parent, plan, AsROCMStreamValue(stream));
+  if (ret != HIPFFT_SUCCESS) {
+    LOG(ERROR) << "failed to run hipFFT routine hipfftSetStream: " << ret;
     return false;
   }
   return true;
@@ -130,98 +130,98 @@ port::Status ROCMFftPlan::Initialize(
   parent_ = parent;
   fft_type_ = type;
   if (batch_count == 1 && input_embed == nullptr && output_embed == nullptr) {
-    cufftResult_t ret;
+    hipfftResult_t ret;
     if (scratch_allocator == nullptr) {
       switch (rank) {
         case 1:
-          // cufftPlan1d
-          ret = wrap::cufftPlan1d(parent, &plan_, elem_count_[0],
+          // hipfftPlan1d
+          ret = wrap::hipfftPlan1d(parent, &plan_, elem_count_[0],
                                   ROCMFftType(type), 1 /* = batch */);
-          if (ret != CUFFT_SUCCESS) {
-            LOG(ERROR) << "failed to create cuFFT 1d plan:" << ret;
+          if (ret != HIPFFT_SUCCESS) {
+            LOG(ERROR) << "failed to create hipFFT 1d plan:" << ret;
             return port::Status{port::error::INTERNAL,
-                                "Failed to create cuFFT 1d plan."};
+                                "Failed to create hipFFT 1d plan."};
           }
           return port::Status::OK();
         case 2:
-          // cufftPlan2d
-          ret = wrap::cufftPlan2d(parent, &plan_, elem_count_[0],
+          // hipfftPlan2d
+          ret = wrap::hipfftPlan2d(parent, &plan_, elem_count_[0],
                                   elem_count_[1], ROCMFftType(type));
-          if (ret != CUFFT_SUCCESS) {
-            LOG(ERROR) << "failed to create cuFFT 2d plan:" << ret;
+          if (ret != HIPFFT_SUCCESS) {
+            LOG(ERROR) << "failed to create hipFFT 2d plan:" << ret;
             return port::Status{port::error::INTERNAL,
-                                "Failed to create cuFFT 2d plan."};
+                                "Failed to create hipFFT 2d plan."};
           }
           return port::Status::OK();
         case 3:
-          // cufftPlan3d
+          // hipfftPlan3d
           ret =
-              wrap::cufftPlan3d(parent, &plan_, elem_count_[0], elem_count_[1],
+              wrap::hipfftPlan3d(parent, &plan_, elem_count_[0], elem_count_[1],
                                 elem_count_[2], ROCMFftType(type));
-          if (ret != CUFFT_SUCCESS) {
-            LOG(ERROR) << "failed to create cuFFT 3d plan:" << ret;
+          if (ret != HIPFFT_SUCCESS) {
+            LOG(ERROR) << "failed to create hipFFT 3d plan:" << ret;
             return port::Status{port::error::INTERNAL,
-                                "Failed to create cuFFT 3d plan."};
+                                "Failed to create hipFFT 3d plan."};
           }
           return port::Status::OK();
         default:
-          LOG(ERROR) << "Invalid rank value for cufftPlan. "
+          LOG(ERROR) << "Invalid rank value for hipfftPlan. "
                         "Requested 1, 2, or 3, given: "
                      << rank;
           return port::Status{port::error::INVALID_ARGUMENT,
-                              "cufftPlan only takes rank 1, 2, or 3."};
+                              "hipfftPlan only takes rank 1, 2, or 3."};
       }
     } else {
-      ret = wrap::cufftCreate(parent, &plan_);
-      if (ret != CUFFT_SUCCESS) {
-        LOG(ERROR) << "failed to create cuFFT plan:" << ret;
+      ret = wrap::hipfftCreate(parent, &plan_);
+      if (ret != HIPFFT_SUCCESS) {
+        LOG(ERROR) << "failed to create hipFFT plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to create cuFFT plan."};
+                            "Failed to create hipFFT plan."};
       }
-      ret = wrap::cufftSetAutoAllocation(parent, plan_, 0);
-      if (ret != CUFFT_SUCCESS) {
-        LOG(ERROR) << "failed to set auto allocation for cuFFT plan:" << ret;
+      ret = wrap::hipfftSetAutoAllocation(parent, plan_, 0);
+      if (ret != HIPFFT_SUCCESS) {
+        LOG(ERROR) << "failed to set auto allocation for hipFFT plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to set auto allocation for cuFFT plan."};
+                            "Failed to set auto allocation for hipFFT plan."};
       }
       size_t size_in_bytes;
       switch (rank) {
         case 1:
-          ret = wrap::cufftMakePlan1d(parent, plan_, elem_count_[0],
+          ret = wrap::hipfftMakePlan1d(parent, plan_, elem_count_[0],
                                       ROCMFftType(type), /*batch=*/1,
                                       &size_in_bytes);
-          if (ret != CUFFT_SUCCESS) {
-            LOG(ERROR) << "failed to make cuFFT 1d plan:" << ret;
+          if (ret != HIPFFT_SUCCESS) {
+            LOG(ERROR) << "failed to make hipFFT 1d plan:" << ret;
             return port::Status{port::error::INTERNAL,
-                                "Failed to make cuFFT 1d plan."};
+                                "Failed to make hipFFT 1d plan."};
           }
           break;
         case 2:
-          ret = wrap::cufftMakePlan2d(parent, plan_, elem_count_[0],
+          ret = wrap::hipfftMakePlan2d(parent, plan_, elem_count_[0],
                                       elem_count_[1], ROCMFftType(type),
                                       &size_in_bytes);
-          if (ret != CUFFT_SUCCESS) {
-            LOG(ERROR) << "failed to make cuFFT 2d plan:" << ret;
+          if (ret != HIPFFT_SUCCESS) {
+            LOG(ERROR) << "failed to make hipFFT 2d plan:" << ret;
             return port::Status{port::error::INTERNAL,
-                                "Failed to make cuFFT 2d plan."};
+                                "Failed to make hipFFT 2d plan."};
           }
           break;
         case 3:
-          ret = wrap::cufftMakePlan3d(parent, plan_, elem_count_[0],
+          ret = wrap::hipfftMakePlan3d(parent, plan_, elem_count_[0],
                                       elem_count_[1], elem_count_[2],
                                       ROCMFftType(type), &size_in_bytes);
-          if (ret != CUFFT_SUCCESS) {
-            LOG(ERROR) << "failed to make cuFFT 3d plan:" << ret;
+          if (ret != HIPFFT_SUCCESS) {
+            LOG(ERROR) << "failed to make hipFFT 3d plan:" << ret;
             return port::Status{port::error::INTERNAL,
-                                "Failed to make cuFFT 3d plan."};
+                                "Failed to make hipFFT 3d plan."};
           }
           break;
         default:
-          LOG(ERROR) << "Invalid rank value for cufftPlan. "
+          LOG(ERROR) << "Invalid rank value for hipfftPlan. "
                         "Requested 1, 2, or 3, given: "
                      << rank;
           return port::Status{port::error::INVALID_ARGUMENT,
-                              "cufftPlan only takes rank 1, 2, or 3."};
+                              "hipfftPlan only takes rank 1, 2, or 3."};
       }
       // TODO(yangzihao): refactor this code and the one with the same function
       // in the batch mode.
@@ -234,52 +234,52 @@ port::Status ROCMFftPlan::Initialize(
         }
       }
       // Connect work area with allocated space.
-      ret = wrap::cufftSetWorkArea(parent, plan_, scratch_.opaque());
-      if (ret != CUFFT_SUCCESS) {
-        LOG(ERROR) << "failed to set work area for cuFFT plan:" << ret;
+      ret = wrap::hipfftSetWorkArea(parent, plan_, scratch_.opaque());
+      if (ret != HIPFFT_SUCCESS) {
+        LOG(ERROR) << "failed to set work area for hipFFT plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to set work area for cuFFT plan."};
+                            "Failed to set work area for hipFFT plan."};
       }
       return port::Status::OK();
     }
   } else {
-    // For either multiple batches or rank higher than 3, use cufftPlanMany().
+    // For either multiple batches or rank higher than 3, use hipfftPlanMany().
     if (scratch_allocator == nullptr) {
-      auto ret = wrap::cufftPlanMany(
+      auto ret = wrap::hipfftPlanMany(
           parent, &plan_, rank, elem_count_,
           input_embed ? input_embed_ : nullptr, input_stride, input_distance,
           output_embed ? output_embed_ : nullptr, output_stride,
           output_distance, ROCMFftType(type), batch_count);
-      if (ret != CUFFT_SUCCESS) {
-        LOG(ERROR) << "failed to create cuFFT batched plan:" << ret;
+      if (ret != HIPFFT_SUCCESS) {
+        LOG(ERROR) << "failed to create hipFFT batched plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to create cuFFT bacthed plan."};
+                            "Failed to create hipFFT bacthed plan."};
       }
     } else {
-      auto ret = wrap::cufftCreate(parent, &plan_);
-      if (ret != CUFFT_SUCCESS) {
-        LOG(ERROR) << "failed to create cuFFT batched plan:" << ret;
+      auto ret = wrap::hipfftCreate(parent, &plan_);
+      if (ret != HIPFFT_SUCCESS) {
+        LOG(ERROR) << "failed to create hipFFT batched plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to create cuFFT bacthed plan."};
+                            "Failed to create hipFFT bacthed plan."};
       }
-      ret = wrap::cufftSetAutoAllocation(parent, plan_, 0);
-      if (ret != CUFFT_SUCCESS) {
-        LOG(ERROR) << "failed to set auto allocation for cuFFT batched plan:"
+      ret = wrap::hipfftSetAutoAllocation(parent, plan_, 0);
+      if (ret != HIPFFT_SUCCESS) {
+        LOG(ERROR) << "failed to set auto allocation for hipFFT batched plan:"
                    << ret;
         return port::Status{
             port::error::INTERNAL,
-            "Failed to set auto allocation for cuFFT bacthed plan."};
+            "Failed to set auto allocation for hipFFT bacthed plan."};
       }
       size_t size_in_bytes;
-      ret = wrap::cufftMakePlanMany(
+      ret = wrap::hipfftMakePlanMany(
           parent, plan_, rank, elem_count_,
           input_embed ? input_embed_ : nullptr, input_stride, input_distance,
           output_embed ? output_embed_ : nullptr, output_stride,
           output_distance, ROCMFftType(type), batch_count, &size_in_bytes);
-      if (ret != CUFFT_SUCCESS) {
-        LOG(ERROR) << "failed to make cuFFT batched plan:" << ret;
+      if (ret != HIPFFT_SUCCESS) {
+        LOG(ERROR) << "failed to make hipFFT batched plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to make cuFFT bacthed plan."};
+                            "Failed to make hipFFT bacthed plan."};
       }
       if (size_in_bytes != 0) {
         auto allocated =
@@ -290,11 +290,11 @@ port::Status ROCMFftPlan::Initialize(
         }
       }
       // Connect work area with allocated space.
-      ret = wrap::cufftSetWorkArea(parent, plan_, scratch_.opaque());
-      if (ret != CUFFT_SUCCESS) {
-        LOG(ERROR) << "failed to set work area for cuFFT batched plan:" << ret;
+      ret = wrap::hipfftSetWorkArea(parent, plan_, scratch_.opaque());
+      if (ret != HIPFFT_SUCCESS) {
+        LOG(ERROR) << "failed to set work area for hipFFT batched plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to set work area for cuFFT bacthed plan."};
+                            "Failed to set work area for hipFFT bacthed plan."};
       }
     }
   }
@@ -312,7 +312,7 @@ port::Status ROCMFftPlan::Initialize(ROCMExecutor *parent, Stream *stream,
                     /*output_distance=*/0, type, 1, scratch_allocator);
 }
 
-ROCMFftPlan::~ROCMFftPlan() { wrap::cufftDestroy(parent_, plan_); }
+ROCMFftPlan::~ROCMFftPlan() { wrap::hipfftDestroy(parent_, plan_); }
 
 int ROCMFftPlan::GetFftDirection() const {
   if (!IsInitialized()) {
@@ -323,12 +323,12 @@ int ROCMFftPlan::GetFftDirection() const {
       case fft::Type::kZ2ZForward:
       case fft::Type::kR2C:
       case fft::Type::kD2Z:
-        return CUFFT_FORWARD;
+        return HIPFFT_FORWARD;
       case fft::Type::kC2CInverse:
       case fft::Type::kZ2ZInverse:
       case fft::Type::kC2R:
       case fft::Type::kZ2D:
-        return CUFFT_INVERSE;
+        return HIPFFT_INVERSE;
       default:
         LOG(FATAL) << "Invalid value of fft::Type.";
     }
@@ -345,7 +345,7 @@ std::unique_ptr<fft::Plan> ROCMFft::Create1dPlan(Stream *stream, uint64 num_x,
   // TODO(yangzihao): In the future, send error msg back to TensorFlow
   // so it can fail gracefully,
   if (!status.ok()) {
-    LOG(FATAL) << "failed to initialize cufft 1d plan: "
+    LOG(FATAL) << "failed to initialize hipfft 1d plan: "
                << status.error_message();
   }
   return std::move(fft_plan_ptr);
@@ -360,7 +360,7 @@ std::unique_ptr<fft::Plan> ROCMFft::Create1dPlanWithScratchAllocator(
                                                  type, scratch_allocator);
   if (!status.ok()) {
     LOG(FATAL)
-        << "failed to initialize cufft 1d plan with customized allocator: "
+        << "failed to initialize hipfft 1d plan with customized allocator: "
         << status.error_message();
   }
   return std::move(fft_plan_ptr);
@@ -374,7 +374,7 @@ std::unique_ptr<fft::Plan> ROCMFft::Create2dPlan(Stream *stream, uint64 num_x,
   port::Status status = fft_plan_ptr->Initialize(
       parent_, stream, 1, elem_count, type, /*scratch_allocator=*/nullptr);
   if (!status.ok()) {
-    LOG(FATAL) << "failed to initialize cufft 2d plan: "
+    LOG(FATAL) << "failed to initialize hipfft 2d plan: "
                << status.error_message();
   }
   return std::move(fft_plan_ptr);
@@ -389,7 +389,7 @@ std::unique_ptr<fft::Plan> ROCMFft::Create2dPlanWithScratchAllocator(
                                                  type, scratch_allocator);
   if (!status.ok()) {
     LOG(FATAL)
-        << "failed to initialize cufft 2d plan with customized allocator: "
+        << "failed to initialize hipfft 2d plan with customized allocator: "
         << status.error_message();
   }
   return std::move(fft_plan_ptr);
@@ -404,7 +404,7 @@ std::unique_ptr<fft::Plan> ROCMFft::Create3dPlan(Stream *stream, uint64 num_x,
   port::Status status = fft_plan_ptr->Initialize(
       parent_, stream, 3, elem_count, type, /*scratch_allocator=*/nullptr);
   if (!status.ok()) {
-    LOG(FATAL) << "failed to initialize cufft 3d plan: "
+    LOG(FATAL) << "failed to initialize hipfft 3d plan: "
                << status.error_message();
   }
   return std::move(fft_plan_ptr);
@@ -419,7 +419,7 @@ std::unique_ptr<fft::Plan> ROCMFft::Create3dPlanWithScratchAllocator(
                                                  type, scratch_allocator);
   if (!status.ok()) {
     LOG(FATAL)
-        << "failed to initialize cufft 3d plan with customized allocator: "
+        << "failed to initialize hipfft 3d plan with customized allocator: "
         << status.error_message();
   }
   return std::move(fft_plan_ptr);
@@ -436,7 +436,7 @@ std::unique_ptr<fft::Plan> ROCMFft::CreateBatchedPlan(
       input_distance, output_embed, output_stride, output_distance, type,
       batch_count, /*scratch_allocator=*/nullptr);
   if (!status.ok()) {
-    LOG(FATAL) << "failed to initialize batched cufft plan: "
+    LOG(FATAL) << "failed to initialize batched hipfft plan: "
                << status.error_message();
   }
 
@@ -455,14 +455,14 @@ std::unique_ptr<fft::Plan> ROCMFft::CreateBatchedPlanWithScratchAllocator(
       batch_count, scratch_allocator);
   if (!status.ok()) {
     LOG(FATAL)
-        << "failed to initialize batched cufft plan with customized allocator: "
+        << "failed to initialize batched hipfft plan with customized allocator: "
         << status.error_message();
   }
   return std::move(fft_plan_ptr);
 }
 
 template <typename FuncT, typename InputT, typename OutputT>
-bool ROCMFft::DoFftInternal(Stream *stream, fft::Plan *plan, FuncT cufftExec,
+bool ROCMFft::DoFftInternal(Stream *stream, fft::Plan *plan, FuncT hipfftExec,
                             const DeviceMemory<InputT> &input,
                             DeviceMemory<OutputT> *output) {
   ROCMFftPlan *rocm_fft_plan = dynamic_cast<ROCMFftPlan *>(plan);
@@ -475,12 +475,12 @@ bool ROCMFft::DoFftInternal(Stream *stream, fft::Plan *plan, FuncT cufftExec,
     return false;
   }
 
-  auto ret = cufftExec(parent_, rocm_fft_plan->GetPlan(),
+  auto ret = hipfftExec(parent_, rocm_fft_plan->GetPlan(),
                        ROCMComplex(const_cast<InputT *>(ROCMMemory(input))),
                        ROCMComplex(ROCMMemoryMutable(output)));
 
-  if (ret != CUFFT_SUCCESS) {
-    LOG(ERROR) << "failed to run cuFFT routine: " << ret;
+  if (ret != HIPFFT_SUCCESS) {
+    LOG(ERROR) << "failed to run hipFFT routine: " << ret;
     return false;
   }
 
@@ -489,7 +489,7 @@ bool ROCMFft::DoFftInternal(Stream *stream, fft::Plan *plan, FuncT cufftExec,
 
 template <typename FuncT, typename InputT, typename OutputT>
 bool ROCMFft::DoFftWithDirectionInternal(Stream *stream, fft::Plan *plan,
-                                         FuncT cufftExec,
+                                         FuncT hipfftExec,
                                          const DeviceMemory<InputT> &input,
                                          DeviceMemory<OutputT> *output) {
   ROCMFftPlan *rocm_fft_plan = dynamic_cast<ROCMFftPlan *>(plan);
@@ -502,13 +502,13 @@ bool ROCMFft::DoFftWithDirectionInternal(Stream *stream, fft::Plan *plan,
     return false;
   }
 
-  auto ret = cufftExec(parent_, rocm_fft_plan->GetPlan(),
+  auto ret = hipfftExec(parent_, rocm_fft_plan->GetPlan(),
                        ROCMComplex(const_cast<InputT *>(ROCMMemory(input))),
                        ROCMComplex(ROCMMemoryMutable(output)),
                        rocm_fft_plan->GetFftDirection());
 
-  if (ret != CUFFT_SUCCESS) {
-    LOG(ERROR) << "failed to run cuFFT routine: " << ret;
+  if (ret != HIPFFT_SUCCESS) {
+    LOG(ERROR) << "failed to run hipFFT routine: " << ret;
     return false;
   }
 
@@ -521,18 +521,18 @@ bool ROCMFft::DoFftWithDirectionInternal(Stream *stream, fft::Plan *plan,
                       const DeviceMemory<std::complex<__type>> &input,       \
                       DeviceMemory<std::complex<__type>> *output) {          \
     return DoFftWithDirectionInternal(                                       \
-        stream, plan, wrap::cufftExec##__fft_type1, input, output);          \
+        stream, plan, wrap::hipfftExec##__fft_type1, input, output);          \
   }                                                                          \
   bool ROCMFft::DoFft(Stream *stream, fft::Plan *plan,                       \
                       const DeviceMemory<__type> &input,                     \
                       DeviceMemory<std::complex<__type>> *output) {          \
-    return DoFftInternal(stream, plan, wrap::cufftExec##__fft_type2, input,  \
+    return DoFftInternal(stream, plan, wrap::hipfftExec##__fft_type2, input,  \
                          output);                                            \
   }                                                                          \
   bool ROCMFft::DoFft(Stream *stream, fft::Plan *plan,                       \
                       const DeviceMemory<std::complex<__type>> &input,       \
                       DeviceMemory<__type> *output) {                        \
-    return DoFftInternal(stream, plan, wrap::cufftExec##__fft_type3, input,  \
+    return DoFftInternal(stream, plan, wrap::hipfftExec##__fft_type3, input,  \
                          output);                                            \
   }
 
@@ -547,18 +547,18 @@ PERFTOOLS_GPUTOOLS_ROCM_DEFINE_FFT(double, Z2Z, D2Z, Z2D)
 
 namespace gpu = ::perftools::gputools;
 
-REGISTER_MODULE_INITIALIZER(register_cufft, {
+REGISTER_MODULE_INITIALIZER(register_hipfft, {
   gpu::port::Status status =
       gpu::PluginRegistry::Instance()
           ->RegisterFactory<gpu::PluginRegistry::FftFactory>(
-              gpu::rocm::kROCmPlatformId, gpu::rocm::kCuFftPlugin, "cuFFT",
+              gpu::rocm::kROCmPlatformId, gpu::rocm::kCuFftPlugin, "hipFFT",
               [](gpu::internal::StreamExecutorInterface
                      *parent) -> gpu::fft::FftSupport * {
                 gpu::rocm::ROCMExecutor *rocm_executor =
                     dynamic_cast<gpu::rocm::ROCMExecutor *>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
-                      << "Attempting to initialize an instance of the cuFFT "
+                      << "Attempting to initialize an instance of the hipFFT "
                       << "support library with a non-ROCM StreamExecutor";
                   return nullptr;
                 }
@@ -566,7 +566,7 @@ REGISTER_MODULE_INITIALIZER(register_cufft, {
                 return new gpu::rocm::ROCMFft(rocm_executor);
               });
   if (!status.ok()) {
-    LOG(ERROR) << "Unable to register cuFFT factory: "
+    LOG(ERROR) << "Unable to register hipFFT factory: "
                << status.error_message();
   }
 

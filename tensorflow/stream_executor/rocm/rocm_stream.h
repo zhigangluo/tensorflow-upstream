@@ -29,7 +29,7 @@ namespace rocm {
 
 class ROCMExecutor;
 
-// Wraps a CUstream in order to satisfy the platform-independent
+// Wraps a hipStream_t in order to satisfy the platform-independent
 // StreamInterface.
 //
 // Thread-safe post-initialization.
@@ -60,33 +60,33 @@ class ROCMStream : public internal::StreamInterface {
   // Retrieves an event which indicates that all work enqueued into the stream
   // has completed. Ownership of the event is not transferred to the caller, the
   // event is owned by this stream.
-  CUevent* completed_event() { return &completed_event_; }
+  hipEvent_t* completed_event() { return &completed_event_; }
 
-  // Returns the CUstream value for passing to the ROCM API.
+  // Returns the hipStream_t value for passing to the ROCM API.
   //
   // Precond: this ROCMStream has been allocated (otherwise passing a nullptr
   // into the NVIDIA library causes difficult-to-understand faults).
-  CUstream rocm_stream() const {
+  hipStream_t rocm_stream() const {
     DCHECK(rocm_stream_ != nullptr);
-    return const_cast<CUstream>(rocm_stream_);
+    return const_cast<hipStream_t>(rocm_stream_);
   }
 
   ROCMExecutor *parent() const { return parent_; }
 
  private:
   ROCMExecutor *parent_;  // Executor that spawned this stream.
-  CUstream rocm_stream_;  // Wrapped ROCM stream handle.
+  hipStream_t rocm_stream_;  // Wrapped ROCM stream handle.
 
   // Event that indicates this stream has completed.
-  CUevent completed_event_ = nullptr;
+  hipEvent_t completed_event_ = nullptr;
 };
 
 // Helper functions to simplify extremely common flows.
 // Converts a Stream to the underlying ROCMStream implementation.
 ROCMStream *AsROCMStream(Stream *stream);
 
-// Extracts a CUstream from a ROCMStream-backed Stream object.
-CUstream AsROCMStreamValue(Stream *stream);
+// Extracts a hipStream_t from a ROCMStream-backed Stream object.
+hipStream_t AsROCMStreamValue(Stream *stream);
 
 }  // namespace rocm
 }  // namespace gputools

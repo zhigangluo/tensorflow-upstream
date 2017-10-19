@@ -100,12 +100,12 @@ static ROCMTimer *AsROCMTimer(Timer *timer) {
 // N.B. we must lose constness in order to pass a suitable type to the existing
 // librocm APIs, so the caller should take care to only pass the result of const
 // GPU memory conversions to librocm functions which will honor constness.
-static CUdeviceptr AsROCmDevicePtr(const DeviceMemoryBase &gpu_mem) {
-  return reinterpret_cast<CUdeviceptr>(gpu_mem.opaque());
+static hipDeviceptr_t AsROCmDevicePtr(const DeviceMemoryBase &gpu_mem) {
+  return reinterpret_cast<hipDeviceptr_t>(gpu_mem.opaque());
 }
 
 // See description on const version above.
-static CUdeviceptr AsROCmDevicePtr(DeviceMemoryBase *gpu_mem) {
+static hipDeviceptr_t AsROCmDevicePtr(DeviceMemoryBase *gpu_mem) {
   return AsROCmDevicePtr(*gpu_mem);
 }
 
@@ -220,7 +220,7 @@ static string GetBinaryDir(bool strip_exe) {
 bool ROCMExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
                              KernelBase *kernel) {
   ROCMKernel *rocm_kernel = AsROCMKernel(kernel);
-  CUmodule module = nullptr;
+  hipModule_t module = nullptr;
   const string *kernelname;
 
   const OnDiskKernelLoaderSpec *on_disk_spec = nullptr;
@@ -340,31 +340,31 @@ bool ROCMExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
                           const BlockDim &block_dims, const KernelBase &kernel,
                           const KernelArgsArrayBase &args) {
   CHECK_EQ(kernel.Arity(), args.number_of_arguments());
-  CUstream custream = AsROCMStreamValue(stream);
+  hipStream_t custream = AsROCMStreamValue(stream);
   const ROCMKernel *rocm_kernel = AsROCMKernel(&kernel);
-  CUfunction cufunc = rocm_kernel->AsROCMFunctionValue();
+  hipFunction_t hipfunc = rocm_kernel->AsROCMFunctionValue();
 
   // Only perform/print the occupancy check once.  Even just checking to see
   // whether we've done an occupancy check on this kernel before isn't free
   // (because we have to synchronize), so we only do this at -v 2+.
   if (VLOG_IS_ON(2)) {
     mutex_lock lock(launched_kernels_mu_);
-    if (!launched_kernels_.count(cufunc)) {
+    if (!launched_kernels_.count(hipfunc)) {
       VlogOccupancyInfo(kernel, thread_dims, block_dims);
       // TODO(rspringer): Remove elements from launched_kernels_...if we ever
       // expose a kernel/module deallocation method.
-      launched_kernels_.insert(cufunc);
+      launched_kernels_.insert(hipfunc);
     }
   }
 
   if (rocm_kernel->GetPreferredCacheConfig() !=
       KernelCacheConfig::kNoPreference) {
-    ROCMDriver::FuncSetCacheConfig(cufunc, rocm_kernel->GetROCMCacheConfig());
+    ROCMDriver::FuncSetCacheConfig(hipfunc, rocm_kernel->GetROCMCacheConfig());
   }
 
   void **kernel_params = const_cast<void **>(args.argument_addresses().data());
 
-  if (!ROCMDriver::LaunchKernel(GetROCmContext(stream), cufunc, block_dims.x,
+  if (!ROCMDriver::LaunchKernel(GetROCmContext(stream), hipfunc, block_dims.x,
                                 block_dims.y, block_dims.z, thread_dims.x,
                                 thread_dims.y, thread_dims.z,
                                 args.number_of_shared_bytes(), custream,
@@ -572,8 +572,8 @@ bool ROCMExecutor::HostCallback(Stream *stream,
                                        InternalHostCallback, callback_ptr);
 }
 
-/* static */ void ROCMExecutor::InternalHostCallback(CUstream stream,
-                                                     CUresult status,
+/* static */ void ROCMExecutor::InternalHostCallback(hipStream_t stream,
+                                                     hipError_t status,
                                                      void *data) {
   std::function<void()> *callback =
       reinterpret_cast<std::function<void()> *>(data);
@@ -631,7 +631,7 @@ void ROCMExecutor::DeallocateTimer(Timer *timer) {
 }
 
 bool ROCMExecutor::CreateStreamDependency(Stream *dependent, Stream *other) {
-  CUevent other_completed_event = *AsROCMStream(other)->completed_event();
+  hipEvent_t other_completed_event = *AsROCMStream(other)->completed_event();
   bool ok = ROCMDriver::RecordEvent(context_, other_completed_event,
                                     AsROCMStreamValue(other))
       .ok();
@@ -737,11 +737,11 @@ SharedMemoryConfig ROCMExecutor::GetDeviceSharedMemoryConfig() {
   }
 
   switch (rocm_config.ValueOrDie()) {
-    case CU_SHARED_MEM_CONFIG_DEFAULT_BANK_SIZE:
+    case hipSharedMemBankSizeDefault:
       return SharedMemoryConfig::kDefault;
-    case CU_SHARED_MEM_CONFIG_FOUR_BYTE_BANK_SIZE:
+    case hipSharedMemBankSizeFourByte:
       return SharedMemoryConfig::kFourByte;
-    case CU_SHARED_MEM_CONFIG_EIGHT_BYTE_BANK_SIZE:
+    case hipSharedMemBankSizeEightByte:
       return SharedMemoryConfig::kEightByte;
     default:
       LOG(FATAL) << "Invalid shared memory configuration returned: "
@@ -754,13 +754,13 @@ port::Status ROCMExecutor::SetDeviceSharedMemoryConfig(
   CUsharedconfig rocm_config;
   switch (config) {
     case SharedMemoryConfig::kDefault:
-      rocm_config = CU_SHARED_MEM_CONFIG_DEFAULT_BANK_SIZE;
+      rocm_config = hipSharedMemBankSizeDefault;
       break;
     case SharedMemoryConfig::kFourByte:
-      rocm_config = CU_SHARED_MEM_CONFIG_FOUR_BYTE_BANK_SIZE;
+      rocm_config = hipSharedMemBankSizeFourByte;
       break;
     case SharedMemoryConfig::kEightByte:
-      rocm_config = CU_SHARED_MEM_CONFIG_EIGHT_BYTE_BANK_SIZE;
+      rocm_config = hipSharedMemBankSizeEightByte;
       break;
     default:
       LOG(FATAL) << "Invalid shared memory configuration specified: "
@@ -779,7 +779,7 @@ bool ROCMExecutor::GetSymbol(const string& symbol_name, void **mem,
     mutex_lock lock{disk_modules_mu_};
     for (auto &it : disk_modules_) {
       if (ROCMDriver::GetModuleSymbol(context_, it.second, symbol_name.c_str(),
-                                      reinterpret_cast<CUdeviceptr *>(mem),
+                                      reinterpret_cast<hipDeviceptr_t *>(mem),
                                       bytes)) {
         return true;
       }
@@ -790,7 +790,7 @@ bool ROCMExecutor::GetSymbol(const string& symbol_name, void **mem,
     mutex_lock lock{in_memory_modules_mu_};
     for (auto &it : in_memory_modules_) {
       if (ROCMDriver::GetModuleSymbol(context_, it.second, symbol_name.c_str(),
-                                      reinterpret_cast<CUdeviceptr *>(mem),
+                                      reinterpret_cast<hipDeviceptr_t *>(mem),
                                       bytes)) {
         return true;
       }
@@ -853,6 +853,10 @@ ROCmContext* ROCMExecutor::rocm_context() { return context_; }
 // For anything more complicated/prod-focused than this, you'll likely want to
 // turn to gsys' topology modeling.
 static int TryToReadNumaNode(const string &pci_bus_id, int device_ordinal) {
+// XXX TODO FIX THIS LATER ON
+  return 1;
+
+#if 0
 #if defined(__APPLE__)
   LOG(INFO) << "OS X does not support NUMA - returning NUMA node zero";
   return 0;
@@ -907,6 +911,7 @@ static int TryToReadNumaNode(const string &pci_bus_id, int device_ordinal) {
   fclose(file);
   return kUnknownNumaNode;
 #endif
+#endif
 }
 
 // Set of compute capability specific device parameters that cannot be
@@ -959,7 +964,7 @@ DeviceDescription *ROCMExecutor::PopulateDeviceDescription() const {
     builder.set_numa_node(numa_node);
   }
 
-  CUdevprop prop;
+  hipDeviceProp_t prop;
   if (ROCMDriver::GetDeviceProperties(&prop, device_ordinal_)) {
     builder.set_threads_per_block_limit(prop.maxThreadsPerBlock);
 

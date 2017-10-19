@@ -22,7 +22,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/plugin_registry.h"
 #include "tensorflow/stream_executor/rng.h"
 
-typedef struct curandGenerator_st *curandGenerator_t;
+typedef struct hiprngGenerator_st *hiprngGenerator_t;
 
 namespace perftools {
 namespace gputools {
@@ -33,8 +33,8 @@ class DeviceMemory;
 
 namespace rocm {
 
-// Opaque and unique identifier for the cuRAND plugin.
-extern const PluginId kCuRandPlugin;
+// Opaque and unique identifier for the hipRNG plugin.
+extern const PluginId kHipRandPlugin;
 
 class ROCMExecutor;
 
@@ -46,12 +46,12 @@ class ROCMRng : public rng::RngSupport {
  public:
   explicit ROCMRng(ROCMExecutor *parent);
 
-  // Retrieves a curand library generator handle. This is necessary for
+  // Retrieves a hiprng library generator handle. This is necessary for
   // enqueuing random number generation work onto the device.
   // TODO(leary) provide a way for users to select the RNG algorithm.
   bool Init();
 
-  // Releases a curand library generator handle, if one was acquired.
+  // Releases a hiprng library generator handle, if one was acquired.
   ~ROCMRng() override;
 
   // See rng::RngSupport for details on the following overrides.
@@ -77,22 +77,22 @@ class ROCMRng : public rng::RngSupport {
   bool DoPopulateRandGaussianInternal(Stream *stream, ElemT mean, ElemT stddev,
                                       DeviceMemory<ElemT> *v, FuncT func);
 
-  // Sets the stream for the internal curand generator.
+  // Sets the stream for the internal hiprng generator.
   //
   // This is a stateful operation, as the handle can only have one stream set at
   // a given time, so it is usually performed right before enqueuing work to do
   // with random number generation.
   bool SetStream(Stream *stream) EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
-  // mutex that guards the cuRAND handle for this device.
+  // mutex that guards the hipRNG handle for this device.
   mutex mu_;
 
   // ROCMExecutor which instantiated this ROCMRng.
   // Immutable post-initialization.
   ROCMExecutor *parent_;
 
-  // cuRANDalibrary handle on the device.
-  curandGenerator_t rng_ GUARDED_BY(mu_);
+  // hipRNGalibrary handle on the device.
+  hiprngGenerator_t rng_ GUARDED_BY(mu_);
 
   SE_DISALLOW_COPY_AND_ASSIGN(ROCMRng);
 };

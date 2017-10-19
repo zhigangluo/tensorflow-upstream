@@ -60,7 +60,7 @@ namespace rocm {
 namespace {
 
 // Manages the singleton map of contexts that we've created, mapping
-// from the CUcontext to the ROCmContext* that we pass around internally.
+// from the hipCtx_t to the ROCmContext* that we pass around internally.
 // This also manages assignment of unique ids to ROCmContexts, to allow
 // for fast comparison of a context against the current context.
 //
@@ -70,13 +70,13 @@ namespace {
 class CreatedContexts {
  public:
   // Returns whether context is a member of the live set.
-  static bool Has(CUcontext context) {
+  static bool Has(hipCtx_t context) {
     shared_lock lock{mu_};
     return Live()->find(context) != Live()->end();
   }
 
   // Adds context to the live set.
-  static ROCmContext* Add(CUcontext context) {
+  static ROCmContext* Add(hipCtx_t context) {
     CHECK(context != nullptr);
     mutex_lock lock{mu_};
     auto rocm_context = new ROCmContext(context, next_id_++);
@@ -86,7 +86,7 @@ class CreatedContexts {
   }
 
   // Removes context from the live set.
-  static void Remove(CUcontext context) {
+  static void Remove(hipCtx_t context) {
     CHECK(context != nullptr);
     mutex_lock lock{mu_};
     auto it = Live()->find(context);
@@ -96,9 +96,9 @@ class CreatedContexts {
 
  private:
   // Returns the live map singleton.
-  static std::map<CUcontext, std::unique_ptr<ROCmContext>> *Live() {
+  static std::map<hipCtx_t, std::unique_ptr<ROCmContext>> *Live() {
     static auto singleton =
-        new std::map<CUcontext, std::unique_ptr<ROCmContext>>;
+        new std::map<hipCtx_t, std::unique_ptr<ROCmContext>>;
     return singleton;
   }
 
@@ -110,15 +110,15 @@ class CreatedContexts {
 /* static */ mutex CreatedContexts::mu_{LINKER_INITIALIZED};
 /* static */ int64 CreatedContexts::next_id_ = 1;  // 0 means "no context"
 
-// Formats CUresult to output prettified values into a log stream.
+// Formats hipError_t to output prettified values into a log stream.
 // Error summaries taken from:
 // http://docs.nvidia.com/rocm/rocm-driver-api/group__ROCM__TYPES.html#group__ROCM__TYPES_1gc6c391505e117393cc2558fff6bfc2e9
 //
 // TODO(leary) switch to cuGetErrorName when updated rocm.h is available.
-string ToString(CUresult result) {
+string ToString(hipError_t result) {
 #define OSTREAM_ROCM_ERROR(__name) \
-  case ROCM_ERROR_##__name:        \
-    return "ROCM_ERROR_" #__name;
+  case hipError##__name:        \
+    return "HIP_ERROR_" #__name;
 
 ///////////////
 // NOTE: here we specify return code values outside of the enum explicitly
@@ -219,7 +219,7 @@ string ToString(CUresult result) {
     OSTREAM_ROCM_ERROR(NOT_SUPPORTED)
     OSTREAM_ROCM_ERROR(UNKNOWN)  // Unknown internal error to ROCM.
     default:
-      return port::StrCat("CUresult(", static_cast<int>(result), ")");
+      return port::StrCat("hipError_t(", static_cast<int>(result), ")");
   }
 #pragma GCC diagnostic pop
 }
@@ -227,8 +227,8 @@ string ToString(CUresult result) {
 // Returns the current context and checks that it is in the set of ROCM contexts
 // created by StreamExecutor (to ensure that the ROCM runtime didn't create a
 // context behind our backs).
-CUcontext CurrentContext() {
-  CUcontext current = ROCMDriver::CurrentContextOrDie();
+hipCtx_t CurrentContext() {
+  hipCtx_t current = ROCMDriver::CurrentContextOrDie();
   if (current != nullptr && !CreatedContexts::Has(current)) {
     LOG(FATAL) << "current context was not created by the StreamExecutor "
                   "rocm_driver API: "
@@ -240,7 +240,7 @@ CUcontext CurrentContext() {
 }
 
 // ROCM driver routines may require a large amount of stack (particularly
-// cuModuleLoadDataEx, in our experience). To avoid stack overflow when using
+// hipModuleLoadDataEx, in our experience). To avoid stack overflow when using
 // stack-limited threads (such as those spawned by a default-argument
 // thread::ThreadPool on some platforms), we run certain routines in this pool
 // and wait for completion.
@@ -271,10 +271,10 @@ string MemorySpaceString(MemorySpace memory_space) {
 
 namespace {
 
-// Call cuCtxtSynchronize and crash if it doesn't succeed.
+// Call hipCtxtSynchronize and crash if it doesn't succeed.
 void SynchronizeOrDie() {
-  auto res = cuCtxSynchronize();
-  if (res != ROCM_SUCCESS) {
+  auto res = hipCtxSynchronize();
+  if (res != hipSuccess) {
     LOG(FATAL) << "Synchronize found "
                << ToString(res) << " :: " << port::CurrentStackTrace();
   }
@@ -309,7 +309,7 @@ ScopedActivateContext::ScopedActivateContext(ROCmContext* rocm_context) {
   to_restore_ = (tls->depth == 1 ? nullptr : tls->context);
 
   // Set the context and update thread local.
-  CHECK_EQ(ROCM_SUCCESS, cuCtxSetCurrent(rocm_context->context()));
+  CHECK_EQ(hipSuccess, hipCtxSetCurrent(rocm_context->context()));
   tls->id = rocm_context->id();
   tls->context = rocm_context;
 }
@@ -334,7 +334,7 @@ ScopedActivateContext::~ScopedActivateContext() {
   }
 
   // Set context and update thread local.
-  CHECK_EQ(ROCM_SUCCESS, cuCtxSetCurrent(to_restore_->context()));
+  CHECK_EQ(hipSuccess, hipCtxSetCurrent(to_restore_->context()));
   tls->id = to_restore_->id();
   tls->context = to_restore_;
 }
@@ -344,7 +344,7 @@ namespace {
 // Returns a stringified device number associated with pointer, primarily for
 // logging purposes. Returns "?" if the device could not be successfully
 // queried.
-string ROCMPointerToDeviceString(CUdeviceptr pointer) {
+string ROCMPointerToDeviceString(hipDevice_tptr pointer) {
   auto value = ROCMDriver::GetPointerDevice(pointer);
   if (value.ok()) {
     return port::StrCat(value.ValueOrDie());
@@ -356,7 +356,7 @@ string ROCMPointerToDeviceString(CUdeviceptr pointer) {
 // Returns a stringified memory space associated with pointer, primarily for
 // logging purposes. Returns "?" if the memory space could not be successfully
 // queried.
-string ROCMPointerToMemorySpaceString(CUdeviceptr pointer) {
+string ROCMPointerToMemorySpaceString(hipDevice_tptr pointer) {
   auto value = ROCMDriver::GetPointerMemorySpace(pointer);
   if (value.ok()) {
     return MemorySpaceString(value.ValueOrDie());
@@ -369,7 +369,7 @@ string ROCMPointerToMemorySpaceString(CUdeviceptr pointer) {
 // permitted between the "from" and "to" pointers' associated contexts,
 // primarily for logging purposes. Returns "error" if an error is encountered
 // in the process of querying.
-string ROCMPointersToCanAccessString(CUdeviceptr from, CUdeviceptr to) {
+string ROCMPointersToCanAccessString(hipDevice_tptr from, hipDevice_tptr to) {
   auto from_context = ROCMDriver::GetPointerContext(from);
   if (!from_context.ok()) {
     LOG(ERROR) << "could not retrieve source pointer's context: "
@@ -392,27 +392,27 @@ string ROCMPointersToCanAccessString(CUdeviceptr from, CUdeviceptr to) {
 // Actually performs the work of ROCM initialization. Wrapped up in one-time
 // execution guard.
 static port::Status InternalInit() {
-  CUresult res = ROCM_ERROR_NO_DEVICE;
+  hipError_t res = ROCM_ERROR_NO_DEVICE;
   if (FLAGS_gpuexec_rocm_driver_inject_init_error) {
     LOG(ERROR) << "injecting ROCM init error; initialization will fail";
   } else {
-    res = cuInit(0 /* = flags */);
+    res = hipInit(0 /* = flags */);
   }
 
-  if (res == ROCM_SUCCESS) {
+  if (res == hipSuccess) {
     return port::Status::OK();
   }
 
-  LOG(ERROR) << "failed call to cuInit: " << ToString(res);
+  LOG(ERROR) << "failed call to hipInit: " << ToString(res);
   Diagnostician::LogDiagnosticInformation();
   return port::Status{port::error::ABORTED,
-                      port::StrCat("failed call to cuInit: ", ToString(res))};
+                      port::StrCat("failed call to hipInit: ", ToString(res))};
 }
 
 }  // namespace
 
 /* static */ port::Status ROCMDriver::Init() {
-  // Cached return value from calling InternalInit(), as cuInit need only be
+  // Cached return value from calling InternalInit(), as hipInit need only be
   // called once, but ROCMDriver::Init may be called many times.
   static port::Status init_retval;
   static bool set = false;
@@ -428,23 +428,23 @@ static port::Status InternalInit() {
 }
 
 /* static */ port::Status ROCMDriver::GetDevice(int device_ordinal,
-                                                CUdevice *device) {
-  CUresult res = cuDeviceGet(device, device_ordinal);
-  if (res == ROCM_SUCCESS) {
+                                                hipDevice_t *device) {
+  hipError_t res = hipDeviceGet(device, device_ordinal);
+  if (res == hipSuccess) {
     return port::Status::OK();
   }
 
   return port::Status{
       port::error::INTERNAL,
-      port::StrCat("failed call to cuDeviceGet: ", ToString(res))};
+      port::StrCat("failed call to hipDeviceGet: ", ToString(res))};
 }
 
-/* static */ bool ROCMDriver::GetDeviceName(CUdevice device,
+/* static */ bool ROCMDriver::GetDeviceName(hipDevice_t device,
                                             string *device_name) {
   static const size_t kCharLimit = 64;
   port::InlinedVector<char, 4> chars(kCharLimit);
-  CUresult res = cuDeviceGetName(chars.begin(), kCharLimit - 1, device);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipDeviceGetName(chars.begin(), kCharLimit - 1, device);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to get device name for " << device << ": "
                << ToString(res);
     return false;
@@ -479,7 +479,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
 }
 
 /* static */ port::Status ROCMDriver::CreateContext(
-    CUdevice device, DeviceOptions device_options, ROCmContext** context) {
+    hipDevice_t device, DeviceOptions device_options, ROCmContext** context) {
   *context = nullptr;
 
   int flags = 0;
@@ -487,9 +487,9 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
     LOG(WARNING) << "could not convert all device options into context flags";
   }
 
-  CUresult res;
-  CUcontext former_context;
-  CUcontext new_context;
+  hipError_t res;
+  hipCtx_t former_context;
+  hipCtx_t new_context;
   {
     // TODO(leary) Need to see if NVIDIA can expunge the leakiness in their
     // context creation: see http://b/13248943
@@ -498,8 +498,8 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
     {
       unsigned int former_primary_context_flags;
       int former_primary_context_is_active;
-      CHECK_EQ(ROCM_SUCCESS,
-               cuDevicePrimaryCtxGetState(device, &former_primary_context_flags,
+      CHECK_EQ(hipSuccess,
+               hipDevicePrimaryCtxGetState(device, &former_primary_context_flags,
                                           &former_primary_context_is_active));
       if (former_primary_context_flags != flags) {
         if (former_primary_context_is_active) {
@@ -508,13 +508,13 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
               << former_primary_context_flags << ") than the desired flag set ("
               << flags << ").";
         } else {
-          CHECK_EQ(ROCM_SUCCESS, cuDevicePrimaryCtxSetFlags(device, flags));
+          CHECK_EQ(hipSuccess, hipDevicePrimaryCtxSetFlags(device, flags));
         }
       }
     }
 
     former_context = ROCMDriver::CurrentContextOrDie();
-    res = cuDevicePrimaryCtxRetain(&new_context, device);
+    res = hipDevicePrimaryCtxRetain(&new_context, device);
     if (former_context != nullptr) {
       if (former_context == new_context) {
         VLOG(2) << "The primary context " << former_context
@@ -532,12 +532,12 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
           << "creating context when one is currently active; existing: "
           << former_context;
     }
-    res = cuCtxCreate(&new_context, flags, device);
+    res = hipCtxCreate(&new_context, flags, device);
 #endif
   }
-  CHECK_EQ(ROCM_SUCCESS, cuCtxSetCurrent(former_context));
+  CHECK_EQ(hipSuccess, hipCtxSetCurrent(former_context));
 
-  if (res == ROCM_SUCCESS) {
+  if (res == hipSuccess) {
     *context = CreatedContexts::Add(new_context);
     CHECK(*context != nullptr)
         << "success in this call must entail non-null result";
@@ -546,9 +546,9 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
   }
 
 #if ROCM_VERSION >= 7000
-  string message = "failed call to cuDevicePrimaryCtxRetain: " + ToString(res);
+  string message = "failed call to hipDevicePrimaryCtxRetain: " + ToString(res);
 #else
-  string message = "failed call to cuCtxCreate: " + ToString(res);
+  string message = "failed call to hipCtxCreate: " + ToString(res);
 #endif
   if (res == ROCM_ERROR_OUT_OF_MEMORY) {
     uint64 total_memory;
@@ -567,29 +567,29 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
     return;
   }
 #if ROCM_VERSION >= 7000
-  CUcontext former_context = CurrentContext();
-  CUresult res = cuCtxSetCurrent(context->context());
-  CUdevice device;
-  cuCtxGetDevice(&device);
-  cuCtxSetCurrent(former_context);
+  hipCtx_t former_context = CurrentContext();
+  hipError_t res = hipCtxSetCurrent(context->context());
+  hipDevice_t device;
+  hipCtxGetDevice(&device);
+  hipCtxSetCurrent(former_context);
 
-  res = cuDevicePrimaryCtxRelease(device);
+  res = hipDevicePrimaryCtxRelease(device);
 #else
-  CUresult res = cuCtxDestroy(context->context());
+  hipError_t res = hipCtxDestroy(context->context());
 #endif
 
-  if (res != ROCM_SUCCESS) {
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to release ROCM context; leaking: " << ToString(res);
   }
 
   CreatedContexts::Remove(context->context());
 }
 
-/* static */ bool ROCMDriver::FuncGetAttribute(CUfunction_attribute attribute,
-                                               CUfunction func,
+/* static */ bool ROCMDriver::FuncGetAttribute(hipFunction_t_attribute attribute,
+                                               hipFunction_t func,
                                                int *attribute_value) {
-  CUresult res = cuFuncGetAttribute(attribute_value, attribute, func);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipFuncGetAttribute(attribute_value, attribute, func);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to query kernel attribute. kernel: " << func
                << ", attribute: " << attribute;
     return false;
@@ -597,10 +597,10 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
   return true;
 }
 
-/* static */ bool ROCMDriver::FuncSetCacheConfig(CUfunction function,
+/* static */ bool ROCMDriver::FuncSetCacheConfig(hipFunction_t function,
                                                  CUfunc_cache cache_config) {
-  CUresult res = cuFuncSetCacheConfig(function, cache_config);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipFuncSetCacheConfig(function, cache_config);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to set ROCM kernel cache config. kernel: " << function
                << ", config: " << cache_config << ", result: " << ToString(res);
     return false;
@@ -613,10 +613,10 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
 ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   CUsharedconfig shared_mem_config;
   ScopedActivateContext activation{context};
-  CUresult result = cuCtxGetSharedMemConfig(&shared_mem_config);
-  if (result != ROCM_SUCCESS) {
-    CUdevice device;
-    cuCtxGetDevice(&device);
+  hipError_t result = hipCtxGetSharedMemConfig(&shared_mem_config);
+  if (result != hipSuccess) {
+    hipDevice_t device;
+    hipCtxGetDevice(&device);
     LOG(ERROR) << "failed to get ROCM device shared memory config. "
                << "Context device ID: " << device
                << ", result: " << ToString(result);
@@ -630,10 +630,10 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 /* static */ port::Status ROCMDriver::ContextSetSharedMemConfig(
     ROCmContext* context, CUsharedconfig shared_mem_config) {
   ScopedActivateContext activation{context};
-  CUresult result = cuCtxSetSharedMemConfig(shared_mem_config);
-  if (result != ROCM_SUCCESS) {
-    CUdevice device;
-    cuCtxGetDevice(&device);
+  hipError_t result = hipCtxSetSharedMemConfig(shared_mem_config);
+  if (result != hipSuccess) {
+    hipDevice_t device;
+    hipCtxGetDevice(&device);
     LOG(ERROR) << "failed to set ROCM device shared memory config. "
                << "Context device ID: " << device
                << ", config: " << shared_mem_config
@@ -646,20 +646,20 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::LaunchKernel(
-    ROCmContext* context, CUfunction function, unsigned int grid_dim_x,
+    ROCmContext* context, hipFunction_t function, unsigned int grid_dim_x,
     unsigned int grid_dim_y, unsigned int grid_dim_z, unsigned int block_dim_x,
     unsigned int block_dim_y, unsigned int block_dim_z,
-    unsigned int shared_mem_bytes, CUstream stream, void **kernel_params,
+    unsigned int shared_mem_bytes, hipStream_t stream, void **kernel_params,
     void **extra) {
   ScopedActivateContext activation{context};
   VLOG(2) << "launching kernel: " << function << "; gdx: " << grid_dim_x
           << " gdy: " << grid_dim_y << " gdz: " << grid_dim_z
           << " bdx: " << block_dim_x << " bdy: " << block_dim_y
           << " bdz: " << block_dim_z;
-  CUresult res = cuLaunchKernel(function, grid_dim_x, grid_dim_y, grid_dim_z,
+  hipError_t res = cuLaunchKernel(function, grid_dim_x, grid_dim_y, grid_dim_z,
                                 block_dim_x, block_dim_y, block_dim_z,
                                 shared_mem_bytes, stream, kernel_params, extra);
-  if (res != ROCM_SUCCESS) {
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to launch ROCM kernel: " << function
                << "; result: " << ToString(res);
     return false;
@@ -670,10 +670,10 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 
 /* static */ port::Status ROCMDriver::LoadCubin(ROCmContext* context,
                                                 const char *cubin_bytes,
-                                                CUmodule *module) {
+                                                hipModule_t *module) {
   ScopedActivateContext activation{context};
-  CUresult result = cuModuleLoadFatBinary(module, cubin_bytes);
-  if (result != ROCM_SUCCESS) {
+  hipError_t result = hipModuleLoadFatBinary(module, cubin_bytes);
+  if (result != hipSuccess) {
     return port::Status{port::error::INTERNAL,
                         "failed to load in-memory CUBIN: " + ToString(result)};
   }
@@ -683,7 +683,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 
 /* static */ bool ROCMDriver::LoadPtx(ROCmContext* context,
                                       const char *ptx_contents,
-                                      CUmodule *module) {
+                                      hipModule_t *module) {
   port::Notification notification;
   bool ret = true;
   GetDriverExecutor()->Schedule([context, ptx_contents, module, &ret,
@@ -710,12 +710,12 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
         port::bit_cast<void *>(uintptr_t(log_verbose))};
     CHECK(ARRAYSIZE(options) == ARRAYSIZE(option_values));
 
-    CUresult res;
+    hipError_t res;
     {
       // TODO(leary) Need to see if NVIDIA can expunge the leakiness in their
       // module loading: see http://b/13248943
 
-      res = cuModuleLoadDataEx(module, ptx_data, ARRAYSIZE(options), options,
+      res = hipModuleLoadDataEx(module, ptx_data, ARRAYSIZE(options), options,
                                option_values);
     }
 
@@ -727,7 +727,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
     CHECK_LE(error_log_buffer_bytes, kLogBufferBytesLimit);
     CHECK_LE(info_log_buffer_bytes, kLogBufferBytesLimit);
 
-    if (res != ROCM_SUCCESS) {
+    if (res != hipSuccess) {
       LOG(ERROR) << "failed to load PTX text as a module: " << ToString(res);
       // As a precaution for null termination of the API-provided value, ensure
       // that at least the last byte is null.
@@ -752,11 +752,11 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::SynchronousMemsetUint8(ROCmContext* context,
-                                                     CUdeviceptr location,
+                                                     hipDevice_tptr location,
                                                      uint8 value, size_t size) {
   ScopedActivateContext activation{context};
-  CUresult res = cuMemsetD8(location, value, size);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipMemsetD8(location, value, size);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to memset memory: " << ToString(res);
     return false;
   }
@@ -764,12 +764,12 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::SynchronousMemsetUint32(ROCmContext* context,
-                                                      CUdeviceptr location,
+                                                      hipDevice_tptr location,
                                                       uint32 value,
                                                       size_t uint32_count) {
   ScopedActivateContext activation{context};
-  CUresult res = cuMemsetD32(location, value, uint32_count);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipMemsetD32(location, value, uint32_count);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to memset memory: " << ToString(res);
     return false;
   }
@@ -777,13 +777,13 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::AsynchronousMemsetUint8(ROCmContext* context,
-                                                      CUdeviceptr location,
+                                                      hipDevice_tptr location,
                                                       uint8 value,
                                                       size_t uint32_count,
-                                                      CUstream stream) {
+                                                      hipStream_t stream) {
   ScopedActivateContext activation{context};
-  CUresult res = cuMemsetD8Async(location, value, uint32_count, stream);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipMemsetD8Async(location, value, uint32_count, stream);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to enqueue async memset operation: " << ToString(res);
     return false;
   }
@@ -792,13 +792,13 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::AsynchronousMemsetUint32(ROCmContext* context,
-                                                       CUdeviceptr location,
+                                                       hipDevice_tptr location,
                                                        uint32 value,
                                                        size_t uint32_count,
-                                                       CUstream stream) {
+                                                       hipStream_t stream) {
   ScopedActivateContext activation{context};
-  CUresult res = cuMemsetD32Async(location, value, uint32_count, stream);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipMemsetD32Async(location, value, uint32_count, stream);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to enqueue async memset operation: " << ToString(res);
     return false;
   }
@@ -807,12 +807,12 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::AddStreamCallback(ROCmContext* context,
-                                                CUstream stream,
+                                                hipStream_t stream,
                                                 StreamCallback callback,
                                                 void *data) {
   // Note: flags param is required to be zero according to ROCM 6.0.
-  CUresult res = cuStreamAddCallback(stream, callback, data, 0 /* = flags */);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipStreamAddCallback(stream, callback, data, 0 /* = flags */);
+  if (res != hipSuccess) {
     LOG(ERROR) << "unable to add host callback: " << ToString(res);
     return false;
   }
@@ -820,13 +820,13 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::GetModuleFunction(ROCmContext *context,
-                                                CUmodule module,
+                                                hipModule_t module,
                                                 const char *kernel_name,
-                                                CUfunction *function) {
+                                                hipFunction_t *function) {
   ScopedActivateContext activated{context};
   CHECK(module != nullptr && kernel_name != nullptr);
-  CUresult res = cuModuleGetFunction(function, module, kernel_name);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipModuleGetFunction(function, module, kernel_name);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to get PTX kernel \"" << kernel_name
                << "\" from module: " << ToString(res);
     return false;
@@ -836,15 +836,15 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::GetModuleSymbol(ROCmContext* context,
-                                              CUmodule module,
+                                              hipModule_t module,
                                               const char *symbol_name,
-                                              CUdeviceptr *dptr,
+                                              hipDevice_tptr *dptr,
                                               size_t *bytes) {
   ScopedActivateContext activated{context};
   CHECK(module != nullptr && symbol_name != nullptr &&
         (dptr != nullptr || bytes != nullptr));
-  CUresult res = cuModuleGetGlobal(dptr, bytes, module, symbol_name);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipModuleGetGlobal(dptr, bytes, module, symbol_name);
+  if (res != hipSuccess) {
     // symbol may not be found in the current module, but it may reside in
     // another module.
     VLOG(2) << "failed to get symbol \"" << symbol_name
@@ -856,21 +856,21 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ void ROCMDriver::UnloadModule(ROCmContext *context,
-                                           CUmodule module) {
+                                           hipModule_t module) {
   ScopedActivateContext activated{context};
-  CUresult res = cuModuleUnload(module);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipModuleUnload(module);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to unload module " << module
                << "; leaking: " << ToString(res);
   }
 }
 
-/* static */ port::StatusOr<CUdevice> ROCMDriver::DeviceFromContext(
+/* static */ port::StatusOr<hipDevice_t> ROCMDriver::DeviceFromContext(
     ROCmContext* context) {
   ScopedActivateContext activated{context};
-  CUdevice device = -1;
-  CUresult result = cuCtxGetDevice(&device);
-  if (result == ROCM_SUCCESS) {
+  hipDevice_t device = -1;
+  hipError_t result = hipCtxGetDevice(&device);
+  if (result == hipSuccess) {
     return device;
   }
 
@@ -880,13 +880,13 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::CreateStream(ROCmContext *context,
-                                           CUstream *out) {
+                                           hipStream_t *out) {
   // TODO(leary) can we switch this to CU_STREAM_NON_BLOCKING or will that mess
   // up synchronization with respect to memsets and any other things that have
   // to occur on the default stream?
   ScopedActivateContext activated{context};
-  CUresult res = cuStreamCreate(out, 0);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipStreamCreate(out, 0);
+  if (res != hipSuccess) {
     LOG(ERROR) << "could not allocate ROCM stream for context " << context
                << ": " << ToString(res);
     return false;
@@ -898,14 +898,14 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ void ROCMDriver::DestroyStream(ROCmContext* context,
-                                            CUstream *stream) {
+                                            hipStream_t *stream) {
   if (*stream == nullptr) {
     return;
   }
 
   ScopedActivateContext activated{context};
-  CUresult res = cuStreamDestroy(*stream);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipStreamDestroy(*stream);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to destroy ROCM stream for context " << context
                << ": " << ToString(res);
   } else {
@@ -918,9 +918,9 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 /* static */ void *ROCMDriver::DeviceAllocate(ROCmContext *context,
                                               uint64 bytes) {
   ScopedActivateContext activated{context};
-  CUdeviceptr result = 0;
-  CUresult res = cuMemAlloc(&result, bytes);
-  if (res != ROCM_SUCCESS) {
+  hipDevice_tptr result = 0;
+  hipError_t res = hipMemAlloc(&result, bytes);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to allocate "
                << port::HumanReadableNumBytes::ToString(bytes) << " (" << bytes
                << " bytes) from device: " << ToString(res);
@@ -935,9 +935,9 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 /* static */ void ROCMDriver::DeviceDeallocate(ROCmContext* context,
                                                void *location) {
   ScopedActivateContext activation{context};
-  CUdeviceptr pointer = port::bit_cast<CUdeviceptr>(location);
-  CUresult res = cuMemFree(pointer);
-  if (res != ROCM_SUCCESS) {
+  hipDevice_tptr pointer = port::bit_cast<hipDevice_tptr>(location);
+  hipError_t res = hipMemFree(pointer);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to free device memory at " << location
                << "; result: " << ToString(res);
   } else {
@@ -950,8 +950,8 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   ScopedActivateContext activation{context};
   void *host_mem = nullptr;
   // "Portable" memory is visible to all ROCM contexts. Safe for our use model.
-  CUresult res = cuMemHostAlloc(&host_mem, bytes, CU_MEMHOSTALLOC_PORTABLE);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipMemHostAlloc(&host_mem, bytes, CU_MEMHOSTALLOC_PORTABLE);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to alloc " << bytes
                << " bytes on host: " << ToString(res);
   }
@@ -961,8 +961,8 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 /* static */ void ROCMDriver::HostDeallocate(ROCmContext* context,
                                              void *location) {
   ScopedActivateContext activation{context};
-  CUresult res = cuMemFreeHost(location);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipMemFreeHost(location);
+  if (res != hipSuccess) {
     LOG(ERROR) << "error deallocating host memory at " << location << ": "
                << ToString(res);
   }
@@ -972,9 +972,9 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
                                            uint64 bytes) {
   ScopedActivateContext activation{context};
   // "Portable" memory is visible to all ROCM contexts. Safe for our use model.
-  CUresult res =
-      cuMemHostRegister(location, bytes, CU_MEMHOSTREGISTER_PORTABLE);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res =
+      hipMemHostRegister(location, bytes, CU_MEMHOSTREGISTER_PORTABLE);
+  if (res != hipSuccess) {
     LOG(ERROR) << "error registering host memory at " << location << ": "
                << ToString(res);
     return false;
@@ -985,8 +985,8 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 /* static */ bool ROCMDriver::HostUnregister(ROCmContext* context,
                                              void *location) {
   ScopedActivateContext activation{context};
-  CUresult res = cuMemHostUnregister(location);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipMemHostUnregister(location);
+  if (res != hipSuccess) {
     LOG(ERROR) << "error unregistering host memory at " << location << ": "
                << ToString(res);
     return false;
@@ -995,18 +995,18 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::DestroyEvent(ROCmContext* context,
-                                                   CUevent *event) {
+                                                   hipEvent_t *event) {
   if (*event == nullptr) {
     return port::Status{port::error::INVALID_ARGUMENT,
                         "input event cannot be null"};
   }
 
   ScopedActivateContext activated{context};
-  CUresult res = cuEventDestroy(*event);
+  hipError_t res = hipEventDestroy(*event);
   *event = nullptr;
 
   switch (res) {
-    case ROCM_SUCCESS:
+    case hipSuccess:
       return port::Status::OK();
     case ROCM_ERROR_DEINITIALIZED:
     case ROCM_ERROR_NOT_INITIALIZED:
@@ -1023,12 +1023,12 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::RecordEvent(ROCmContext* context,
-                                                  CUevent event,
-                                                  CUstream stream) {
+                                                  hipEvent_t event,
+                                                  hipStream_t stream) {
   ScopedActivateContext activated{context};
-  CUresult res = cuEventRecord(event, stream);
+  hipError_t res = hipEventRecord(event, stream);
   switch (res) {
-    case ROCM_SUCCESS:
+    case hipSuccess:
       return port::Status::OK();
     case ROCM_ERROR_DEINITIALIZED:
     case ROCM_ERROR_NOT_INITIALIZED:
@@ -1044,11 +1044,11 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   }
 }
 
-/* static */ port::StatusOr<CUresult> ROCMDriver::QueryEvent(
-    ROCmContext *context, CUevent event) {
+/* static */ port::StatusOr<hipError_t> ROCMDriver::QueryEvent(
+    ROCmContext *context, hipEvent_t event) {
   ScopedActivateContext activated{context};
-  CUresult res = cuEventQuery(event);
-  if (res != ROCM_SUCCESS && res != ROCM_ERROR_NOT_READY) {
+  hipError_t res = hipEventQuery(event);
+  if (res != hipSuccess && res != ROCM_ERROR_NOT_READY) {
     return port::Status{
         port::error::INTERNAL,
         port::Printf("failed to query event: %s", ToString(res).c_str())};
@@ -1059,17 +1059,17 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 
 /* static */ bool ROCMDriver::GetEventElapsedTime(ROCmContext* context,
                                                   float *elapsed_milliseconds,
-                                                  CUevent start, CUevent stop) {
+                                                  hipEvent_t start, hipEvent_t stop) {
   ScopedActivateContext activated{context};
-  // The stop event must have completed in order for cuEventElapsedTime to
+  // The stop event must have completed in order for hipEventElapsedTime to
   // work.
-  CUresult res = cuEventSynchronize(stop);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipEventSynchronize(stop);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to synchronize the stop event: " << ToString(res);
     return false;
   }
-  res = cuEventElapsedTime(elapsed_milliseconds, start, stop);
-  if (res != ROCM_SUCCESS) {
+  res = hipEventElapsedTime(elapsed_milliseconds, start, stop);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to get elapsed time between events: "
                << ToString(res);
     return false;
@@ -1079,11 +1079,11 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::WaitStreamOnEvent(ROCmContext* context,
-                                                CUstream stream,
-                                                CUevent event) {
+                                                hipStream_t stream,
+                                                hipEvent_t event) {
   ScopedActivateContext activation{context};
-  CUresult res = cuStreamWaitEvent(stream, event, 0 /* = flags */);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipStreamWaitEvent(stream, event, 0 /* = flags */);
+  if (res != hipSuccess) {
     LOG(ERROR) << "could not wait stream on event: " << ToString(res);
     return false;
   }
@@ -1093,8 +1093,8 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 
 /* static */ bool ROCMDriver::SynchronizeContext(ROCmContext* context) {
   ScopedActivateContext activation{context};
-  CUresult res = cuCtxSynchronize();
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipCtxSynchronize();
+  if (res != hipSuccess) {
     LOG(ERROR) << "could not synchronize on ROCM context: " << ToString(res)
                << " :: " << port::CurrentStackTrace();
     return false;
@@ -1104,11 +1104,11 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::SynchronizeStream(ROCmContext* context,
-                                                CUstream stream) {
+                                                hipStream_t stream) {
   ScopedActivateContext activated{context};
   CHECK(stream != nullptr);
-  CUresult res = cuStreamSynchronize(stream);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipStreamSynchronize(stream);
+  if (res != hipSuccess) {
     LOG(ERROR) << "could not synchronize on ROCM stream: " << ToString(res)
                << " :: " << port::CurrentStackTrace();
     return false;
@@ -1119,11 +1119,11 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::IsStreamIdle(ROCmContext *context,
-                                           CUstream stream) {
+                                           hipStream_t stream) {
   ScopedActivateContext activated{context};
   CHECK(stream != nullptr);
-  CUresult res = cuStreamQuery(stream);
-  if (res == ROCM_SUCCESS) {
+  hipError_t res = hipStreamQuery(stream);
+  if (res == hipSuccess) {
     return true;
   }
 
@@ -1135,11 +1135,11 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 
 /* static */ port::Status ROCMDriver::SynchronousMemcpyD2H(ROCmContext *context,
                                                            void *host_dst,
-                                                           CUdeviceptr gpu_src,
+                                                           hipDevice_tptr gpu_src,
                                                            uint64 size) {
   ScopedActivateContext activation{context};
-  CUresult res = cuMemcpyDtoH(host_dst, gpu_src, size);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipMemcpyDtoH(host_dst, gpu_src, size);
+  if (res != hipSuccess) {
     return port::InternalError(
         port::Printf("failed to synchronous memcpy from device to host: %s; "
                      "host dst: %p; GPU src: %p; size: %llu=0x%llx",
@@ -1152,12 +1152,12 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::SynchronousMemcpyH2D(ROCmContext *context,
-                                                           CUdeviceptr gpu_dst,
+                                                           hipDevice_tptr gpu_dst,
                                                            const void *host_src,
                                                            uint64 size) {
   ScopedActivateContext activation{context};
-  CUresult res = cuMemcpyHtoD(gpu_dst, host_src, size);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipMemcpyHtoD(gpu_dst, host_src, size);
+  if (res != hipSuccess) {
     return port::InternalError(port::Printf(
         "failed to synchronous memcpy from host to device: %s; GPU dst: %p;"
         " host src: %p; size: %llu=0x%llx",
@@ -1169,12 +1169,12 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::SynchronousMemcpyD2D(ROCmContext *context,
-                                                           CUdeviceptr gpu_dst,
-                                                           CUdeviceptr gpu_src,
+                                                           hipDevice_tptr gpu_dst,
+                                                           hipDevice_tptr gpu_src,
                                                            uint64 size) {
   ScopedActivateContext activation{context};
-  CUresult res = cuMemcpyDtoD(gpu_dst, gpu_src, size);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipMemcpyDtoD(gpu_dst, gpu_src, size);
+  if (res != hipSuccess) {
     return port::InternalError(port::Printf(
         "failed to synchronous memcpy from host to device: %s; GPU dst: %p; "
         "GPU src: %p; size: %llu=0x%llx",
@@ -1187,12 +1187,12 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 
 /* static */ bool ROCMDriver::AsynchronousMemcpyD2H(ROCmContext* context,
                                                     void *host_dst,
-                                                    CUdeviceptr gpu_src,
+                                                    hipDevice_tptr gpu_src,
                                                     uint64 size,
-                                                    CUstream stream) {
+                                                    hipStream_t stream) {
   ScopedActivateContext activation{context};
-  CUresult res = cuMemcpyDtoHAsync(host_dst, gpu_src, size, stream);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipMemcpyDtoHAsync(host_dst, gpu_src, size, stream);
+  if (res != hipSuccess) {
     LOG(ERROR) << port::Printf(
         "failed to enqueue async memcpy from device to host: %s; host dst: %p; "
         "GPU src: %p; size: %llu=0x%llx",
@@ -1206,13 +1206,13 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::AsynchronousMemcpyH2D(ROCmContext* context,
-                                                    CUdeviceptr gpu_dst,
+                                                    hipDevice_tptr gpu_dst,
                                                     const void *host_src,
                                                     uint64 size,
-                                                    CUstream stream) {
+                                                    hipStream_t stream) {
   ScopedActivateContext activation{context};
-  CUresult res = cuMemcpyHtoDAsync(gpu_dst, host_src, size, stream);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipMemcpyHtoDAsync(gpu_dst, host_src, size, stream);
+  if (res != hipSuccess) {
     LOG(ERROR) << port::Printf(
         "failed to enqueue async memcpy from host to device: %s; GPU dst: %p; "
         "host src: %p; size: %llu=0x%llx",
@@ -1225,13 +1225,13 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::AsynchronousMemcpyD2D(ROCmContext* context,
-                                                    CUdeviceptr gpu_dst,
-                                                    CUdeviceptr gpu_src,
+                                                    hipDevice_tptr gpu_dst,
+                                                    hipDevice_tptr gpu_src,
                                                     uint64 size,
-                                                    CUstream stream) {
+                                                    hipStream_t stream) {
   ScopedActivateContext activation{context};
-  CUresult result = cuMemcpyDtoDAsync(gpu_dst, gpu_src, size, stream);
-  if (result != ROCM_SUCCESS) {
+  hipError_t result = hipMemcpyDtoDAsync(gpu_dst, gpu_src, size, stream);
+  if (result != hipSuccess) {
     LOG(ERROR) << port::Printf(
         "failed to enqueue async memcpy from device to device: %s"
         "; GPU dst: %p on %s %s"
@@ -1251,24 +1251,24 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::CreateEvent(ROCmContext* context,
-                                                  CUevent *result,
+                                                  hipEvent_t *result,
                                                   EventFlags flags) {
-  int cuflags;
+  int hipflags;
   switch (flags) {
     case EventFlags::kDefault:
-      cuflags = CU_EVENT_DEFAULT;
+      hipflags = hipEventDefault;
       break;
     case EventFlags::kDisableTiming:
-      cuflags = CU_EVENT_DISABLE_TIMING;
+      hipflags = hipEventDisableTiming;
       break;
     default:
       LOG(FATAL) << "impossible event flags: " << int(flags);
   }
 
   ScopedActivateContext activated{context};
-  CUresult res = cuEventCreate(result, cuflags);
+  hipError_t res = hipEventCreate(result, hipflags);
 
-  if (res == ROCM_SUCCESS) {
+  if (res == hipSuccess) {
     return port::Status::OK();
   } else if (res == ROCM_ERROR_OUT_OF_MEMORY) {
     return port::Status{port::error::RESOURCE_EXHAUSTED,
@@ -1282,8 +1282,8 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 
 /* static */ int ROCMDriver::GetDeviceCount() {
   int device_count = 0;
-  CUresult res = cuDeviceGetCount(&device_count);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipDeviceGetCount(&device_count);
+  if (res != hipSuccess) {
     LOG(ERROR) << "could not retrieve ROCM device count: " << ToString(res);
     return 0;
   }
@@ -1295,11 +1295,11 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ port::StatusOr<ROCmContext*> ROCMDriver::GetPointerContext(
-    CUdeviceptr pointer) {
+    hipDevice_tptr pointer) {
   ROCmContext* context = nullptr;
-  CUresult result =
+  hipError_t result =
       cuPointerGetAttribute(&context, CU_POINTER_ATTRIBUTE_CONTEXT, pointer);
-  if (result == ROCM_SUCCESS) {
+  if (result == hipSuccess) {
     CHECK(context != nullptr) << "success should entail non-null context";
     return context;
   }
@@ -1311,11 +1311,10 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ port::StatusOr<MemorySpace> ROCMDriver::GetPointerMemorySpace(
-    CUdeviceptr pointer) {
+    hipDevice_tptr pointer) {
   unsigned int value;
-  CUresult result =
-      cuPointerGetAttribute(&value, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, pointer);
-  if (result == ROCM_SUCCESS) {
+  hipError_t result = hipSuccess;
+  if (result == hipSuccess) {
     switch (value) {
       case CU_MEMORYTYPE_DEVICE:
         return MemorySpace::kDevice;
@@ -1334,11 +1333,11 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
                    ToString(result))};
 }
 
-/* static */ port::Status ROCMDriver::GetPointerAddressRange(CUdeviceptr dptr,
-                                                             CUdeviceptr *base,
+/* static */ port::Status ROCMDriver::GetPointerAddressRange(hipDevice_tptr dptr,
+                                                             hipDevice_tptr *base,
                                                              size_t *size) {
-  CUresult result = cuMemGetAddressRange(base, size, dptr);
-  if (result == ROCM_SUCCESS) {
+  hipError_t result = hipMemGetAddressRange(base, size, dptr);
+  if (result == hipSuccess) {
     return port::Status::OK();
   } else if (result == ROCM_ERROR_NOT_FOUND) {
     // We differentiate between "this pointer is unknown" (return here) and
@@ -1356,8 +1355,8 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
                    reinterpret_cast<void *>(dptr), ToString(result).c_str())};
 }
 
-/* static */ port::StatusOr<CUdevice> ROCMDriver::GetPointerDevice(
-    CUdeviceptr pointer) {
+/* static */ port::StatusOr<hipDevice_t> ROCMDriver::GetPointerDevice(
+    hipDevice_tptr pointer) {
   auto result = GetPointerContext(pointer);
   if (!result.ok()) {
     return result.status();
@@ -1368,11 +1367,11 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 
 /* static */ port::Status ROCMDriver::GetComputeCapability(int *cc_major,
                                                            int *cc_minor,
-                                                           CUdevice device) {
+                                                           hipDevice_t device) {
   *cc_major = 0;
   *cc_minor = 0;
-  CUresult result = cuDeviceComputeCapability(cc_major, cc_minor, device);
-  if (result == ROCM_SUCCESS) {
+  hipError_t result = hipDeviceComputeCapability(cc_major, cc_minor, device);
+  if (result == hipSuccess) {
     return port::Status::OK();
   }
 
@@ -1382,14 +1381,14 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
                    ToString(result).c_str(), device)};
 }
 
-// Helper function that turns the integer output of cuDeviceGetAttribute to type
+// Helper function that turns the integer output of hipDeviceGetAttribute to type
 // T and wraps it in a StatusOr.
 template <typename T>
-static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
-                                            CUdevice_attribute attribute) {
+static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
+                                            hipDevice_t_attribute attribute) {
   int value = -1;
-  CUresult result = cuDeviceGetAttribute(&value, attribute, device);
-  if (result != ROCM_SUCCESS) {
+  hipError_t result = hipDeviceGetAttribute(&value, attribute, device);
+  if (result != hipSuccess) {
     return port::Status{
         port::error::NOT_FOUND,
         port::StrCat("could not retrieve ROCM device attribute (", attribute,
@@ -1400,68 +1399,68 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
 }
 
 /* static */ port::StatusOr<int> ROCMDriver::GetMultiprocessorCount(
-    CUdevice device) {
+    hipDevice_t device) {
   return GetSimpleAttribute<int>(device,
                                  CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT);
 }
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetMaxSharedMemoryPerCore(
-    CUdevice device) {
+    hipDevice_t device) {
   return GetSimpleAttribute<int64>(
       device, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR);
 }
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetMaxSharedMemoryPerBlock(
-    CUdevice device) {
+    hipDevice_t device) {
   return GetSimpleAttribute<int64>(
       device, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK);
 }
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetMaxThreadsPerMultiprocessor(
-    CUdevice device) {
+    hipDevice_t device) {
   return GetSimpleAttribute<int64>(
       device, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR);
 }
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetMaxThreadsPerBlock(
-    CUdevice device) {
+    hipDevice_t device) {
   return GetSimpleAttribute<int64>(device,
                                    CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK);
 }
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetMaxRegistersPerBlock(
-    CUdevice device) {
+    hipDevice_t device) {
   return GetSimpleAttribute<int64>(device,
                                    CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_BLOCK);
 }
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetThreadsPerWarp(
-    CUdevice device) {
+    hipDevice_t device) {
   return GetSimpleAttribute<int64>(device, CU_DEVICE_ATTRIBUTE_WARP_SIZE);
 }
 
 /* static */ bool ROCMDriver::GetGridLimits(int *x, int *y, int *z,
-                                            CUdevice device) {
+                                            hipDevice_t device) {
   int value;
-  CUresult res =
-      cuDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X, device);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res =
+      hipDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X, device);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to query max grid dim x: " << ToString(res);
     return false;
   }
   *x = value;
 
   res =
-      cuDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y, device);
-  if (res != ROCM_SUCCESS) {
+      hipDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y, device);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to query max grid dim y: " << ToString(res);
     return false;
   }
   *y = value;
 
   res =
-      cuDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z, device);
-  if (res != ROCM_SUCCESS) {
+      hipDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z, device);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to query max grid dim z: " << ToString(res);
     return false;
   }
@@ -1470,8 +1469,8 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
 }
 
 /* static */ bool ROCMDriver::GetDriverVersion(int *driver_version) {
-  CUresult res = cuDriverGetVersion(driver_version);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipDriverGetVersion(driver_version);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to query driver version: " << ToString(res);
     return false;
   }
@@ -1479,10 +1478,10 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   return true;
 }
 
-/* static */ bool ROCMDriver::GetDeviceProperties(CUdevprop *device_properties,
+/* static */ bool ROCMDriver::GetDeviceProperties(hipDeviceProp_t *device_properties,
                                                   int device_ordinal) {
-  CUresult res = cuDeviceGetProperties(device_properties, device_ordinal);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipDeviceGetProperties(device_properties, device_ordinal);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to query device properties: " << ToString(res);
     return false;
   }
@@ -1490,11 +1489,11 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   return true;
 }
 
-/* static */ bool ROCMDriver::IsEccEnabled(CUdevice device, bool *result) {
+/* static */ bool ROCMDriver::IsEccEnabled(hipDevice_t device, bool *result) {
   int value = -1;
-  CUresult res =
-      cuDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_ECC_ENABLED, device);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res =
+      hipDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_ECC_ENABLED, device);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to query ECC status: " << ToString(res);
     return false;
   }
@@ -1509,8 +1508,8 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   ScopedActivateContext activation{context};
   size_t free = 0;
   size_t total = 0;
-  CUresult res = cuMemGetInfo(&free, &total);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipMemGetInfo(&free, &total);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to query device memory info: " << ToString(res);
     return false;
   }
@@ -1520,11 +1519,11 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   return true;
 }
 
-/* static */ bool ROCMDriver::GetDeviceTotalMemory(CUdevice device,
+/* static */ bool ROCMDriver::GetDeviceTotalMemory(hipDevice_t device,
                                                    uint64 *result) {
   size_t value = -1;
-  CUresult res = cuDeviceTotalMem(&value, device);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipDeviceTotalMem(&value, device);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to query total available memory: " << ToString(res);
     return false;
   }
@@ -1533,13 +1532,13 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   return true;
 }
 
-/* static */ string ROCMDriver::GetPCIBusID(CUdevice device) {
+/* static */ string ROCMDriver::GetPCIBusID(hipDevice_t device) {
   string pci_bus_id;
   static const int kBufferSize = 64;
   port::InlinedVector<char, 4> chars(kBufferSize);
   chars[kBufferSize - 1] = '\0';
-  CUresult res = cuDeviceGetPCIBusId(chars.begin(), kBufferSize - 1, device);
-  if (res != ROCM_SUCCESS) {
+  hipError_t res = hipDeviceGetPCIBusId(chars.begin(), kBufferSize - 1, device);
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to query PCI bus id for device: " << ToString(res);
     return pci_bus_id;
   }
@@ -1566,9 +1565,9 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
                << to_device.status();
     return false;
   }
-  CUresult res = cuDeviceCanAccessPeer(
+  hipError_t res = hipDeviceCanAccessPeer(
       &can_access_peer, from_device.ValueOrDie(), to_device.ValueOrDie());
-  if (res != ROCM_SUCCESS) {
+  if (res != hipSuccess) {
     LOG(ERROR) << "failed to detect peer access capability: " << ToString(res);
     return false;
   }
@@ -1583,8 +1582,8 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   }
 
   ScopedActivateContext activated{from};
-  CUresult result = cuCtxEnablePeerAccess(to->context(), 0 /* = flags */);
-  if (result != ROCM_SUCCESS &&
+  hipError_t result = hipCtxEnablePeerAccess(to->context(), 0 /* = flags */);
+  if (result != hipSuccess &&
       result != ROCM_ERROR_PEER_ACCESS_ALREADY_ENABLED) {
     return port::Status{
         port::error::INTERNAL,
@@ -1596,14 +1595,14 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
 }
 
 /* static */ port::StatusOr<int> ROCMDriver::GetMaxOccupiedBlocksPerCore(
-    ROCmContext* context, CUfunction kernel, int threads_per_block,
+    ROCmContext* context, hipFunction_t kernel, int threads_per_block,
     size_t dynamic_shared_memory_bytes) {
   ScopedActivateContext activation{context};
 
   int max_blocks;
-  CUresult result = cuOccupancyMaxActiveBlocksPerMultiprocessor(
+  hipError_t result = cuOccupancyMaxActiveBlocksPerMultiprocessor(
       &max_blocks, kernel, threads_per_block, dynamic_shared_memory_bytes);
-  if (result != ROCM_SUCCESS) {
+  if (result != hipSuccess) {
     return port::Status{
         port::error::INTERNAL,
         port::Printf("failed to calculate occupancy of kernel %p: %s", kernel,
@@ -1613,10 +1612,10 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   return max_blocks;
 }
 
-/* static */ CUcontext ROCMDriver::CurrentContextOrDie() {
-  CUcontext current = nullptr;
-  CUresult result = cuCtxGetCurrent(&current);
-  if (result != ROCM_SUCCESS) {
+/* static */ hipCtx_t ROCMDriver::CurrentContextOrDie() {
+  hipCtx_t current = nullptr;
+  hipError_t result = hipCtxGetCurrent(&current);
+  if (result != hipSuccess) {
     LOG(FATAL) << "failed to query current context: " << ToString(result);
   }
   return current;

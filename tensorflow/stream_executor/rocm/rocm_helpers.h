@@ -24,7 +24,7 @@ limitations under the License.
 #include <stddef.h>
 #include <complex>
 
-#include "rocm/include/cuComplex.h"
+#include "rocm/include/hipComplex.h"
 #include "rocm/include/rocm.h"
 
 namespace perftools {
@@ -50,15 +50,15 @@ T *ROCMMemoryMutable(DeviceMemory<T> *mem) {
   return static_cast<T *>(mem->opaque());
 }
 
-static_assert(sizeof(std::complex<float>) == sizeof(cuComplex),
-              "std::complex<float> and cuComplex should have the same size");
-static_assert(offsetof(cuComplex, x) == 0,
-              "The real part of cuComplex should appear first.");
-static_assert(sizeof(std::complex<double>) == sizeof(cuDoubleComplex),
-              "std::complex<double> and cuDoubleComplex should have the same "
+static_assert(sizeof(std::complex<float>) == sizeof(hipComplex),
+              "std::complex<float> and hipComplex should have the same size");
+static_assert(offsetof(hipComplex, x) == 0,
+              "The real part of hipComplex should appear first.");
+static_assert(sizeof(std::complex<double>) == sizeof(hipDoubleComplex),
+              "std::complex<double> and hipDoubleComplex should have the same "
               "size");
-static_assert(offsetof(cuDoubleComplex, x) == 0,
-              "The real part of cuDoubleComplex should appear first.");
+static_assert(offsetof(hipDoubleComplex, x) == 0,
+              "The real part of hipDoubleComplex should appear first.");
 
 // Type traits to get ROCM complex types from std::complex<>.
 
@@ -69,16 +69,16 @@ struct ROCMComplexT {
 
 template <>
 struct ROCMComplexT<std::complex<float>> {
-  typedef cuComplex type;
+  typedef hipComplex type;
 };
 
 template <>
 struct ROCMComplexT<std::complex<double>> {
-  typedef cuDoubleComplex type;
+  typedef hipDoubleComplex type;
 };
 
 // Converts pointers of std::complex<> to pointers of
-// cuComplex/cuDoubleComplex. No type conversion for non-complex types.
+// hipComplex/hipDoubleComplex. No type conversion for non-complex types.
 
 template <typename T>
 inline const typename ROCMComplexT<T>::type *ROCMComplex(const T *p) {
@@ -91,12 +91,12 @@ inline typename ROCMComplexT<T>::type *ROCMComplex(T *p) {
 }
 
 // Converts values of std::complex<float/double> to values of
-// cuComplex/cuDoubleComplex.
-inline cuComplex ROCMComplexValue(std::complex<float> val) {
+// hipComplex/hipDoubleComplex.
+inline hipComplex ROCMComplexValue(std::complex<float> val) {
   return {val.real(), val.imag()};
 }
 
-inline cuDoubleComplex ROCMComplexValue(std::complex<double> val) {
+inline hipDoubleComplex ROCMComplexValue(std::complex<double> val) {
   return {val.real(), val.imag()};
 }
 

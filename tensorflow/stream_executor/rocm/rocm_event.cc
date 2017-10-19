@@ -43,7 +43,7 @@ port::Status ROCMEvent::Record(ROCMStream* stream) {
 }
 
 Event::Status ROCMEvent::PollForStatus() {
-  port::StatusOr<CUresult> status =
+  port::StatusOr<hipError_t> status =
       ROCMDriver::QueryEvent(parent_->rocm_context(), rocm_event_);
   if (!status.ok()) {
     LOG(ERROR) << "Error polling for event status: "
@@ -52,9 +52,9 @@ Event::Status ROCMEvent::PollForStatus() {
   }
 
   switch (status.ValueOrDie()) {
-    case ROCM_SUCCESS:
+    case hipSuccess:
       return Event::Status::kComplete;
-    case ROCM_ERROR_NOT_READY:
+    case hipErrorNotReady:
       return Event::Status::kPending;
     default:
       LOG(INFO) << "Error condition returned for event status: "
@@ -63,7 +63,7 @@ Event::Status ROCMEvent::PollForStatus() {
   }
 }
 
-const CUevent& ROCMEvent::rocm_event() {
+const hipEvent_t& ROCMEvent::rocm_event() {
   return rocm_event_;
 }
 

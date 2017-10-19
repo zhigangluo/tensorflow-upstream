@@ -13,18 +13,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// ROCM-specific support for FFT functionality -- this wraps the cuFFT library
+// ROCM-specific support for FFT functionality -- this wraps the hipFFT library
 // capabilities, and is only included into ROCM implementation code -- it will
 // not introduce rocm headers into other code.
 
 #ifndef TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_FFT_H_
 #define TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_FFT_H_
 
-#include "rocm/include/cufft.h"
 #include "tensorflow/stream_executor/fft.h"
 #include "tensorflow/stream_executor/platform/port.h"
 #include "tensorflow/stream_executor/plugin_registry.h"
 #include "tensorflow/stream_executor/scratch_allocator.h"
+#include "rocm/include/hipfft/hipfft.h"
 
 namespace perftools {
 namespace gputools {
@@ -35,11 +35,11 @@ namespace rocm {
 
 class ROCMExecutor;
 
-// Opaque and unique indentifier for the cuFFT plugin.
-extern const PluginId kCuFftPlugin;
+// Opaque and unique indentifier for the hipFFT plugin.
+extern const PluginId kHipFftPlugin;
 
 // ROCMFftPlan uses deferred initialization. Only a single call of
-// Initialize() is allowed to properly create cufft plan and set member
+// Initialize() is allowed to properly create hipfft plan and set member
 // variable is_initialized_ to true. Newly added interface that uses member
 // variables should first check is_initialized_ to make sure that the values of
 // member variables are valid.
@@ -53,13 +53,13 @@ class ROCMFftPlan : public fft::Plan {
         is_initialized_(false) {}
   ~ROCMFftPlan() override;
 
-  // Get FFT direction in cuFFT based on FFT type.
+  // Get FFT direction in hipFFT based on FFT type.
   int GetFftDirection() const;
-  cufftHandle GetPlan() const {
+  hipfftHandle GetPlan() const {
     if (IsInitialized()) {
       return plan_;
     } else {
-      LOG(FATAL) << "Try to get cufftHandle value before initialization.";
+      LOG(FATAL) << "Try to get hipfftHandle value before initialization.";
     }
   }
 
@@ -81,19 +81,19 @@ class ROCMFftPlan : public fft::Plan {
 
  private:
   ROCMExecutor *parent_;
-  cufftHandle plan_;
+  hipfftHandle plan_;
   fft::Type fft_type_;
   DeviceMemory<uint8> scratch_;
   bool is_initialized_;
 };
 
-// FFT support for ROCM platform via cuFFT library.
+// FFT support for ROCM platform via hipFFT library.
 //
 // This satisfies the platform-agnostic FftSupport interface.
 //
-// Note that the cuFFT handle that this encapsulates is implicitly tied to the
+// Note that the hipFFT handle that this encapsulates is implicitly tied to the
 // context (and, as a result, the device) that the parent ROCMExecutor is tied
-// to. This simply happens as an artifact of creating the cuFFT handle when a
+// to. This simply happens as an artifact of creating the hipFFT handle when a
 // ROCM context is active.
 //
 // Thread-safe. The ROCM context associated with all operations is the ROCM
@@ -108,19 +108,19 @@ class ROCMFft : public fft::FftSupport {
  private:
   ROCMExecutor *parent_;
 
-  // Two helper functions that execute dynload::cufftExec?2?.
+  // Two helper functions that execute dynload::hipfftExec?2?.
 
   // This is for complex to complex FFT, when the direction is required.
   template <typename FuncT, typename InputT, typename OutputT>
   bool DoFftWithDirectionInternal(Stream *stream, fft::Plan *plan,
-                                  FuncT cufft_exec,
+                                  FuncT hipfft_exec,
                                   const DeviceMemory<InputT> &input,
                                   DeviceMemory<OutputT> *output);
 
   // This is for complex to real or real to complex FFT, when the direction
   // is implied.
   template <typename FuncT, typename InputT, typename OutputT>
-  bool DoFftInternal(Stream *stream, fft::Plan *plan, FuncT cufft_exec,
+  bool DoFftInternal(Stream *stream, fft::Plan *plan, FuncT hipfft_exec,
                      const DeviceMemory<InputT> &input,
                      DeviceMemory<OutputT> *output);
 
