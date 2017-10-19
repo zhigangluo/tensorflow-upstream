@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#include "rocm/include/hiprng/hiprng.h"
 #include "tensorflow/stream_executor/rocm/rocm_rng.h"
 
 #include "tensorflow/stream_executor/rocm/rocm_activation.h"
@@ -26,7 +27,6 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/status.h"
 #include "tensorflow/stream_executor/platform/logging.h"
 #include "tensorflow/stream_executor/rng.h"
-#include "rocm/include/hiprng.h"
 
 // Formats hiprngStatus_t to output prettified values into a log stream.
 std::ostream &operator<<(std::ostream &in, const hiprngStatus_t &status) {
@@ -58,7 +58,7 @@ namespace perftools {
 namespace gputools {
 namespace rocm {
 
-PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kHipRandPlugin);
+PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kHipRngPlugin);
 
 namespace wrap {
 
@@ -280,7 +280,7 @@ REGISTER_MODULE_INITIALIZER(register_hiprng, {
   gpu::port::Status status =
       gpu::PluginRegistry::Instance()
           ->RegisterFactory<gpu::PluginRegistry::RngFactory>(
-              gpu::rocm::kROCmPlatformId, gpu::rocm::kHipRandPlugin, "hipRNG",
+              gpu::rocm::kROCmPlatformId, gpu::rocm::kHipRngPlugin, "hipRNG",
               [](gpu::internal::StreamExecutorInterface
                      *parent) -> gpu::rng::RngSupport * {
                 gpu::rocm::ROCMExecutor *rocm_executor =
@@ -308,5 +308,5 @@ REGISTER_MODULE_INITIALIZER(register_hiprng, {
 
   gpu::PluginRegistry::Instance()->SetDefaultFactory(gpu::rocm::kROCmPlatformId,
                                                      gpu::PluginKind::kRng,
-                                                     gpu::rocm::kHipRandPlugin);
+                                                     gpu::rocm::kHipRngPlugin);
 });

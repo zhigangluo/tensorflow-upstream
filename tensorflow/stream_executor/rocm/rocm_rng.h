@@ -22,8 +22,6 @@ limitations under the License.
 #include "tensorflow/stream_executor/plugin_registry.h"
 #include "tensorflow/stream_executor/rng.h"
 
-typedef struct hiprngGenerator_st *hiprngGenerator_t;
-
 namespace perftools {
 namespace gputools {
 
@@ -34,7 +32,7 @@ class DeviceMemory;
 namespace rocm {
 
 // Opaque and unique identifier for the hipRNG plugin.
-extern const PluginId kHipRandPlugin;
+extern const PluginId kHipRngPlugin;
 
 class ROCMExecutor;
 
