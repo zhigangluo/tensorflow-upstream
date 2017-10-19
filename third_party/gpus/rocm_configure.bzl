@@ -3,74 +3,55 @@
 
 `rocm_configure` depends on the following environment variables:
 
-  * `TF_NEED_CUDA`: Whether to enable building with CUDA.
+  * `TF_NEED_ROCM`: Whether to enable building with ROCm.
   * `GCC_HOST_COMPILER_PATH`: The GCC host compiler path
-  * `TF_CUDA_CLANG`: Whether to use clang as a cuda compiler.
-  * `CLANG_CUDA_COMPILER_PATH`: The clang compiler path that will be used for
-    both host and device code compilation if TF_CUDA_CLANG is 1.
-  * `CUDA_TOOLKIT_PATH`: The path to the CUDA toolkit. Default is
-    `/usr/local/cuda`.
-  * `TF_CUDA_VERSION`: The version of the CUDA toolkit. If this is blank, then
+  * `ROCM_TOOLKIT_PATH`: The path to the ROCm toolkit. Default is
+    `/opt/rocm`.
+  * `TF_ROCM_VERSION`: The version of the ROCm toolkit. If this is blank, then
     use the system default.
-  * `TF_CUDNN_VERSION`: The version of the cuDNN library.
-  * `CUDNN_INSTALL_PATH`: The path to the cuDNN library. Default is
-    `/usr/local/cuda`.
-  * `TF_CUDA_COMPUTE_CAPABILITIES`: The CUDA compute capabilities. Default is
-    `3.5,5.2`.
+  * `TF_MIOPEN_VERSION`: The version of the MIOpen library.
+  * `TF_ROCM_AMDGPU_TARGETS`: The AMDGPU targets. Default is
+    `gfx803,gfx900`.
 """
 
 _GCC_HOST_COMPILER_PATH = "GCC_HOST_COMPILER_PATH"
 _ROCM_TOOLKIT_PATH = "ROCM_TOOLKIT_PATH"
-_DEFAULT_ROCM_TOOLKIT_PATH = "/opt/rocm"
+_TF_ROCM_VERSION = "TF_ROCM_VERSION"
+_TF_MIOPEN_VERSION = "TF_MIOPEN_VERSION"
+_TF_ROCM_AMDGPU_TARGETS = "TF_ROCM_AMDGPU_TARGETS"
 _TF_ROCM_CONFIG_REPO = "TF_ROCM_CONFIG_REPO"
 
+_DEFAULT_ROCM_VERSION = ""
+_DEFAULT_MIOPEN_VERSION = ""
+_DEFAULT_ROCM_TOOLKIT_PATH = "/opt/rocm"
+_DEFAULT_ROCM_AMDGPU_TARGETS = ["gfx803", "gfx900"]
+
+def find_cc(repository_ctx):
+  """Find the C++ compiler."""
+  # Return a dummy value for GCC detection here to avoid error
+  target_cc_name = "gcc"
+  cc_path_envvar = _GCC_HOST_COMPILER_PATH
+  cc_name = target_cc_name
+
+  if cc_path_envvar in repository_ctx.os.environ:
+    cc_name_from_env = repository_ctx.os.environ[cc_path_envvar].strip()
+    if cc_name_from_env:
+      cc_name = cc_name_from_env
+  if cc_name.startswith("/"):
+    # Absolute path, maybe we should make this supported by our which function.
+    return cc_name
+  cc = repository_ctx.which(cc_name)
+  if cc == None:
+    fail(("Cannot find {}, either correct your path or set the {}" +
+          " environment variable").format(target_cc_name, cc_path_envvar))
+  return cc
+
 _INC_DIR_MARKER_BEGIN = "#include <...>"
-
-
-def _read_dir(repository_ctx, src_dir):
-  """Returns a string with all files in a directory.
-
-  Finds all files inside a directory, traversing subfolders and following
-  symlinks. The returned string contains the full path of all files
-  separated by line breaks.
-  """
-  find_result = _execute(
-      repository_ctx, ["find", src_dir, "-follow", "-type", "f"],
-      empty_stdout_fine=True)
-  result = find_result.stdout
-  return result
 
 def _cxx_inc_convert(path):
   """Convert path returned by cc -E xc++ in a complete path."""
   path = path.strip()
   return path
-
-def _rocm_include_path(repository_ctx, rocm_config):
-  return "/opt/rocm/include"
-
-def _execute(repository_ctx, cmdline, error_msg=None, error_details=None,
-             empty_stdout_fine=False):
-  """Executes an arbitrary shell command.
-
-  Args:
-    repository_ctx: the repository_ctx object
-    cmdline: list of strings, the command to execute
-    error_msg: string, a summary of the error if the command fails
-    error_details: string, details about the error or steps to fix it
-    empty_stdout_fine: bool, if True, an empty stdout result is fine, otherwise
-      it's an error
-  Return:
-    the result of repository_ctx.execute(cmdline)
-  """
-  result = repository_ctx.execute(cmdline)
-  if result.stderr or not (empty_stdout_fine or result.stdout):
-    auto_configure_fail(
-        "\n".join([
-            error_msg.strip() if error_msg else "Repository command failed",
-            result.stderr.strip(),
-            error_details if error_details else ""]))
-  return result
-
 
 def _get_cxx_inc_directories_impl(repository_ctx, cc, lang_is_cpp):
   """Compute the list of default C or C++ include directories."""
@@ -113,52 +94,136 @@ def get_cxx_inc_directories(repository_ctx, cc):
   return includes_cpp + [inc for inc in includes_c
                          if inc not in includes_cpp_set]
 
+def auto_configure_fail(msg):
+  """Output failure message when rocm configuration fails."""
+  red = "\033[0;31m"
+  no_color = "\033[0m"
+  fail("\n%sCuda Configuration Error:%s %s\n" % (red, no_color, msg))
+# END cc_configure common functions (see TODO above).
 
-
-def find_cc(repository_ctx):
-  """Find the C++ compiler."""
-  # On Windows, we use Bazel's MSVC CROSSTOOL for GPU build
-  # Return a dummy value for GCC detection here to avoid error
-  target_cc_name = "gcc"
-  cc_path_envvar = _GCC_HOST_COMPILER_PATH
-  cc_name = target_cc_name
-
-  if cc_path_envvar in repository_ctx.os.environ:
-    cc_name_from_env = repository_ctx.os.environ[cc_path_envvar].strip()
-    if cc_name_from_env:
-      cc_name = cc_name_from_env
-  if cc_name.startswith("/"):
-    # Absolute path, maybe we should make this supported by our which function.
-    return cc_name
-  cc = repository_ctx.which(cc_name)
-  if cc == None:
-    fail(("Cannot find {}, either correct your path or set the {}" +
-          " environment variable").format(target_cc_name, cc_path_envvar))
-  return cc
-
-def _find_libs(repository_ctx, rocm_config):
-  """Returns the CUDA and cuDNN libraries on the system.
+def _host_compiler_includes(repository_ctx, cc):
+  """Generates the cxx_builtin_include_directory entries for gcc inc dirs.
 
   Args:
     repository_ctx: The repository context.
-    rocm_config: The CUDA config as returned by _get_rocm_config
+    cc: The path to the gcc host compiler.
 
   Returns:
-    Map of library names to structs of filename and path as returned by
-    _find_rocm_lib and _find_cupti_lib.
+    A string containing the cxx_builtin_include_directory for each of the gcc
+    host compiler include directories, which can be added to the CROSSTOOL
+    file.
   """
-  cpu_value = rocm_config.cpu_value
-  return {
-      "rocm": _find_rocm_lib("hip_hcc", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path),
-      "rocmrt": _find_rocm_lib(
-          "hip_hcc", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path),
-      "rocmrt_static": _find_rocm_lib(
-          "hip_hcc_static", repository_ctx, cpu_value,
-          rocm_config.rocm_toolkit_path, static=True),
-      "rocblas": _find_rocm_lib(
-          "rocblas", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path),
-  }
+  inc_dirs = get_cxx_inc_directories(repository_ctx, cc)
+  entries = []
+  for inc_dir in inc_dirs:
+    entries.append("  cxx_builtin_include_directory: \"%s\"" % inc_dir)
 
+  # define __HIP_PLATFORM_HCC__
+  entries.append("  unfiltered_cxx_flag: \"-D__HIP_PLATFORM_HCC__\"")
+
+  return "\n".join(entries)
+
+def _rocm_include_path(repository_ctx, rocm_config):
+  """Generates the cxx_builtin_include_directory entries for rocm inc dirs.
+
+  Args:
+    repository_ctx: The repository context.
+    cc: The path to the gcc host compiler.
+
+  Returns:
+    A string containing the cxx_builtin_include_directory for each of the gcc
+    host compiler include directories, which can be added to the CROSSTOOL
+    file.
+  """
+  target_dir = ""
+  inc_entries = []
+  if target_dir != "":
+    inc_entries.append("  cxx_builtin_include_directory: \"%s\"" % target_dir)
+  default_include = rocm_config.rocm_toolkit_path + '/include'
+  inc_entries.append("  cxx_builtin_include_directory: \"%s\"" %
+                     default_include)
+  return "\n".join(inc_entries)
+
+def _enable_rocm(repository_ctx):
+  if "TF_NEED_ROCM" in repository_ctx.os.environ:
+    enable_rocm = repository_ctx.os.environ["TF_NEED_ROCM"].strip()
+    return enable_rocm == "1"
+  return False
+
+def _rocm_toolkit_path(repository_ctx):
+  """Finds the rocm toolkit directory.
+
+  Args:
+    repository_ctx: The repository context.
+
+  Returns:
+    A speculative real path of the rocm toolkit install directory.
+  """
+  rocm_toolkit_path = _DEFAULT_ROCM_TOOLKIT_PATH
+  if _ROCM_TOOLKIT_PATH in repository_ctx.os.environ:
+    rocm_toolkit_path = repository_ctx.os.environ[_ROCM_TOOLKIT_PATH].strip()
+  if not repository_ctx.path(rocm_toolkit_path).exists:
+    auto_configure_fail("Cannot find rocm toolkit path.")
+  return str(repository_ctx.path(rocm_toolkit_path).realpath)
+
+def _amdgpu_targets(repository_ctx):
+  """Returns a list of strings representing AMDGPU targets."""
+  if _TF_ROCM_AMDGPU_TARGETS not in repository_ctx.os.environ:
+    return _DEFAULT_ROCM_AMDGPU_TARGETS
+  amdgpu_targets_str = repository_ctx.os.environ[_TF_ROCM_AMDGPU_TARGETS]
+  amdgpu_targets = amdgpu_targets_str.split(",")
+  for amdgpu_target in amdgpu_targets:
+    if amdgpu_target[:3] != "gfx" or not amdgpu_target[3:].isdigit():
+      auto_configure_fail("Invalid AMDGPU target: %s" % amdgpu_target)
+  return amdgpu_targets
+
+def _cpu_value(repository_ctx):
+  """Returns the name of the host operating system.
+
+  Args:
+    repository_ctx: The repository context.
+
+  Returns:
+    A string containing the name of the host operating system.
+  """
+  os_name = repository_ctx.os.name.lower()
+  if os_name.startswith("mac os"):
+    return "Darwin"
+  if os_name.find("windows") != -1:
+    return "Windows"
+  result = repository_ctx.execute(["uname", "-s"])
+  return result.stdout.strip()
+
+def _lib_name(lib, cpu_value, version="", static=False):
+  """Constructs the platform-specific name of a library.
+
+  Args:
+    lib: The name of the library, such as "rocmrt"
+    cpu_value: The name of the host operating system.
+    version: The version of the library.
+    static: True the library is static or False if it is a shared object.
+
+  Returns:
+    The platform-specific name of the library.
+  """
+  if cpu_value in ("Linux", "FreeBSD"):
+    if static:
+      return "lib%s.a" % lib
+    else:
+      if version:
+        version = ".%s" % version
+      return "lib%s.so%s" % (lib, version)
+  elif cpu_value == "Windows":
+    return "%s.lib" % lib
+  elif cpu_value == "Darwin":
+    if static:
+      return "lib%s.a" % lib
+    else:
+      if version:
+        version = ".%s" % version
+    return "lib%s%s.dylib" % (lib, version)
+  else:
+    auto_configure_fail("Invalid cpu_value: %s" % cpu_value)
 
 def _find_rocm_lib(lib, repository_ctx, cpu_value, basedir, version="",
                    static=False):
@@ -204,54 +269,57 @@ def _find_rocm_lib(lib, repository_ctx, cpu_value, basedir, version="",
 
   auto_configure_fail("Cannot find rocm library %s" % file_name)
 
+def _find_libs(repository_ctx, rocm_config):
+  """Returns the CUDA and cuDNN libraries on the system.
 
+  Args:
+    repository_ctx: The repository context.
+    rocm_config: The CUDA config as returned by _get_rocm_config
 
-def auto_configure_fail(msg):
-  """Output failure message when rocm configuration fails."""
-  red = "\033[0;31m"
-  no_color = "\033[0m"
-  fail("\n%sCuda Configuration Error:%s %s\n" % (red, no_color, msg))
-# END cc_configure common functions (see TODO above).
+  Returns:
+    Map of library names to structs of filename and path as returned by
+    _find_rocm_lib.
+  """
+  cpu_value = rocm_config.cpu_value
+  return {
+      "hip": _find_rocm_lib(
+          "hip_hcc", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path),
+      "hipblas": _find_rocm_lib(
+          "hipblas", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path),
+      "hiprng": _find_rocm_lib(
+          "hiprng", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path + "/hiprng"),
+      "hipfft": _find_rocm_lib(
+          "hipfft", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path + "/hipfft"),
+      "miopen": _find_rocm_lib(
+          "MIOpen", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path + "/miopen"),
+  }
 
-def _norm_path(path):
-  """Returns a path with '/' and remove the trailing slash."""
-  path = path.replace("\\", "/")
-  if path[-1] == "/":
-    path = path[:-1]
-  return path
-
-
-def _compute_rocm_extra_copts(repository_ctx):
-  capability_flags = ["--amdgpu-target=gfx900"]
-  return str(capability_flags)
-
-
-def _rocmrt_static_linkopt(cpu_value):
-  """Returns additional platform-specific linkopts for rocmrt."""
-  return "" if cpu_value == "Darwin" else "\"-lrt\","
-
-def _enable_rocm(repository_ctx):
-  if "TF_NEED_ROCM" in repository_ctx.os.environ:
-    enable_rocm = repository_ctx.os.environ["TF_NEED_ROCM"].strip()
-    return enable_rocm == "1"
-  return False
-
-def _cpu_value(repository_ctx):
-  """Returns the name of the host operating system.
+def _get_rocm_config(repository_ctx):
+  """Detects and returns information about the ROCm installation on the system.
 
   Args:
     repository_ctx: The repository context.
 
   Returns:
-    A string containing the name of the host operating system.
+    A struct containing the following fields:
+      rocm_toolkit_path: The ROCm toolkit installation directory.
+      rocm_version: The version of ROCm on the system.
+      miopen_version: The version of MIOpen on the system.
+      amdgpu_targets: A list of the system's AMDGPU targets.
+      cpu_value: The name of the host operating system.
   """
-  os_name = repository_ctx.os.name.lower()
-  if os_name.startswith("mac os"):
-    return "Darwin"
-  if os_name.find("windows") != -1:
-    return "Windows"
-  result = repository_ctx.execute(["uname", "-s"])
-  return result.stdout.strip()
+  cpu_value = _cpu_value(repository_ctx)
+  rocm_toolkit_path = _rocm_toolkit_path(repository_ctx)
+  # XXX FIXME properly implement ROCM version detection logic
+  rocm_version = "1.6.4"
+  # XXX FIXME properly implement MIOpen version detection logic
+  miopen_version = "1.1.3"
+  return struct(
+      rocm_toolkit_path = rocm_toolkit_path,
+      rocm_version = rocm_version,
+      miopen_version = miopen_version,
+      amdgpu_targets = _amdgpu_targets(repository_ctx),
+      cpu_value = cpu_value)
 
 def _tpl(repository_ctx, tpl, substitutions={}, out=None):
   if not out:
@@ -261,29 +329,13 @@ def _tpl(repository_ctx, tpl, substitutions={}, out=None):
       Label("//third_party/gpus/%s.tpl" % tpl),
       substitutions)
 
+
 def _file(repository_ctx, label):
   repository_ctx.template(
       label.replace(":", "/"),
       Label("//third_party/gpus/%s.tpl" % label),
       {})
 
-def _host_compiler_includes(repository_ctx, cc):
-  """Generates the cxx_builtin_include_directory entries for gcc inc dirs.
-
-  Args:
-    repository_ctx: The repository context.
-    cc: The path to the gcc host compiler.
-
-  Returns:
-    A string containing the cxx_builtin_include_directory for each of the gcc
-    host compiler include directories, which can be added to the CROSSTOOL
-    file.
-  """
-  inc_dirs = get_cxx_inc_directories(repository_ctx, cc)
-  inc_entries = []
-  for inc_dir in inc_dirs:
-    inc_entries.append("  cxx_builtin_include_directory: \"%s\"" % inc_dir)
-  return "\n".join(inc_entries)
 
 _DUMMY_CROSSTOOL_BZL_FILE = """
 def error_gpu_disabled():
@@ -311,40 +363,6 @@ load("//crosstool:error_gpu_disabled.bzl", "error_gpu_disabled")
 error_gpu_disabled()
 """
 
-
-
-def _lib_name(lib, cpu_value, version="", static=False):
-  """Constructs the platform-specific name of a library.
-
-  Args:
-    lib: The name of the library, such as "rocmrt"
-    cpu_value: The name of the host operating system.
-    version: The version of the library.
-    static: True the library is static or False if it is a shared object.
-
-  Returns:
-    The platform-specific name of the library.
-  """
-  if cpu_value in ("Linux", "FreeBSD"):
-    if static:
-      return "lib%s.a" % lib
-    else:
-      if version:
-        version = ".%s" % version
-      return "lib%s.so%s" % (lib, version)
-  elif cpu_value == "Windows":
-    return "%s.lib" % lib
-  elif cpu_value == "Darwin":
-    if static:
-      return "lib%s.a" % lib
-    else:
-      if version:
-        version = ".%s" % version
-    return "lib%s%s.dylib" % (lib, version)
-  else:
-    auto_configure_fail("Invalid cpu_value: %s" % cpu_value)
-
-
 def _create_dummy_repository(repository_ctx):
   cpu_value = _cpu_value(repository_ctx)
 
@@ -356,24 +374,11 @@ def _create_dummy_repository(repository_ctx):
        })
   _tpl(repository_ctx, "rocm:BUILD",
        {
-           "%{rocm_driver_lib}": _lib_name("rocm", cpu_value),
-           "%{rocmrt_static_lib}": _lib_name("rocmrt_static", cpu_value,
-                                             static=True),
-           "%{rocmrt_static_linkopt}": _rocmrt_static_linkopt(cpu_value),
-           "%{rocmrt_lib}": _lib_name("rocrt", cpu_value),
-           "%{rocblas_lib}": _lib_name("rocblas", cpu_value),
-           "%{rocm_include_genrules}": '',
-           "%{rocm_headers}": '',
        })
 
-  # Create dummy files for the CUDA toolkit since they are still required by
+  # Create dummy files for the ROCm toolkit since they are still required by
   # tensorflow/core/platform/default/build_config:rocm.
   repository_ctx.file("rocm/hip/include/hip/hip_runtime.h", "")
-  repository_ctx.file("rocm/rocblas/include/rocblas/rocblas.h", "")
-  repository_ctx.file("rocm/hip/lib/%s" % _lib_name("rocm", cpu_value))
-  repository_ctx.file("rocm/hip/lib/%s" % _lib_name("rocmrt", cpu_value))
-  repository_ctx.file("rocm/hip/lib/%s" % _lib_name("rocmrt_static", cpu_value))
-  repository_ctx.file("rocm/rocblas/lib/%s" % _lib_name("rocblas", cpu_value))
 
   # Set up rocm_config.h, which is used by
   # tensorflow/stream_executor/dso_loader.cc.
@@ -389,56 +394,35 @@ def _create_dummy_repository(repository_ctx):
                       _DUMMY_CROSSTOOL_BZL_FILE)
   repository_ctx.file("crosstool/BUILD", _DUMMY_CROSSTOOL_BUILD_FILE)
 
-
-def _create_remote_rocm_repository(repository_ctx, remote_config_repo):
-  """Creates pointers to a remotely configured repo set up to build with CUDA."""
-  _tpl(repository_ctx, "rocm:build_defs.bzl",
-       {
-           "%{rocm_is_configured}": "True",
-           "%{rocm_extra_copts}": _compute_rocm_extra_copts(
-               repository_ctx, #_compute_capabilities(repository_ctx)
-            ),
-
-       })
-
-def _rocm_toolkit_path(repository_ctx):
-  """Finds the rocm toolkit directory.
+def _execute(repository_ctx, cmdline, error_msg=None, error_details=None,
+             empty_stdout_fine=False):
+  """Executes an arbitrary shell command.
 
   Args:
-    repository_ctx: The repository context.
-
-  Returns:
-    A speculative real path of the rocm toolkit install directory.
+    repository_ctx: the repository_ctx object
+    cmdline: list of strings, the command to execute
+    error_msg: string, a summary of the error if the command fails
+    error_details: string, details about the error or steps to fix it
+    empty_stdout_fine: bool, if True, an empty stdout result is fine, otherwise
+      it's an error
+  Return:
+    the result of repository_ctx.execute(cmdline)
   """
-  rocm_toolkit_path = _DEFAULT_ROCM_TOOLKIT_PATH
-  if _ROCM_TOOLKIT_PATH in repository_ctx.os.environ:
-    rocm_toolkit_path = repository_ctx.os.environ[_ROCM_TOOLKIT_PATH].strip()
-  if not repository_ctx.path(rocm_toolkit_path).exists:
-    auto_configure_fail("Cannot find rocm toolkit path.")
-  return str(repository_ctx.path(rocm_toolkit_path).realpath)
+  result = repository_ctx.execute(cmdline)
+  if result.stderr or not (empty_stdout_fine or result.stdout):
+    auto_configure_fail(
+        "\n".join([
+            error_msg.strip() if error_msg else "Repository command failed",
+            result.stderr.strip(),
+            error_details if error_details else ""]))
+  return result
 
-
-
-def _get_rocm_config(repository_ctx):
-  """Detects and returns information about the CUDA installation on the system.
-
-  Args:
-    repository_ctx: The repository context.
-
-  Returns:
-    A struct containing the following fields:
-      rocm_toolkit_path: The CUDA toolkit installation directory.
-      cudnn_install_basedir: The cuDNN installation directory.
-      rocm_version: The version of CUDA on the system.
-      cudnn_version: The version of cuDNN on the system.
-      compute_capabilities: A list of the system's CUDA compute capabilities.
-      cpu_value: The name of the host operating system.
-  """
-  cpu_value = _cpu_value(repository_ctx)
-  rocm_toolkit_path = _rocm_toolkit_path(repository_ctx)
-  return struct(
-      rocm_toolkit_path = rocm_toolkit_path,
-      cpu_value = cpu_value)
+def _norm_path(path):
+  """Returns a path with '/' and remove the trailing slash."""
+  path = path.replace("\\", "/")
+  if path[-1] == "/":
+    path = path[:-1]
+  return path
 
 def _symlink_genrule_for_dir(repository_ctx, src_dir, dest_dir, genrule_name,
     src_files = [], dest_files = []):
@@ -491,8 +475,27 @@ def _genrule(src_dir, genrule_name, command, outs):
       ')\n'
   )
 
+def _read_dir(repository_ctx, src_dir):
+  """Returns a string with all files in a directory.
 
+  Finds all files inside a directory, traversing subfolders and following
+  symlinks. The returned string contains the full path of all files
+  separated by line breaks.
+  """
+  find_result = _execute(
+      repository_ctx, ["find", src_dir, "-follow", "-type", "f"],
+      empty_stdout_fine=True)
+  result = find_result.stdout
+  return result
 
+def _compute_rocm_extra_copts(repository_ctx, amdgpu_targets):
+  if False:
+    amdgpu_target_flags = ["--amdgpu-target=" +
+        amdgpu_target for amdgpu_target in amdgpu_targets]
+  else:
+    # AMDGPU targets are handled in the "crosstool_wrapper_driver_is_not_gcc"
+    amdgpu_target_flags = []
+  return str(amdgpu_target_flags)
 
 def _create_local_rocm_repository(repository_ctx):
   """Creates the repository containing files set up to build with ROCm."""
@@ -505,6 +508,16 @@ def _create_local_rocm_repository(repository_ctx):
   rocm_include_path = rocm_toolkit_path + "/include"
   genrules = [_symlink_genrule_for_dir(repository_ctx,
       rocm_include_path, "rocm/include", "rocm-include")]
+  genrules.append(_symlink_genrule_for_dir(repository_ctx,
+      rocm_toolkit_path + "/hiprng/include", "rocm/include/hiprng", "hiprng-include"))
+  genrules.append(_symlink_genrule_for_dir(repository_ctx,
+      rocm_toolkit_path + "/hcrng/include/hcRNG", "rocm/include/hcRNG", "hcrng-include"))
+  genrules.append(_symlink_genrule_for_dir(repository_ctx,
+      rocm_toolkit_path + "/hipfft/include", "rocm/include/hipfft", "hipfft-include"))
+  genrules.append(_symlink_genrule_for_dir(repository_ctx,
+      rocm_toolkit_path + "/hipblas/include", "rocm/include/hipblas", "hipblas-include"))
+  genrules.append(_symlink_genrule_for_dir(repository_ctx,
+      rocm_toolkit_path + "/miopen/include", "rocm/include/miopen", "miopen-include"))
 
   rocm_libs = _find_libs(repository_ctx, rocm_config)
   rocm_lib_src = []
@@ -523,19 +536,25 @@ def _create_local_rocm_repository(repository_ctx):
        {
            "%{rocm_is_configured}": "True",
            "%{rocm_extra_copts}": _compute_rocm_extra_copts(
-               repository_ctx),
+               repository_ctx, rocm_config.amdgpu_targets),
 
        })
   _tpl(repository_ctx, "rocm:BUILD",
        {
-           "%{rocm_driver_lib}": rocm_libs["rocm"].file_name,
-           "%{rocmrt_static_lib}": rocm_libs["rocmrt_static"].file_name,
-           "%{rocmrt_static_linkopt}": _rocmrt_static_linkopt(
-               rocm_config.cpu_value),
-           "%{rocmrt_lib}": rocm_libs["rocmrt"].file_name,
-           "%{rocblas_lib}": rocm_libs["rocblas"].file_name,
-           "%{rocm_include_genrules}": '',
-           "%{rocm_headers}": '',
+           "%{rocmrt_static_lib}": rocm_libs["hip"].file_name,
+           "%{rocmrt_static_linkopt}": '',
+           "%{rocmrt_lib}": rocm_libs["hip"].file_name,
+           "%{hipblas_lib}": rocm_libs["hipblas"].file_name,
+           "%{hipfft_lib}": rocm_libs["hipfft"].file_name,
+           "%{hiprng_lib}": rocm_libs["hiprng"].file_name,
+           "%{miopen_lib}": rocm_libs["miopen"].file_name,
+           "%{rocm_include_genrules}": "\n".join(genrules),
+           "%{rocm_headers}": ('":rocm-include",\n' +
+                               '":hiprng-include",\n' +
+                               '":hcrng-include",\n' +
+                               '":hipfft-include",\n' +
+                               '":hipblas-include",\n' +
+                               '":miopen-include",'),
        })
   # Set up crosstool/
   _file(repository_ctx, "crosstool:BUILD")
@@ -553,15 +572,41 @@ def _create_local_rocm_repository(repository_ctx):
        "crosstool:clang/bin/crosstool_wrapper_driver_is_not_gcc",
        {
            "%{cpu_compiler}": str(cc),
+           "%{rocm_version}": rocm_config.rocm_version,
            "%{gcc_host_compiler_path}": str(cc),
+           "%{rocm_amdgpu_targets}": ",".join(
+               ["\"%s\"" % c for c in rocm_config.amdgpu_targets]),
        })
 
   # Set up rocm_config.h, which is used by
   # tensorflow/stream_executor/dso_loader.cc.
   _tpl(repository_ctx, "rocm:rocm_config.h",
        {
+           "%{rocm_version}": rocm_config.rocm_version,
+           "%{miopen_version}": rocm_config.miopen_version,
+           "%{rocm_amdgpu_targets}": ",".join(
+               ["\"%s\"" % c for c in rocm_config.amdgpu_targets]),
+           "%{rocm_toolkit_path}": rocm_config.rocm_toolkit_path,
        }, "rocm/rocm/rocm_config.h")
 
+
+def _create_remote_rocm_repository(repository_ctx, remote_config_repo):
+  """Creates pointers to a remotely configured repo set up to build with ROCm."""
+  _tpl(repository_ctx, "rocm:build_defs.bzl",
+       {
+           "%{rocm_is_configured}": "True",
+           "%{rocm_extra_copts}": _compute_rocm_extra_copts(
+               repository_ctx, #_compute_capabilities(repository_ctx)
+            ),
+
+       })
+  _tpl(repository_ctx, "rocm:remote.BUILD",
+       {
+           "%{remote_rocm_repo}": remote_config_repo,
+       }, "rocm/BUILD")
+  _tpl(repository_ctx, "crosstool:remote.BUILD", {
+           "%{remote_rocm_repo}": remote_config_repo,
+       }, "crosstool/BUILD")
 
 def _rocm_autoconf_impl(repository_ctx):
   """Implementation of the rocm_autoconf repository rule."""
@@ -581,6 +626,9 @@ rocm_configure = repository_rule(
         _GCC_HOST_COMPILER_PATH,
         "TF_NEED_ROCM",
         _ROCM_TOOLKIT_PATH,
+        _TF_ROCM_VERSION,
+        _TF_MIOPEN_VERSION,
+        _TF_ROCM_AMDGPU_TARGETS,
         _TF_ROCM_CONFIG_REPO,
     ],
 )

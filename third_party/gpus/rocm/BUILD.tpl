@@ -46,16 +46,6 @@ cc_library(
 )
 
 cc_library(
-    name = "rocm_driver",
-    srcs = ["rocm/lib/%{rocm_driver_lib}"],
-    includes = [
-        ".",
-        "rocm/include",
-    ],
-    visibility = ["//visibility:public"],
-)
-
-cc_library(
     name = "rocmrt",
     srcs = ["rocm/lib/%{rocmrt_lib}"],
     data = ["rocm/lib/%{rocmrt_lib}"],
@@ -68,9 +58,9 @@ cc_library(
 )
 
 cc_library(
-    name = "rocblas",
-    srcs = ["rocm/lib/%{rocblas_lib}"],
-    data = ["rocm/lib/%{rocblas_lib}"],
+    name = "hipblas",
+    srcs = ["rocm/lib/%{hipblas_lib}"],
+    data = ["rocm/lib/%{hipblas_lib}"],
     includes = [
         ".",
         "rocm/include",
@@ -79,22 +69,53 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
+cc_library(
+    name = "hipfft",
+    srcs = ["rocm/lib/%{hipfft_lib}"],
+    data = ["rocm/lib/%{hipfft_lib}"],
+    includes = [
+        ".",
+        "rocm/include",
+    ],
+    linkstatic = 1,
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "hiprng",
+    srcs = ["rocm/lib/%{hiprng_lib}"],
+    data = ["rocm/lib/%{hiprng_lib}"],
+    includes = [
+        ".",
+        "rocm/include",
+    ],
+    linkstatic = 1,
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "miopen",
+    srcs = ["rocm/lib/%{miopen_lib}"],
+    data = ["rocm/lib/%{miopen_lib}"],
+    includes = [
+        ".",
+        "rocm/include",
+    ],
+    linkstatic = 1,
+    visibility = ["//visibility:public"],
+)
 
 cc_library(
     name = "rocm",
     visibility = ["//visibility:public"],
     deps = [
-        ":rocblas",
         ":rocm_headers",
         ":rocmrt",
+        ":hipblas",
+        ":hipfft",
+        ":hiprng",
+        ":miopen",
     ],
 )
-
-#
-#cc_library(
-#    name = "libdevice_root",
-#    data = [":rocm-nvvm"],
-#    visibility = ["//visibility:public"],
-#)
 
 %{rocm_include_genrules}
