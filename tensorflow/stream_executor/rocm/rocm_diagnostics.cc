@@ -140,7 +140,6 @@ void Diagnostician::LogDiagnosticInformation() {
   port::StatusOr<DriverVersion> kernel_version = FindKernelDriverVersion();
   LOG(INFO) << "kernel reported version is: "
 	  << DriverVersionStatusToString(kernel_version);
-#endif
 
   if (kernel_version.ok() && dso_version.ok()) {
     WarnOnDsoKernelMismatch(dso_version, kernel_version);
@@ -185,7 +184,6 @@ port::StatusOr<DriverVersion> Diagnostician::FindDsoVersion() {
   };
 
   dl_iterate_phdr(iterate_phdr, &result);
-#endif
 
   return result;
 }
