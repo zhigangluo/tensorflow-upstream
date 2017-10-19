@@ -31,19 +31,19 @@ namespace gputools {
 namespace rocm {
 
 class ROCMExecutor;
-class CudnnRnnDescriptor;
-class CudnnRnnSequenceTensorDescriptor;
-class CudnnRnnStateTensorDescriptor;
+class MIOpenRnnDescriptor;
+class MIOpenRnnSequenceTensorDescriptor;
+class MIOpenRnnStateTensorDescriptor;
 
-// Opaque and unique identifier for the cuDNN plugin.
-extern const PluginId kCuDnnPlugin;
+// Opaque and unique identifier for the MIOpen plugin.
+extern const PluginId kMIOpenPlugin;
 
-// cudnn-library based DNN support. For details on overridden interface
+// miopen-library based DNN support. For details on overridden interface
 // functions, see dnn.h.
-class CudnnSupport : public dnn::DnnSupport {
+class MIOpenSupport : public dnn::DnnSupport {
  public:
-  explicit CudnnSupport(ROCMExecutor* parent);
-  ~CudnnSupport() override;
+  explicit MIOpenSupport(ROCMExecutor* parent);
+  ~MIOpenSupport() override;
 
   port::Status Init() override;
 
@@ -212,7 +212,7 @@ class CudnnSupport : public dnn::DnnSupport {
       const dnn::ConvolutionDescriptor& convolution_descriptor,
       const dnn::BatchDescriptor& output_descriptor,
       DeviceMemory<float>* output_data) override {
-    LOG(ERROR) << "DoConvolveQuantized not supported by cuDNN";
+    LOG(ERROR) << "DoConvolveQuantized not supported by MIOpen";
     return false;
   }
 
@@ -225,7 +225,7 @@ class CudnnSupport : public dnn::DnnSupport {
       const dnn::ConvolutionDescriptor& convolution_descriptor,
       const dnn::BatchDescriptor& output_descriptor,
       DeviceMemory<float>* output_data) override {
-    LOG(ERROR) << "DoConvolveQuantized not supported by cuDNN";
+    LOG(ERROR) << "DoConvolveQuantized not supported by MIOpen";
     return false;
   }
 
@@ -238,7 +238,7 @@ class CudnnSupport : public dnn::DnnSupport {
       const dnn::ConvolutionDescriptor& convolution_descriptor,
       const dnn::BatchDescriptor& output_descriptor,
       DeviceMemory<float>* output_data) override {
-    LOG(ERROR) << "separable convolution not supported by CUDNN";
+    LOG(ERROR) << "separable convolution not supported by MIOpen";
     return false;
   }
 
@@ -320,7 +320,7 @@ class CudnnSupport : public dnn::DnnSupport {
                          const dnn::BatchDescriptor& input_dimensions,
                          const dnn::BatchDescriptor& output_dimensions,
                          DeviceMemory<float>* output_data) override {
-    LOG(ERROR) << "DNN MatMulQuantized not supported by CUDNN";
+    LOG(ERROR) << "DNN MatMulQuantized not supported by MIOpen";
     return false;
   }
 
@@ -330,7 +330,7 @@ class CudnnSupport : public dnn::DnnSupport {
                          const dnn::BatchDescriptor& input_dimensions,
                          const dnn::BatchDescriptor& output_dimensions,
                          DeviceMemory<float>* output_data) override {
-    LOG(ERROR) << "DNN MatMulQuantized not supported by CUDNN";
+    LOG(ERROR) << "DNN MatMulQuantized not supported by MIOpen";
     return false;
   }
 
@@ -464,12 +464,12 @@ class CudnnSupport : public dnn::DnnSupport {
 
   ROCMExecutor* parent_;  // Parent executor object. Not owned.
 
-  // cudnn library handle. cudnnHandle_t type is not present in this header to
+  // miopen library handle. miopenHandle_t type is not present in this header to
   // prevent third-party library header inclusions from leaking outside the
   // single rocm_dnn translation unit.
   void* dnn_handle_ GUARDED_BY(dnn_handle_mutex_);
 
-  // NOTE(keveman): Temporary data layout transformation until cuDNN supports
+  // NOTE(keveman): Temporary data layout transformation until MIOpen supports
   // kBatchYXDepth for backward pass. This function allocates temporary memory,
   // lays out the source data into the temporary but in the kBatchDepthXY
   // layout, and returns the temporary memory. The caller is responsible for
@@ -482,7 +482,7 @@ class CudnnSupport : public dnn::DnnSupport {
   template<class T>
   DeviceMemory<T> MaybeTransformLayout(
       Stream* stream,
-      int cudnn_type,  // Actually cudnnDataType_t.
+      int miopen_type,  // Actually miopenDataType_t.
       dnn::BatchDescriptor* output_descriptor,
       DeviceMemory<T> backward_output_data,
       std::unique_ptr<TemporaryDeviceMemory<T>>* transform_scratch)
@@ -504,7 +504,7 @@ class CudnnSupport : public dnn::DnnSupport {
 
   template <class T>
   bool DoBatchNormalizationBackwardImpl(
-      Stream* stream, int cudnn_type, const DeviceMemory<T>& y_backprop,
+      Stream* stream, int miopen_type, const DeviceMemory<T>& y_backprop,
       const DeviceMemory<T>& x, const DeviceMemory<T>& scale,
       const DeviceMemory<T>& mean, const DeviceMemory<T>& variance,
       const dnn::BatchDescriptor& x_desc,
@@ -514,7 +514,7 @@ class CudnnSupport : public dnn::DnnSupport {
 
   template <class T>
   bool DoConvolveImpl(Stream* stream,
-                      int cudnn_type,  // Actually cudnnDataType_t.
+                      int miopen_type,  // Actually miopenDataType_t.
                       const dnn::BatchDescriptor& batch_descriptor,
                       const DeviceMemory<T>& input_data,
                       const dnn::FilterDescriptor& filter_descriptor,
@@ -531,7 +531,7 @@ class CudnnSupport : public dnn::DnnSupport {
   template <class T>
   bool DoConvolveBackwardDataImpl(
       Stream* stream,
-      int cudnn_type,  // Actually cudnnDataType_t.
+      int miopen_type,  // Actually miopenDataType_t.
       const dnn::FilterDescriptor& filter_descriptor,
       const DeviceMemory<T>& filter_data,
       const dnn::BatchDescriptor& output_descriptor,
@@ -544,7 +544,7 @@ class CudnnSupport : public dnn::DnnSupport {
 
   template <class T>
   bool DoConvolveBackwardFilterImpl(
-      Stream* stream, int cudnn_type,  // Actually cudnnDataType_t.
+      Stream* stream, int miopen_type,  // Actually miopenDataType_t.
       const dnn::BatchDescriptor& input_descriptor,
       const DeviceMemory<T>& input_data,
       const dnn::BatchDescriptor& output_descriptor_in,
@@ -558,44 +558,44 @@ class CudnnSupport : public dnn::DnnSupport {
 
   template <class T>
   bool DoConvolveBackwardBiasImpl(Stream* stream,
-                                  int cudnn_type,  // Actually cudnnDataType_t.
+                                  int miopen_type,  // Actually miopenDataType_t.
                                   const dnn::BatchDescriptor& input_descriptor,
                                   const DeviceMemory<T>& input_data,
                                   const dnn::BatchDescriptor& bias_descriptor,
                                   DeviceMemory<T>* backward_bias_data);
 
   template <class T>
-  bool DoRnnForwardImpl(Stream* stream, const CudnnRnnDescriptor& rnn_desc,
-                        const CudnnRnnSequenceTensorDescriptor& input_desc,
+  bool DoRnnForwardImpl(Stream* stream, const MIOpenRnnDescriptor& rnn_desc,
+                        const MIOpenRnnSequenceTensorDescriptor& input_desc,
                         const DeviceMemory<T>& input_data,
-                        const CudnnRnnStateTensorDescriptor& input_h_desc,
+                        const MIOpenRnnStateTensorDescriptor& input_h_desc,
                         const DeviceMemory<T>& input_h_data,
-                        const CudnnRnnStateTensorDescriptor& input_c_desc,
+                        const MIOpenRnnStateTensorDescriptor& input_c_desc,
                         const DeviceMemory<T>& input_c_data,
                         const DeviceMemory<T>& params,
-                        const CudnnRnnSequenceTensorDescriptor& output_desc,
+                        const MIOpenRnnSequenceTensorDescriptor& output_desc,
                         DeviceMemory<T>* output_data,
-                        const CudnnRnnStateTensorDescriptor& output_h_desc,
+                        const MIOpenRnnStateTensorDescriptor& output_h_desc,
                         DeviceMemory<T>* output_h_data,
-                        const CudnnRnnStateTensorDescriptor& output_c_desc,
+                        const MIOpenRnnStateTensorDescriptor& output_c_desc,
                         DeviceMemory<T>* output_c_data, bool is_training,
                         ScratchAllocator* reserve_space_allocator,
                         ScratchAllocator* workspace_allocator);
 
   template <class T>
-  bool DoRnnBackwardImpl(Stream* stream, const CudnnRnnDescriptor& rnn_desc,
-                         const CudnnRnnSequenceTensorDescriptor& input_desc,
+  bool DoRnnBackwardImpl(Stream* stream, const MIOpenRnnDescriptor& rnn_desc,
+                         const MIOpenRnnSequenceTensorDescriptor& input_desc,
                          const DeviceMemory<T>& input_data,
-                         const CudnnRnnStateTensorDescriptor& input_h_desc,
+                         const MIOpenRnnStateTensorDescriptor& input_h_desc,
                          const DeviceMemory<T>& input_h_data,
-                         const CudnnRnnStateTensorDescriptor& input_c_desc,
+                         const MIOpenRnnStateTensorDescriptor& input_c_desc,
                          const DeviceMemory<T>& input_c_data,
                          const DeviceMemory<T>& params,
-                         const CudnnRnnSequenceTensorDescriptor& output_desc,
+                         const MIOpenRnnSequenceTensorDescriptor& output_desc,
                          const DeviceMemory<T>& output_data,
-                         const CudnnRnnStateTensorDescriptor& output_h_desc,
+                         const MIOpenRnnStateTensorDescriptor& output_h_desc,
                          const DeviceMemory<T>& output_h_data,
-                         const CudnnRnnStateTensorDescriptor& output_c_desc,
+                         const MIOpenRnnStateTensorDescriptor& output_c_desc,
                          const DeviceMemory<T>& output_c_data,
                          const DeviceMemory<float>& output_backprop_data,
                          const DeviceMemory<float>& output_h_backprop_data,
@@ -607,7 +607,7 @@ class CudnnSupport : public dnn::DnnSupport {
                          DeviceMemory<uint8>* reserve_space_data,
                          ScratchAllocator* workspace_allocator);
 
-  SE_DISALLOW_COPY_AND_ASSIGN(CudnnSupport);
+  SE_DISALLOW_COPY_AND_ASSIGN(MIOpenSupport);
 };
 
 }  // namespace rocm
