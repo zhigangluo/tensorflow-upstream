@@ -65,7 +65,7 @@ class ROCMStream : public internal::StreamInterface {
   // Returns the hipStream_t value for passing to the ROCM API.
   //
   // Precond: this ROCMStream has been allocated (otherwise passing a nullptr
-  // into the NVIDIA library causes difficult-to-understand faults).
+  // into ROCM library causes difficult-to-understand faults).
   hipStream_t rocm_stream() const {
     DCHECK(rocm_stream_ != nullptr);
     return const_cast<hipStream_t>(rocm_stream_);
