@@ -15,9 +15,8 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/rocm/rocm_platform.h"
 
-// FIXME
-//#include "tensorflow/stream_executor/rocm/rocm_driver.h"
-//#include "tensorflow/stream_executor/rocm/rocm_gpu_executor.h"
+#include "tensorflow/stream_executor/rocm/rocm_driver.h"
+#include "tensorflow/stream_executor/rocm/rocm_gpu_executor.h"
 #include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 #include "tensorflow/stream_executor/lib/error.h"
 #include "tensorflow/stream_executor/lib/initialize.h"
@@ -101,13 +100,11 @@ int ROCmPlatform::VisibleDeviceCount() const {
   // Throw away the result - it logs internally, and this [containing] function
   // isn't in the path of user control. It's safe to call this > 1x.
 
-  // XXX
-  //if (!rocm::ROCMDriver::Init().ok()) {
-  //  return -1;
-  //}
+  if (!rocm::ROCMDriver::Init().ok()) {
+    return -1;
+  }
 
-  //return ROCMDriver::GetDeviceCount();
-  return 1;
+  return ROCMDriver::GetDeviceCount();
 }
 
 const string& ROCmPlatform::Name() const { return name_; }
@@ -152,23 +149,16 @@ port::StatusOr<StreamExecutor*> ROCmPlatform::GetExecutor(
 
 port::StatusOr<std::unique_ptr<StreamExecutor>>
 ROCmPlatform::GetUncachedExecutor(const StreamExecutorConfig& config) {
-  // XXX
-  //auto executor = port::MakeUnique<StreamExecutor>(
-  //    this, port::MakeUnique<ROCMExecutor>(config.plugin_config));
-  //auto init_status = executor->Init(config.ordinal, config.device_options);
-  //if (!init_status.ok()) {
-  //  return port::Status{
-  //      port::error::INTERNAL,
-  //      port::Printf(
-  //          "failed initializing StreamExecutor for ROCM device ordinal %d: %s",
-  //          config.ordinal, init_status.ToString().c_str())};
-  //}
-
-  return port::Status{
-      port::error::INTERNAL,
-      port::Printf(
-          "failed initializing StreamExecutor for ROCM device ordinal %d: %s",
-          config.ordinal, "XXX")};
+  auto executor = port::MakeUnique<StreamExecutor>(
+      this, port::MakeUnique<ROCMExecutor>(config.plugin_config));
+  auto init_status = executor->Init(config.ordinal, config.device_options);
+  if (!init_status.ok()) {
+    return port::Status{
+        port::error::INTERNAL,
+        port::Printf(
+            "failed initializing StreamExecutor for ROCM device ordinal %d: %s",
+            config.ordinal, init_status.ToString().c_str())};
+  }
 }
 
 void ROCmPlatform::RegisterTraceListener(
