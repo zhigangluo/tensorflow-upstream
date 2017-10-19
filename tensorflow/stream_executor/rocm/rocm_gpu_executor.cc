@@ -318,19 +318,21 @@ bool ROCMExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
 
 bool ROCMExecutor::GetKernelMetadata(ROCMKernel *rocm_kernel,
                                      KernelMetadata *kernel_metadata) {
-  int value;
-  if (!ROCMDriver::FuncGetAttribute(CU_FUNC_ATTRIBUTE_NUM_REGS,
-                                    *rocm_kernel->rocm_function_ptr(),
-                                    &value)) {
-    return false;
-  }
+  int value = 0;
+  // XXX FIXME
+  //if (!ROCMDriver::FuncGetAttribute(CU_FUNC_ATTRIBUTE_NUM_REGS,
+  //                                  *rocm_kernel->rocm_function_ptr(),
+  //                                  &value)) {
+  //  return false;
+  //}
   kernel_metadata->set_registers_per_thread(value);
 
-  if (!ROCMDriver::FuncGetAttribute(CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES,
-                                    *rocm_kernel->rocm_function_ptr(),
-                                    &value)) {
-    return false;
-  }
+  // XXX FIXME
+  //if (!ROCMDriver::FuncGetAttribute(CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES,
+  //                                  *rocm_kernel->rocm_function_ptr(),
+  //                                  &value)) {
+  //  return false;
+  //}
   kernel_metadata->set_shared_memory_bytes(value);
 
   return true;
@@ -405,7 +407,7 @@ void ROCMExecutor::VlogOccupancyInfo(const KernelBase &kernel,
 
   uint64 blocks_per_sm = CalculateOccupancy(
       device_description, regs_per_thread, smem_per_block, thread_dims);
-  VLOG(2) << "Resident blocks per SM is " << blocks_per_sm;
+  VLOG(2) << "Resident blocks per CU is " << blocks_per_sm;
 
   // To increase occupancy, there must be a sufficient number of blocks
   // available to spread across the sm's at this new improved occupancy level.
@@ -423,7 +425,7 @@ void ROCMExecutor::VlogOccupancyInfo(const KernelBase &kernel,
   if (improved_regs_per_thread != 0) {
     VLOG(2) << "Reducing register usage from " << regs_per_thread
             << " to " << improved_regs_per_thread
-            << " could increase resident blocks per SM by one.";
+            << " could increase resident blocks per CU by one.";
   } else {
     VLOG(2) << "Resident blocks per SM cannot be increased by reducing "
         "register usage.";
@@ -479,7 +481,7 @@ bool ROCMExecutor::SynchronousMemSet(DeviceMemoryBase *location, int value,
                                      uint64 size) {
   if (reinterpret_cast<uintptr_t>(location->opaque()) % 4 == 0 &&
       size % 4 == 0) {
-    // rocmMemset reinterprets "value" as a uint8.
+    // hipMemset reinterprets "value" as a uint8.
     uint8 byte_value = static_cast<uint8>(value);
     uint32 pattern = (byte_value << 24) | (byte_value << 16) |
                      (byte_value << 8) | byte_value;
@@ -1022,7 +1024,7 @@ DeviceDescription *ROCMExecutor::PopulateDeviceDescription() const {
   // unlikely to change for us any time soon.
   builder.set_device_address_bits(64);
 
-  builder.set_device_vendor("NVIDIA Corporation");
+  builder.set_device_vendor("Advanced Micro Devices, Inc");
   builder.set_rocm_compute_capability(cc_major_, cc_minor_);
   builder.set_shared_memory_per_core(
       ROCMDriver::GetMaxSharedMemoryPerCore(device_).ValueOrDie());
