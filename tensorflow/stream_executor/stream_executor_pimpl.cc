@@ -73,6 +73,9 @@ internal::StreamExecutorInterface *StreamExecutorImplementationFromPlatformKind(
     case PlatformKind::kOpenCL:
       factory = *internal::MakeOpenCLExecutorImplementation();
       break;
+    case PlatformKind::kROCm:
+      factory = *internal::MakeROCMExecutorImplementation();
+      break;
     case PlatformKind::kHost:
       factory = internal::MakeHostExecutorImplementation;
       break;

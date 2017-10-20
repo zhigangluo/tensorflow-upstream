@@ -42,6 +42,7 @@ enum class PlatformKind {
   kInvalid,
   kCuda,
   kOpenCL,
+  kROCm,
   kHost,
   kMock,
   kSize,

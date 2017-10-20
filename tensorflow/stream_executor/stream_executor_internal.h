@@ -337,6 +337,8 @@ StreamExecutorFactory* MakeCUDAExecutorImplementation();
 
 StreamExecutorFactory* MakeOpenCLExecutorImplementation();
 
+StreamExecutorFactory* MakeROCMExecutorImplementation();
+
 extern StreamExecutorFactory MakeHostExecutorImplementation;
 
 
