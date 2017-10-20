@@ -412,7 +412,8 @@ class MIOpenSupport : public dnn::DnnSupport {
       const DeviceMemory<float>& raw_data,
       const DeviceMemory<float>& normalized_data,
       const DeviceMemory<float>& normalized_variable_gradient,
-      DeviceMemory<float>* raw_variable_gradient) override;
+      DeviceMemory<float>* raw_variable_gradient,
+      ScratchAllocator* workspace_allocator = nullptr) override;
 
   bool DoDepthConcatenate(
       Stream* stream, port::ArraySlice<dnn::BatchDescriptor> input_dimensions,
