@@ -28,7 +28,6 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/casts.h"
 #include "tensorflow/stream_executor/platform/port.h"
 #include "tensorflow/stream_executor/platform/logging.h"
-#include "rocm/include/rocm.h"
 
 #ifdef PLATFORMS_GPUS_ROCM_DYNAMIC_LIBROCM_DYNAMIC_LIBROCM_H_
 #error \

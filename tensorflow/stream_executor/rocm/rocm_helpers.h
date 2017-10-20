@@ -24,8 +24,7 @@ limitations under the License.
 #include <stddef.h>
 #include <complex>
 
-#include "rocm/include/hipComplex.h"
-#include "rocm/include/rocm.h"
+#include "rocm/include/hip/hip_complex.h"
 
 namespace perftools {
 namespace gputools {

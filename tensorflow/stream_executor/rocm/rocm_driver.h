@@ -133,22 +133,22 @@ class ROCMDriver {
   static void DestroyContext(ROCmContext* context);
 
   // Queries the runtime for the specified attribute of the specified function.
-  static bool FuncGetAttribute(hipFunction_t_attribute attribute,
+  static bool FuncGetAttribute(hipDeviceAttribute_t attribute,
                                hipFunction_t function, int *attribute_value);
 
   // Sets the preferred cache configuration for the specified function.
   static bool FuncSetCacheConfig(hipFunction_t function,
-                                 CUfunc_cache cache_config);
+                                 hipFuncCache_t cache_config);
 
   // Gets the preferred shared memory bank configuration for the specified
   // CONTEXT (not function!), either default or four- or eight-byte bank size.
-  static port::StatusOr<CUsharedconfig> ContextGetSharedMemConfig(
+  static port::StatusOr<hipSharedMemConfig> ContextGetSharedMemConfig(
       ROCmContext* context);
 
   // Sets the preferred shared memory bank configuration for the specified
   // CONTEXT (not function!), either default or four- or eight-byte bank size.
   static port::Status ContextSetSharedMemConfig(
-      ROCmContext* context, CUsharedconfig shared_mem_config);
+      ROCmContext* context, hipSharedMemConfig shared_mem_config);
 
   // Launches a HIP kernel via hipLaunchKernel.
   // TODO(leary) describe the structure of kernel_params and extra in a readable
@@ -181,7 +181,7 @@ class ROCMDriver {
   // null. At least one of dptr or bytes should not be null. No ownership is
   // taken of symbol_name.
   static bool GetModuleSymbol(ROCmContext* context, hipModule_t module,
-                              const char *symbol_name, hipDevice_tptr *dptr,
+                              const char *symbol_name, hipDeviceptr_t *dptr,
                               size_t *bytes);
 
   // Unloads module from the current context via cuModuleUnload.
@@ -190,47 +190,47 @@ class ROCMDriver {
   static void UnloadModule(ROCmContext* context, hipModule_t module);
 
   // Performs a synchronous memset of the device memory segment via hipMemsetD8.
-  static bool SynchronousMemsetUint8(ROCmContext* context, hipDevice_tptr location,
+  static bool SynchronousMemsetUint8(ROCmContext* context, hipDeviceptr_t location,
                                      uint8 value, size_t size);
 
   // Performs a synchronous memset of the device memory segment via hipMemsetD32.
   static bool SynchronousMemsetUint32(ROCmContext* context,
-                                      hipDevice_tptr location, uint32 value,
+                                      hipDeviceptr_t location, uint32 value,
                                       size_t uint32_count);
 
   // Performs an asynchronous memset of the device memory segment via
   // hipMemsetD8Async.
-  static bool AsynchronousMemsetUint8(ROCmContext* context, hipDevice_tptr location,
+  static bool AsynchronousMemsetUint8(ROCmContext* context, hipDeviceptr_t location,
                                       uint8 value, size_t uint32_count,
                                       hipStream_t stream);
 
   // Performs an asynchronous memset of the device memory segment via
   // hipMemsetD32Async.
   static bool AsynchronousMemsetUint32(ROCmContext* context,
-                                       hipDevice_tptr location, uint32 value,
+                                       hipDeviceptr_t location, uint32 value,
                                        size_t uint32_count, hipStream_t stream);
 
   // -- Synchronous memcopies.
 
   static port::Status SynchronousMemcpyD2H(ROCmContext* context, void* host_dst,
-                                           hipDevice_tptr gpu_src, uint64 size);
+                                           hipDeviceptr_t gpu_src, uint64 size);
   static port::Status SynchronousMemcpyH2D(ROCmContext* context,
-                                           hipDevice_tptr gpu_dst,
+                                           hipDeviceptr_t gpu_dst,
                                            const void* host_src, uint64 size);
   static port::Status SynchronousMemcpyD2D(ROCmContext* context,
-                                           hipDevice_tptr gpu_dst,
-                                           hipDevice_tptr gpu_src, uint64 size);
+                                           hipDeviceptr_t gpu_dst,
+                                           hipDeviceptr_t gpu_src, uint64 size);
 
   // -- Asynchronous memcopies.
 
   static bool AsynchronousMemcpyD2H(ROCmContext* context, void *host_dst,
-                                    hipDevice_tptr gpu_src, uint64 size,
+                                    hipDeviceptr_t gpu_src, uint64 size,
                                     hipStream_t stream);
-  static bool AsynchronousMemcpyH2D(ROCmContext* context, hipDevice_tptr gpu_dst,
+  static bool AsynchronousMemcpyH2D(ROCmContext* context, hipDeviceptr_t gpu_dst,
                                     const void *host_src, uint64 size,
                                     hipStream_t stream);
-  static bool AsynchronousMemcpyD2D(ROCmContext* context, hipDevice_tptr gpu_dst,
-                                    hipDevice_tptr gpu_src, uint64 size,
+  static bool AsynchronousMemcpyD2D(ROCmContext* context, hipDeviceptr_t gpu_dst,
+                                    hipDeviceptr_t gpu_src, uint64 size,
                                     hipStream_t stream);
 
   // The ROCM stream callback type signature.
@@ -299,13 +299,13 @@ class ROCMDriver {
   // -- Pointer-specific calls.
 
   // Returns the context in which pointer was allocated or registered.
-  static port::StatusOr<ROCmContext*> GetPointerContext(hipDevice_tptr pointer);
+  static port::StatusOr<ROCmContext*> GetPointerContext(hipDeviceptr_t pointer);
 
   // Returns the device associated with the context from GetPointerContext().
-  static port::StatusOr<hipDevice_t> GetPointerDevice(hipDevice_tptr pointer);
+  static port::StatusOr<hipDevice_t> GetPointerDevice(hipDeviceptr_t pointer);
 
   // Returns the memory space addressed by pointer.
-  static port::StatusOr<MemorySpace> GetPointerMemorySpace(hipDevice_tptr pointer);
+  static port::StatusOr<MemorySpace> GetPointerMemorySpace(hipDeviceptr_t pointer);
 
   // Returns the base address and size of the device pointer dptr.
   static port::Status GetPointerAddressRange(hipDeviceptr_t dptr,
