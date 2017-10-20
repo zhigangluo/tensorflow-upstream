@@ -41,8 +41,8 @@ class ROCMStream : public internal::StreamInterface {
   // Note: teardown is handled by a parent's call to DeallocateStream.
   ~ROCMStream() override {}
 
-  void *ROCmStreamHack() override { return rocm_stream_; }
-  void **ROCmStreamMemberHack() override {
+  void *GPUStreamHack() override { return rocm_stream_; }
+  void **GPUStreamMemberHack() override {
     return reinterpret_cast<void **>(&rocm_stream_);
   }
 
