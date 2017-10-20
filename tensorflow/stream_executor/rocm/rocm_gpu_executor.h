@@ -202,7 +202,7 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
 
   std::unique_ptr<internal::TimerInterface> GetTimerImplementation() override;
 
-  void *ROCmContextHack() override;
+  void *GPUContextHack() override;
 
   ROCmContext* rocm_context();
 

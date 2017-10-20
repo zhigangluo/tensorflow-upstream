@@ -824,7 +824,7 @@ ROCMExecutor::GetTimerImplementation() {
   return std::unique_ptr<internal::TimerInterface>(new ROCMTimer(this));
 }
 
-void *ROCMExecutor::ROCmContextHack() { return context_; }
+void *ROCMExecutor::GPUContextHack() { return context_; }
 
 ROCmContext* ROCMExecutor::rocm_context() { return context_; }
 
