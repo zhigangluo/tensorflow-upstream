@@ -90,10 +90,11 @@ cc_library(
         "//tensorflow/core:lib",
         "@local_config_rocm//rocm:rocm_headers",
     ] + if_rocm_is_configured([
-        # XXX FIXME implement rocm in //tensorflow/core
-        #"//tensorflow/core:rocm",
-        #"@local_config_rocm//rocm:rocblas",
-        #"@local_config_rocm//rocm:rocm_driver",
+        "//tensorflow/core:rocm",
+        "@local_config_rocm//rocm:hiprng",
+        "@local_config_rocm//rocm:hipfft",
+        "@local_config_rocm//rocm:hipblas",
+        "@local_config_rocm//rocm:miopen",
     ]),
     alwayslink = 1,
 )
