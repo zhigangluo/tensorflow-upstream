@@ -112,37 +112,24 @@ string ToString(hipError_t result) {
     return "HIP_ERROR_" #__name;
 
 ///////////////
-// NOTE: here we specify return code values outside of the enum explicitly
-// because our in-tree rocm.h is from the ROCM 5.5 SDK, but ROCM 6.0+ driver
-// libraries are deployed in the fleet these error codes are backwards
-// compatible, but if we see a "new" one, we want to be able to identify it in
-// the logs.
-//
-// Once we get a rocm.h that has cuGetErrorName (TODO is above) we can
-// eliminate this function and just rely on the driver to provide us these
-// strings.
-//
-// NOTE: "Must reboot all context" below is shorthand for, "must
-// destroy/recreate the offending context and any allocation which come from
-// it if you are to continue using ROCM."
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wswitch"
   switch (result) {
-    OSTREAM_ROCM_ERROR(INVALID_VALUE)
-    OSTREAM_ROCM_ERROR(OUT_OF_MEMORY)
-    OSTREAM_ROCM_ERROR(NOT_INITIALIZED)
-    OSTREAM_ROCM_ERROR(DEINITIALIZED)
-    OSTREAM_ROCM_ERROR(NO_DEVICE)
-    OSTREAM_ROCM_ERROR(INVALID_DEVICE)
-    OSTREAM_ROCM_ERROR(INVALID_IMAGE)
-    OSTREAM_ROCM_ERROR(INVALID_CONTEXT)
-    OSTREAM_ROCM_ERROR(INVALID_HANDLE)
-    OSTREAM_ROCM_ERROR(NOT_FOUND)
-    OSTREAM_ROCM_ERROR(NOT_READY)
-    OSTREAM_ROCM_ERROR(NO_BINARY_FOR_GPU)
+    OSTREAM_ROCM_ERROR(InvalidValue)
+    OSTREAM_ROCM_ERROR(OutOfMemory)
+    OSTREAM_ROCM_ERROR(NotInitialized)
+    OSTREAM_ROCM_ERROR(Deinitialized)
+    OSTREAM_ROCM_ERROR(NoDevice)
+    OSTREAM_ROCM_ERROR(InvalidDevice)
+    OSTREAM_ROCM_ERROR(InvalidImage)
+    OSTREAM_ROCM_ERROR(InvalidContext)
+    OSTREAM_ROCM_ERROR(InvalidHandle)
+    OSTREAM_ROCM_ERROR(NotFound)
+    OSTREAM_ROCM_ERROR(NotReady)
+    OSTREAM_ROCM_ERROR(NoBinaryForGpu)
 
     // Encountered an uncorrectable ECC error during execution.
-    OSTREAM_ROCM_ERROR(ECC_UNCORRECTABLE)
+    OSTREAM_ROCM_ERROR(ECCNotCorrectable)
 
     // Load/store on an invalid address. Must reboot all context.
     case 700:
@@ -150,65 +137,10 @@ string ToString(hipError_t result) {
     // Passed too many / wrong arguments, too many threads for register count.
     case 701:
       return "ROCM_ERROR_LAUNCH_OUT_OF_RESOURCES";
-    // Kernel took too long to execute.
-    case 702:
-      return "ROCM_ERROR_LAUNCH_TIMEOUT";
-    // Kernel launch uses an incompatible texturing mode.
-    case 703:
-      return "ROCM_ERROR_LAUNCH_INCOMPATIBLE_TEXTURING";
-    // Trying to re-enable peer access that already has it enabled.
-    case 704:
-      return "ROCM_ERROR_PEER_ACCESS_ALREADY_ENABLED";
-    // Trying to disable peer access that has not yet been enabled.
-    case 705:
-      return "ROCM_ERROR_PEER_ACCESS_NOT_ENABLED";
-    // Primary context for the specified device has already been initialized.
-    case 708:
-      return "ROCM_ERROR_PRIMARY_CONTEXT_ACTIVE";
-    // Context current to calling thread has been destroyed or is a primary
-    // context that has not yet been initialized.
-    case 709:
-      return "ROCM_ERROR_CONTEXT_IS_DESTROYED";
-    // Device-side assert triggered during kernel execution. Must reboot all
-    // context.
-    case 710:
-      return "ROCM_ERROR_ASSERT";
-    // Hardware resources to enable peer access have been exhausted.
-    case 711:
-      return "ROCM_ERROR_TOO_MANY_PEERS";
-    // Memory range has already been registered.
-    case 712:
-      return "ROCM_ERROR_HOST_MEMORY_ALREADY_REGISTERED";
-    // Pointer does not correspond to any currently registered memory region.
-    case 713:
-      return "ROCM_ERROR_HOST_MEMORY_NOT_REGISTERED";
-    // Due to stack corruption or exceeding stack size limit. Must reboot all
-    // context.
-    case 714:
-      return "ROCM_ERROR_HARDWARE_STACK_ERROR";
-    case 715:
-      return "ROCM_ERROR_ILLEGAL_INSTRUCTION";
-    // Load/store on an unaligned memory address. Must reboot all context.
-    case 716:
-      return "ROCM_ERROR_MISALIGNED_ADDRESS";
-    // Device instruction with specific address space given address not
-    // belonging to allowed address space. Must reboot all context.
-    case 717:
-      return "ROCM_ERROR_INVALID_ADDRESS_SPACE";
-    // Device program counter wrapped its address space. Must reboot all
-    // context.
-    case 718:
-      return "ROCM_ERROR_INVALID_PC";
-    // Exception on device while executing a kernel; e.g. deref invalid device
-    // pointer, accessing OOB shared memory. Must reboot all context.
-    case 719:
-      return "ROCM_ERROR_LAUNCH_FAILED";
 
-    OSTREAM_ROCM_ERROR(CONTEXT_ALREADY_IN_USE)
-    OSTREAM_ROCM_ERROR(PEER_ACCESS_UNSUPPORTED)
-    OSTREAM_ROCM_ERROR(NOT_PERMITTED)
-    OSTREAM_ROCM_ERROR(NOT_SUPPORTED)
-    OSTREAM_ROCM_ERROR(UNKNOWN)  // Unknown internal error to ROCM.
+    OSTREAM_ROCM_ERROR(ContextAlreadyInUse)
+    OSTREAM_ROCM_ERROR(PeerAccessUnsupported)
+    OSTREAM_ROCM_ERROR(Unknown)  // Unknown internal error to ROCM.
     default:
       return port::StrCat("hipError_t(", static_cast<int>(result), ")");
   }
@@ -386,7 +318,7 @@ string ROCMPointersToCanAccessString(hipDeviceptr_t from, hipDeviceptr_t to) {
 // Actually performs the work of ROCM initialization. Wrapped up in one-time
 // execution guard.
 static port::Status InternalInit() {
-  hipError_t res = ROCM_ERROR_NO_DEVICE;
+  hipError_t res = hipErrorNoDevice;
   if (FLAGS_gpuexec_rocm_driver_inject_init_error) {
     LOG(ERROR) << "injecting ROCM init error; initialization will fail";
   } else {
@@ -487,7 +419,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
   }
 
   string message = "failed call to hipCtxCreate: " + ToString(res);
-  if (res == ROCM_ERROR_OUT_OF_MEMORY) {
+  if (res == hipErrorMemoryAllocation) {
     uint64 total_memory;
     if (GetDeviceTotalMemory(device, &total_memory)) {
       port::StrAppend(&message, "; total memory reported: ", total_memory);
@@ -515,7 +447,8 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
 /* static */ bool ROCMDriver::FuncGetAttribute(hipDeviceAttribute_t attribute,
                                                hipFunction_t func,
                                                int *attribute_value) {
-  hipError_t res = hipFuncGetAttribute(attribute_value, attribute, func);
+  // XXX FIXME properly implement this feature in HIP
+  hipError_t res = hipSuccess;
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to query kernel attribute. kernel: " << func
                << ", attribute: " << attribute;
@@ -583,9 +516,9 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
           << " gdy: " << grid_dim_y << " gdz: " << grid_dim_z
           << " bdx: " << block_dim_x << " bdy: " << block_dim_y
           << " bdz: " << block_dim_z;
-  hipError_t res = cuLaunchKernel(function, grid_dim_x, grid_dim_y, grid_dim_z,
-                                block_dim_x, block_dim_y, block_dim_z,
-                                shared_mem_bytes, stream, kernel_params, extra);
+  hipError_t res = hipModuleLaunchKernel(
+     function, grid_dim_x, grid_dim_y, grid_dim_z, block_dim_x, block_dim_y,
+     block_dim_z, shared_mem_bytes, stream, kernel_params, extra);
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to launch ROCM kernel: " << function
                << "; result: " << ToString(res);
@@ -599,7 +532,8 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
                                                 const char *cubin_bytes,
                                                 hipModule_t *module) {
   ScopedActivateContext activation{context};
-  hipError_t result = hipModuleLoadFatBinary(module, cubin_bytes);
+  // XXX FIXME: properly implement this interface
+  hipError_t result = hipSuccess;
   if (result != hipSuccess) {
     return port::Status{port::error::INTERNAL,
                         "failed to load in-memory CUBIN: " + ToString(result)};
@@ -691,7 +625,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   uint32_t value32 = (valueC << 24) | (valueC << 16) | (valueC << 8) | (valueC) ;
   assert (value32 == value); // if mismatch this indicates case where hipMemsetAsyc can't emulate hipMemSetD32
   hipError_t res =
-      dynload::hipMemset(pointer, static_cast<int>(value), uint32_count*4);
+      hipMemset(pointer, static_cast<int>(value), uint32_count*4);
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to memset memory: " << ToString(res);
     return false;
@@ -727,7 +661,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   uint32_t value32 = (valueC << 24) | (valueC << 16) | (valueC << 8) | (valueC) ;
   assert (value32 == value); // if mismatch this indicates case where hipMemsetAsyc can't emulate hipMemSetD32
   hipError_t res =
-      dynload::hipMemsetAsync(pointer, value, uint32_count*4, stream);
+      hipMemsetAsync(pointer, value, uint32_count*4, stream);
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to enqueue async memset operation: " << ToString(res);
     return false;
@@ -797,7 +731,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 /* static */ port::StatusOr<hipDevice_t> ROCMDriver::DeviceFromContext(
     ROCmContext* context) {
   ScopedActivateContext activated{context};
-  hipDevice_t device = nullptr;
+  hipDevice_t device;
   hipError_t result = hipCtxGetDevice(&device);
   if (result == hipSuccess) {
     return device;
@@ -876,7 +810,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   ScopedActivateContext activation{context};
   void *host_mem = nullptr;
   // "Portable" memory is visible to all ROCM contexts. Safe for our use model.
-  hipError_t res = hipHostAlloc(&host_mem, bytes, hipHostMallocPortable);
+  hipError_t res = hipHostMalloc(&host_mem, bytes, hipHostMallocPortable);
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to alloc " << bytes
                << " bytes on host: " << ToString(res);
@@ -934,8 +868,8 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   switch (res) {
     case hipSuccess:
       return port::Status::OK();
-    case ROCM_ERROR_DEINITIALIZED:
-    case ROCM_ERROR_NOT_INITIALIZED:
+    case hipErrorDeinitialized:
+    case hipErrorNotInitialized:
       return port::Status{
           port::error::FAILED_PRECONDITION,
           port::Printf("error destroying ROCM event in context %p: %s", context,
@@ -956,8 +890,8 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   switch (res) {
     case hipSuccess:
       return port::Status::OK();
-    case ROCM_ERROR_DEINITIALIZED:
-    case ROCM_ERROR_NOT_INITIALIZED:
+    case hipErrorDeinitialized:
+    case hipErrorNotInitialized:
       return port::Status{
           port::error::FAILED_PRECONDITION,
           port::Printf("error recording ROCM event on stream %p: %s", stream,
@@ -974,7 +908,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
     ROCmContext *context, hipEvent_t event) {
   ScopedActivateContext activated{context};
   hipError_t res = hipEventQuery(event);
-  if (res != hipSuccess && res != ROCM_ERROR_NOT_READY) {
+  if (res != hipSuccess && res != hipErrorNotReady) {
     return port::Status{
         port::error::INTERNAL,
         port::Printf("failed to query event: %s", ToString(res).c_str())};
@@ -1053,7 +987,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
     return true;
   }
 
-  if (res != ROCM_ERROR_NOT_READY) {
+  if (res != hipErrorNotReady) {
     LOG(ERROR) << "stream in bad state on status query: " << ToString(res);
   }
   return false;
@@ -1082,7 +1016,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
                                                            const void *host_src,
                                                            uint64 size) {
   ScopedActivateContext activation{context};
-  hipError_t res = hipMemcpyHtoD(gpu_dst, host_src, size);
+  hipError_t res = hipMemcpyHtoD(gpu_dst, const_cast<void*>(host_src), size);
   if (res != hipSuccess) {
     return port::InternalError(port::Printf(
         "failed to synchronous memcpy from host to device: %s; GPU dst: %p;"
@@ -1137,7 +1071,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
                                                     uint64 size,
                                                     hipStream_t stream) {
   ScopedActivateContext activation{context};
-  hipError_t res = hipMemcpyHtoDAsync(gpu_dst, host_src, size, stream);
+  hipError_t res = hipMemcpyHtoDAsync(gpu_dst, const_cast<void*>(host_src), size, stream);
   if (res != hipSuccess) {
     LOG(ERROR) << port::Printf(
         "failed to enqueue async memcpy from host to device: %s; GPU dst: %p; "
@@ -1179,24 +1113,12 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 /* static */ port::Status ROCMDriver::CreateEvent(ROCmContext* context,
                                                   hipEvent_t *result,
                                                   EventFlags flags) {
-  int hipflags;
-  switch (flags) {
-    case EventFlags::kDefault:
-      hipflags = hipEventDefault;
-      break;
-    case EventFlags::kDisableTiming:
-      hipflags = hipEventDisableTiming;
-      break;
-    default:
-      LOG(FATAL) << "impossible event flags: " << int(flags);
-  }
-
   ScopedActivateContext activated{context};
-  hipError_t res = hipEventCreate(result, hipflags);
+  hipError_t res = hipEventCreate(result);
 
   if (res == hipSuccess) {
     return port::Status::OK();
-  } else if (res == ROCM_ERROR_OUT_OF_MEMORY) {
+  } else if (res == hipErrorMemoryAllocation) {
     return port::Status{port::error::RESOURCE_EXHAUSTED,
                         "could not create ROCM event: out of device memory"};
   } else {
@@ -1208,7 +1130,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 
 /* static */ int ROCMDriver::GetDeviceCount() {
   int device_count = 0;
-  hipError_t res = hipDeviceGetCount(&device_count);
+  hipError_t res = hipGetDeviceCount(&device_count);
   if (res != hipSuccess) {
     LOG(ERROR) << "could not retrieve ROCM device count: " << ToString(res);
     return 0;
@@ -1265,7 +1187,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   hipError_t result = hipMemGetAddressRange(base, size, dptr);
   if (result == hipSuccess) {
     return port::Status::OK();
-  } else if (result == ROCM_ERROR_NOT_FOUND) {
+  } else if (result == hipErrorNotFound) {
     // We differentiate between "this pointer is unknown" (return here) and
     // "there was an internal error while performing this operation" (return
     // below).
@@ -1311,7 +1233,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 // T and wraps it in a StatusOr.
 template <typename T>
 static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
-                                            hipDevice_t_attribute attribute) {
+                                            hipDeviceAttribute_t attribute) {
   int value = -1;
   hipError_t result = hipDeviceGetAttribute(&value, attribute, device);
   if (result != hipSuccess) {
@@ -1339,7 +1261,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
 /* static */ port::StatusOr<int64> ROCMDriver::GetMaxSharedMemoryPerBlock(
     hipDevice_t device) {
   return GetSimpleAttribute<int64>(
-      device, hipDeviceAttrMaxSharedMemoryPerBlock);
+      device, hipDeviceAttributeMaxSharedMemoryPerBlock);
 }
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetMaxThreadsPerMultiprocessor(
@@ -1362,7 +1284,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetThreadsPerWarp(
     hipDevice_t device) {
-  return GetSimpleAttribute<int64>(device, CU_DEVICE_ATTRIBUTE_WARP_SIZE);
+  return GetSimpleAttribute<int64>(device, hipDeviceAttributeWarpSize);
 }
 
 /* static */ bool ROCMDriver::GetGridLimits(int *x, int *y, int *z,
@@ -1406,7 +1328,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
 
 /* static */ bool ROCMDriver::GetDeviceProperties(hipDeviceProp_t *device_properties,
                                                   int device_ordinal) {
-  hipError_t res = hipDeviceGetProperties(device_properties, device_ordinal);
+  hipError_t res = hipGetDeviceProperties(device_properties, device_ordinal);
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to query device properties: " << ToString(res);
     return false;
@@ -1510,7 +1432,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   ScopedActivateContext activated{from};
   hipError_t result = hipCtxEnablePeerAccess(to->context(), 0 /* = flags */);
   if (result != hipSuccess &&
-      result != ROCM_ERROR_PEER_ACCESS_ALREADY_ENABLED) {
+      result != hipErrorPeerAccessAlreadyEnabled) {
     return port::Status{
         port::error::INTERNAL,
         port::Printf("failed to enable peer access from %p to %p: %s", from, to,
