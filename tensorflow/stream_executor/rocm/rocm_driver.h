@@ -387,6 +387,24 @@ class ROCMDriver {
 
   // Returns the maximum number of blocks (per multiprocessor) occupied by the
   // specified kernel/hipFunction_t when launched with the specified parameters.
+  static port::StatusOr<int> GetMaxOccupiedBlocksPerCore(
+      ROCmContext* context, hipFunction_t kernel, int threads_per_block,
+      size_t dynamic_shared_memory_bytes);
+
+  // Returns the current context set in CUDA. This is done by calling the cuda
+  // driver (e.g., this value is not our cached view of the current context).
+  static hipCtx_t CurrentContextOrDie();
+
+  // Seam for injecting an error at CUDA initialization time for testing
+  // purposes.
+  static bool driver_inject_init_error_;
+};
+
+// Ensures a context is activated within a scope.
+class ScopedActivateContext {
+ public:
+  // Activates the context via cuCtxSetCurrent, if it is not the currently
+  // active context (a la hipCtxGetCurrent).
   explicit ScopedActivateContext(ROCmContext* context);
 
   // Checks that the context has remained activated for the duration of the
