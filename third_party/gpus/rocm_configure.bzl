@@ -114,6 +114,26 @@ def _host_compiler_includes(repository_ctx, cc):
     file.
   """
   inc_dirs = get_cxx_inc_directories(repository_ctx, cc)
+
+  # Add numpy headers
+  inc_dirs.append("/usr/lib/python2.7/dist-packages/numpy/core/include")
+
+  # Add HIP headers
+  inc_dirs.append("/opt/rocm/hip/include")
+
+  # Add hcrng and hiprng headers
+  inc_dirs.append("/opt/rocm/hcrng/include")
+  inc_dirs.append("/opt/rocm/hiprng/include")
+
+  # Add hcfft and hipfft headers
+  inc_dirs.append("/opt/rocm/hcfft/include")
+  inc_dirs.append("/opt/rocm/hipfft/include")
+
+  # Add hipblas headers
+  inc_dirs.append("/opt/rocm/hipblas/include")
+
+  # Add MIOpen headers
+  inc_dirs.append("/opt/rocm/miopen/include")
   entries = []
   for inc_dir in inc_dirs:
     entries.append("  cxx_builtin_include_directory: \"%s\"" % inc_dir)
