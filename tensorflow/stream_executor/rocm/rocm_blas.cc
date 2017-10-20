@@ -1252,11 +1252,12 @@ bool ROCMBlas::DoBlasHemv(Stream *stream, blas::UpperLower uplo, uint64 n,
                           const DeviceMemory<std::complex<float>> &x, int incx,
                           std::complex<float> beta,
                           DeviceMemory<std::complex<float>> *y, int incy) {
-  return DoBlasInternal(
-      wrap::hipblasChemv, stream, true /* = pointer_mode_host */,
-      ROCMBlasUpperLower(uplo), n, ROCMComplex(&alpha),
-      ROCMComplex(ROCMMemory(a)), lda, ROCMComplex(ROCMMemory(x)), incx,
-      ROCMComplex(&beta), ROCMComplex(ROCMMemoryMutable(y)), incy);
+  return false;
+  //return DoBlasInternal(
+  //    wrap::hipblasChemv, stream, true /* = pointer_mode_host */,
+  //    ROCMBlasUpperLower(uplo), n, ROCMComplex(&alpha),
+  //    ROCMComplex(ROCMMemory(a)), lda, ROCMComplex(ROCMMemory(x)), incx,
+  //    ROCMComplex(&beta), ROCMComplex(ROCMMemoryMutable(y)), incy);
 }
 
 bool ROCMBlas::DoBlasHemv(Stream *stream, blas::UpperLower uplo, uint64 n,
@@ -2184,12 +2185,12 @@ port::Status ROCMBlas::DoBlasGemmBatchedInternal(
 
   assert(!(ldc < m || bsc < ldc * n));
 
-  if (HIPBlasTranspose(transa) == HIPBLAS_OP_N)
+  if (ROCMBlasTranspose(transa) == HIPBLAS_OP_N)
       assert(!(lda < m || bsa < lda * k));
   else
       assert(!(lda < k || bsa < lda * m));
 
-  if (HIPBlasTranspose(transb) == HIPBLAS_OP_N)
+  if (ROCMBlasTranspose(transb) == HIPBLAS_OP_N)
       assert(!(ldb < k || bsb < ldb * n));
   else
       assert(!(ldb < n || bsc < ldc * k));
@@ -2198,7 +2199,7 @@ port::Status ROCMBlas::DoBlasGemmBatchedInternal(
   {
     bool ok = DoBlasInternal(
             hipblas_func, stream, true /* = pointer_mode_host */,
-            HIPBlasTranspose(transa), HIPBlasTranspose(transb), m, n, k,
+            ROCMBlasTranspose(transa), ROCMBlasTranspose(transb), m, n, k,
             ROCMComplex(&alpha), a_raw_ptrs[ 0 ], lda, bsa,
             b_raw_ptrs[ 0 ], ldb, bsb, ROCMComplex(&beta),
             c_raw_ptrs[ 0 ], ldc, bsc, batch_count);
@@ -2220,8 +2221,9 @@ bool ROCMBlas::DoBlasGemmBatched(
     const port::ArraySlice<DeviceMemory<float> *> &c_array, int ldc,
     int batch_count, ScratchAllocator *scratch_allocator) {
   port::Status status = DoBlasGemmBatchedInternal(
-      wrap::hipblasSgemmBatched, stream, transa, transb, m, n, k, alpha, a_array,
-      lda, b_array, ldb, beta, c_array, ldc, batch_count, scratch_allocator);
+      wrap::hipblasSgemmStridedBatched, stream, transa, transb, m, n, k, alpha,
+      a_array, lda, b_array, ldb, beta, c_array, ldc, batch_count,
+      scratch_allocator);
   if (!status.ok()) {
     LOG(ERROR) << status;
   }
@@ -2236,8 +2238,9 @@ bool ROCMBlas::DoBlasGemmBatched(
     double beta, const port::ArraySlice<DeviceMemory<double> *> &c_array,
     int ldc, int batch_count, ScratchAllocator *scratch_allocator) {
   port::Status status = DoBlasGemmBatchedInternal(
-      wrap::hipblasDgemmBatched, stream, transa, transb, m, n, k, alpha, a_array,
-      lda, b_array, ldb, beta, c_array, ldc, batch_count, scratch_allocator);
+      wrap::hipblasDgemmStridedBatched, stream, transa, transb, m, n, k, alpha,
+      a_array, lda, b_array, ldb, beta, c_array, ldc, batch_count,
+      scratch_allocator);
   if (!status.ok()) {
     LOG(ERROR) << status;
   }
@@ -2679,7 +2682,7 @@ void initialize_hipblas() {
 
   gpu::PluginRegistry::Instance()->SetDefaultFactory(gpu::rocm::kROCmPlatformId,
                                                      gpu::PluginKind::kBlas,
-                                                     gpu::rocm::kCuBlasPlugin);
+                                                     gpu::rocm::kHipBlasPlugin);
 }
 
 }  // namespace gputools
