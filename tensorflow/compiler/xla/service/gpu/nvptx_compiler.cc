@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/compiler/xla/service/gpu/gpu_compiler.h"
+#include "tensorflow/compiler/xla/service/gpu/nvptx_compiler.h"
 
 #include <stdlib.h>
 #include <functional>
@@ -91,8 +91,8 @@ const char* kDataLayout = "e-i64:64-v16:16-v32:32-n16:32:64";
 constexpr int64 kMemoryAlignment = 256;
 
 // Returns the directory containing nvvm libdevice files. This function is
-// called in GpuCompiler's constructor, so can't return an error. But
-// GpuCompiler::Compile will return an error when the wanted libdevice file
+// called in NVPTXCompiler's constructor, so can't return an error. But
+// NVPTXCompiler::Compile will return an error when the wanted libdevice file
 // doesn't exist in the folder this function returns.
 string GetLibdeviceDir(const HloModuleConfig& config) {
   std::vector<string> potential_libdevice_dirs;
@@ -224,10 +224,10 @@ void DumpPtxasInfo(const string& ptx) {
 
 }  // namespace
 
-GpuCompiler::GpuCompiler()
+NVPTXCompiler::NVPTXCompiler()
     : pointer_size_(llvm::DataLayout(kDataLayout).getPointerSize()) {}
 
-StatusOr<std::unique_ptr<Executable>> GpuCompiler::Compile(
+StatusOr<std::unique_ptr<Executable>> NVPTXCompiler::Compile(
     std::unique_ptr<HloModule> module, se::StreamExecutor* stream_exec) {
   TF_RET_CHECK(stream_exec != nullptr);
 
@@ -342,7 +342,7 @@ StatusOr<std::unique_ptr<Executable>> GpuCompiler::Compile(
   return std::unique_ptr<Executable>(gpu_executable);
 }
 
-StatusOr<std::vector<std::unique_ptr<Executable>>> GpuCompiler::Compile(
+StatusOr<std::vector<std::unique_ptr<Executable>>> NVPTXCompiler::Compile(
     std::vector<std::unique_ptr<HloModule>> modules,
     std::vector<se::StreamExecutor*> stream_execs) {
   return Unimplemented(
@@ -350,12 +350,12 @@ StatusOr<std::vector<std::unique_ptr<Executable>>> GpuCompiler::Compile(
 }
 
 StatusOr<std::vector<std::unique_ptr<AotCompilationResult>>>
-GpuCompiler::CompileAheadOfTime(std::vector<std::unique_ptr<HloModule>> module,
+NVPTXCompiler::CompileAheadOfTime(std::vector<std::unique_ptr<HloModule>> module,
                                 const AotCompilationOptions& options) {
-  return Unimplemented("not yet implemented: GpuCompiler::CompileAheadOfTime");
+  return Unimplemented("not yet implemented: NVPTXCompiler::CompileAheadOfTime");
 }
 
-se::Platform::Id GpuCompiler::PlatformId() const {
+se::Platform::Id NVPTXCompiler::PlatformId() const {
   return se::cuda::kCudaPlatformId;
 }
 
@@ -364,7 +364,7 @@ se::Platform::Id GpuCompiler::PlatformId() const {
 
 static bool InitModule() {
   xla::Compiler::RegisterCompilerFactory(se::cuda::kCudaPlatformId, []() {
-    return xla::MakeUnique<xla::gpu::GpuCompiler>();
+    return xla::MakeUnique<xla::gpu::NVPTXCompiler>();
   });
   return true;
 }
