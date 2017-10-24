@@ -438,6 +438,7 @@ cc_library(
         "//tensorflow/compiler/xla/service/gpu/llvm_gpu_backend",
         "//tensorflow/compiler/xla/service/llvm_ir:llvm_util",
         "//tensorflow/core:cuda_libdevice_path",
+        "//tensorflow/core:rocm_rocdl_path",
         "//tensorflow/core:lib",
         "//tensorflow/core:stream_executor_no_cuda",
         "@llvm//:core",
