@@ -159,6 +159,8 @@ ROCmPlatform::GetUncachedExecutor(const StreamExecutorConfig& config) {
             "failed initializing StreamExecutor for ROCM device ordinal %d: %s",
             config.ordinal, init_status.ToString().c_str())};
   }
+
+  return std::move(executor);
 }
 
 void ROCmPlatform::RegisterTraceListener(
