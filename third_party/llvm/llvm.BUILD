@@ -24,9 +24,7 @@ llvm_host_triple = "x86_64-unknown-linux_gnu"
 
 llvm_targets = [
     "AArch64",
-    # Uncomment to enable the AMDGPU backend.
-    # TODO(phawkins): use a configure-time test.
-    # "AMDGPU",
+    "AMDGPU",
     "ARM",
     "NVPTX",
     "PowerPC",

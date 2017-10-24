@@ -21,6 +21,11 @@ filegroup(
     ]),
 )
 
+load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
+load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda_is_configured")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm_is_configured")
+
 cc_library(
     name = "partition_assignment",
     srcs = [
@@ -397,8 +402,10 @@ cc_library(
 
 cc_library(
     name = "gpu_compiler",
-    srcs = ["nvptx_compiler.cc", "amdgpu_compiler.cc"],
-    hdrs = ["nvptx_compiler.h", "amdgpu_compiler.h"],
+    srcs = if_cuda_is_configured(if_cuda(["nvptx_compiler.cc"])) +
+           if_rocm_is_configured(if_rocm(["amdgpu_compiler.cc"])),
+    hdrs = if_cuda_is_configured(if_cuda(["nvptx_compiler.h"])) +
+           if_rocm_is_configured(if_rocm(["amdgpu_compiler.h"])),
     deps = [
         ":convolution_folding",
         ":copy_insertion",

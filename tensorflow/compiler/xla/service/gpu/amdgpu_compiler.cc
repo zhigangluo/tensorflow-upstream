@@ -39,7 +39,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/gpu/ir_emitter.h"
 #include "tensorflow/compiler/xla/service/gpu/ir_emitter_context.h"
 #include "tensorflow/compiler/xla/service/gpu/layout_assignment.h"
-#include "tensorflow/compiler/xla/service/gpu/llvm_gpu_backend/nvptx_backend_lib.h"
+#include "tensorflow/compiler/xla/service/gpu/llvm_gpu_backend/amdgpu_backend_lib.h"
 #include "tensorflow/compiler/xla/service/gpu/pad_insertion.h"
 #include "tensorflow/compiler/xla/service/gpu/partition_assignment.h"
 #include "tensorflow/compiler/xla/service/gpu/stream_assignment.h"
@@ -63,7 +63,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/util.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/io/path.h"
-#include "tensorflow/core/platform/cuda_libdevice_path.h"
+#include "tensorflow/core/platform/rocm_rocdl_path.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/stream_executor_no_cuda.h"
@@ -77,40 +77,41 @@ namespace gpu {
 namespace {
 
 // The triple that represents our target.
-const char* kTargetTriple = "amdgcn--amdhsa";
+const char* kTargetTriple = "amdgcn--amdhsa-amdgiz";
 
 // The data layout of the emitted module. Copied from computeDataLayout in
 // AMDGPUTargetMachine.cpp.
-const char* kDataLayout = "e-i64:64-v16:16-v32:32-n16:32:64";
+const char* kDataLayout =
+         "e-p:64:64-p1:64:64-p2:64:64-p3:32:32-p4:32:32-p5:32:32"
+         "-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128"
+         "-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64-A5";
 
 // Any address of a variable residing in global memory or returned by one of the
 // memory allocation routines from the driver or runtime API is always aligned
 // to at least 256 bytes.
-//
-// http://docs.nvidia.com/cuda/cuda-c-programming-guide/#device-memory-accesses
 constexpr int64 kMemoryAlignment = 256;
 
-// Returns the directory containing nvvm libdevice files. This function is
+// Returns the directory containing ROCm-Device-Libs files. This function is
 // called in AMDGPUCompiler's constructor, so can't return an error. But
-// AMDGPUCompiler::Compile will return an error when the wanted libdevice file
+// AMDGPUCompiler::Compile will return an error when the wanted rocdl file
 // doesn't exist in the folder this function returns.
-string GetLibdeviceDir(const HloModuleConfig& config) {
-  std::vector<string> potential_libdevice_dirs;
+string GetROCDLDir(const HloModuleConfig& config) {
+  std::vector<string> potential_rocdl_dirs;
   const string datadir = config.debug_options().xla_gpu_cuda_data_dir();
   if (!datadir.empty()) {
-    potential_libdevice_dirs.push_back(datadir);
+    potential_rocdl_dirs.push_back(datadir);
   }
-  potential_libdevice_dirs.push_back(tensorflow::LibdeviceRoot());
+  potential_rocdl_dirs.push_back(tensorflow::ROCDLRoot());
 
-  // Tries all potential libdevice directories in the order they are inserted.
+  // Tries all potential ROCDL directories in the order they are inserted.
   // Returns the first directory that exists in the file system.
-  for (const string& potential_libdevice_dir : potential_libdevice_dirs) {
-    if (tensorflow::Env::Default()->IsDirectory(potential_libdevice_dir).ok()) {
-      VLOG(2) << "Found libdevice dir " << potential_libdevice_dir;
-      return potential_libdevice_dir;
+  for (const string& potential_rocdl_dir : potential_rocdl_dirs) {
+    if (tensorflow::Env::Default()->IsDirectory(potential_rocdl_dir).ok()) {
+      VLOG(2) << "Found ROCm-Device-Libs dir " << potential_rocdl_dir;
+      return potential_rocdl_dir;
     }
-    VLOG(2) << "Unable to find potential libdevice dir "
-            << potential_libdevice_dir;
+    VLOG(2) << "Unable to find potential ROCm-Device-Libs dir "
+            << potential_rocdl_dir;
   }
 
   // Last resort: maybe in the current folder.
@@ -185,41 +186,8 @@ tensorflow::Status PrepareHloModuleForIrEmitting(HloModule* hlo_module) {
   return pipeline.Run(hlo_module).status();
 }
 
-// Invokes the ptxas tool on the given PTX string, and dumps its output.
-void DumpPtxasInfo(const string& ptx) {
-  const string ptxas_path =
-      tensorflow::io::JoinPath(tensorflow::CudaRoot(), "bin/ptxas");
-  // Do not log PTX stats if ptxas is not found at the given path.
-  if (!tensorflow::Env::Default()->FileExists(ptxas_path).ok()) {
-    LOG(WARNING)
-        << "Failed to dump PTX stats because ptxas is not found at path \""
-        << ptxas_path << "\".";
-    return;
-  }
-
-  // Write `ptx` into a temporary file.
-  char tempdir_template[] = "/tmp/ptxXXXXXX";
-  char* tempdir_name = mkdtemp(tempdir_template);
-  CHECK_NOTNULL(tempdir_name);
-  string ptx_path = tensorflow::io::JoinPath(tempdir_name, "ptx");
-  TF_CHECK_OK(
-      tensorflow::WriteStringToFile(tensorflow::Env::Default(), ptx_path, ptx));
-  LOG(INFO) << "ptx file written to: " << ptx_path;
-
-  // Invoke ptxas and collect its output.
-  tensorflow::SubProcess ptxas_info_dumper;
-  ptxas_info_dumper.SetProgram(ptxas_path, {ptxas_path, ptx_path, "-o",
-                                            "/dev/null", "-v", "-arch=sm_35"});
-  ptxas_info_dumper.SetChannelAction(tensorflow::CHAN_STDERR,
-                                     tensorflow::ACTION_PIPE);
-  CHECK(ptxas_info_dumper.Start());
-  string stderr_output;
-  int exit_status = ptxas_info_dumper.Communicate(
-      /*stdin_input=*/nullptr, /*stdout_output=*/nullptr, &stderr_output);
-  XLA_LOG_LINES(tensorflow::INFO, stderr_output);
-  if (exit_status != 0) {
-    LOG(FATAL) << "Invalid PTX. See the error message above for reasons.";
-  }
+void DumpHsacoInfo(const string& hsaco) {
+  // XXX FIXME properly implment this function
 }
 
 }  // namespace
@@ -296,34 +264,37 @@ StatusOr<std::unique_ptr<Executable>> AMDGPUCompiler::Compile(
     XLA_VLOG_LINES(2, ir_module_string_before_opt);
   }
 
-  // Reserve space for the PTX to be generated for this module.
-  string* ptx;
+  // Reserve space for the HSACO to be generated for this module.
+  string* hsaco;
   {
     tensorflow::mutex_lock lock(mutex_);
-    generated_ptxes_.emplace_back(MakeUnique<string>());
-    ptx = generated_ptxes_.back().get();
+    generated_hsaco_.emplace_back(MakeUnique<string>());
+    hsaco = generated_hsaco_.back().get();
   }
-  int cc_major, cc_minor;
-  if (!stream_exec->GetDeviceDescription().cuda_compute_capability(&cc_major,
-                                                                   &cc_minor)) {
-    LOG(WARNING)
-        << "Couldn't get compute capability for device; assuming sm_20.";
-    cc_major = 2;
-    cc_minor = 0;
+  
+  // XXX FIXME fix stream_executor device_description
+  //int cc_major, cc_minor;
+  //if (!stream_exec->GetDeviceDescription().cuda_compute_capability(&cc_major,
+  //                                                                 &cc_minor)) {
+  //  LOG(WARNING)
+  //      << "Couldn't get compute capability for device; assuming sm_20.";
+  //  cc_major = 2;
+  //  cc_minor = 0;
+  //}
+  if (rocdl_dir_.empty()) {
+    // Compute rocdl_dir_ just once and cache it in this member.
+    rocdl_dir_ = GetROCDLDir(module->config());
   }
-  if (libdevice_dir_.empty()) {
-    // Compute libdevice_dir_ just once and cache it in this member.
-    libdevice_dir_ = GetLibdeviceDir(module->config());
-  }
-  TF_ASSIGN_OR_RETURN(*ptx, CompileToPtx(&llvm_module, {cc_major, cc_minor},
-                                         module->config(), libdevice_dir_));
+  // XXX FIXME force use gfx803 for now
+  TF_ASSIGN_OR_RETURN(*hsaco, CompileToHsaco(&llvm_module, "gfx803",
+                                             module->config(), rocdl_dir_));
 
   VLOG(2) << "LLVM module after optimizations:";
   XLA_VLOG_LINES(2, llvm_ir::DumpModuleToString(llvm_module));
-  VLOG(2) << "PTX:";
-  XLA_VLOG_LINES(2, *ptx);
+  VLOG(2) << "HSACO:";
+  XLA_VLOG_LINES(2, *hsaco);
   if (VLOG_IS_ON(2)) {
-    DumpPtxasInfo(*ptx);
+    DumpHsacoInfo(*hsaco);
   }
 
   auto thunk_schedule = MakeUnique<ThunkSchedule>(
@@ -333,7 +304,7 @@ StatusOr<std::unique_ptr<Executable>> AMDGPUCompiler::Compile(
   XLA_VLOG_LINES(2, thunk_schedule->ToString());
 
   auto* gpu_executable =
-      new GpuExecutable(*ptx, std::move(thunk_schedule), std::move(module),
+      new GpuExecutable(*hsaco, std::move(thunk_schedule), std::move(module),
                         std::move(buffer_assignment), ShapeSizeBytesFunction());
   if (embed_ir_in_executable) {
     DCHECK_NE("", ir_module_string_before_opt);
