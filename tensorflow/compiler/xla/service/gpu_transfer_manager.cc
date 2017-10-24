@@ -38,8 +38,8 @@ namespace xla {
 // TODO(b/30467474) Once GPU infeed implementation settles, consider
 // folding back the cpu and gpu infeed implementations into a generic
 // one if possible.
-GpuTransferManager::GpuTransferManager()
-    : GenericTransferManager(se::cuda::kCudaPlatformId) {}
+GpuTransferManager::GpuTransferManager(se::Platform::Id id)
+    : GenericTransferManager(id) {}
 
 Status GpuTransferManager::TransferLiteralToInfeed(se::StreamExecutor* executor,
                                                    const Literal& literal) {
@@ -141,13 +141,19 @@ StatusOr<gpu::InfeedBuffer*> GpuTransferManager::TransferBufferToInfeedInternal(
 
 }  // namespace xla
 
-static std::unique_ptr<xla::TransferManager> CreateGpuTransferManager() {
-  return xla::MakeUnique<xla::GpuTransferManager>();
+static std::unique_ptr<xla::TransferManager> CreateNVGpuTransferManager() {
+  return xla::MakeUnique<xla::GpuTransferManager>(se::cuda::kCudaPlatformId);
+}
+
+static std::unique_ptr<xla::TransferManager> CreateAMDGpuTransferManager() {
+  return xla::MakeUnique<xla::GpuTransferManager>(se::rocm::kROCmPlatformId);
 }
 
 static bool InitModule() {
   xla::TransferManager::RegisterTransferManager(se::cuda::kCudaPlatformId,
-                                                &CreateGpuTransferManager);
+                                                &CreateNVGpuTransferManager);
+  xla::TransferManager::RegisterTransferManager(se::rocm::kROCmPlatformId,
+                                                &CreateAMDGpuTransferManager);
   return true;
 }
 static bool module_initialized = InitModule();

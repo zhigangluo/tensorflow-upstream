@@ -33,7 +33,7 @@ namespace xla {
 // handles GPU-specific infeed.
 class GpuTransferManager : public GenericTransferManager {
  public:
-  GpuTransferManager();
+  GpuTransferManager(perftools::gputools::Platform::Id id);
   ~GpuTransferManager() override {}
 
   Status TransferLiteralToInfeed(perftools::gputools::StreamExecutor* executor,

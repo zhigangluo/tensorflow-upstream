@@ -147,6 +147,8 @@ static bool InitModule() {
                                                     &CreateComputationPlacer);
   xla::ComputationPlacer::RegisterComputationPlacer(se::cuda::kCudaPlatformId,
                                                     &CreateComputationPlacer);
+  xla::ComputationPlacer::RegisterComputationPlacer(se::rocm::kROCmPlatformId,
+                                                    &CreateComputationPlacer);
   return true;
 }
 static bool module_initialized = InitModule();
