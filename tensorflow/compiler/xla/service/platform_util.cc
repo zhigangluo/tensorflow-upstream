@@ -122,6 +122,8 @@ static bool IsDeviceSupported(se::StreamExecutor* executor) {
         return false;
       }
     }
+  } else if (executor->platform()->id() == se::rocm::kROCmPlatformId) {
+    // FIXME add AMDGPU version check
   }
   return true;
 }

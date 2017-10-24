@@ -36,15 +36,17 @@ namespace xla {
 
 GenericTransferManager::GenericTransferManager(se::Platform::Id platform_id)
     : platform_id_(platform_id) {
-  // We currently only support kHostPlatformId for CPU and kCudaPlatformId for
-  // GPU. Before supporting other platforms, we need to test this transfer
-  // manager on them.
+  // We currently only support kHostPlatformId for CPU and kCudaPlatformId,
+  // kROCmPlatformId for GPU. Before supporting other platforms, we need to
+  //test this transfer manager on them.
   CHECK(platform_id_ == se::host::kHostPlatformId ||
-        platform_id_ == se::cuda::kCudaPlatformId);
+        platform_id_ == se::cuda::kCudaPlatformId ||
+        platform_id_ == se::rocm::kROCmPlatformId);
 }
 
 se::Platform::Id GenericTransferManager::PlatformId() const {
   if (platform_id_ == se::cuda::kCudaPlatformId ||
+      platform_id_ == se::rocm::kROCmPlatformId ||
       platform_id_ == se::host::kHostPlatformId) {
     return platform_id_;
   }
