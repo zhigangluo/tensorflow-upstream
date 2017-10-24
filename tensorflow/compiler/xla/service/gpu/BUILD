@@ -397,8 +397,8 @@ cc_library(
 
 cc_library(
     name = "gpu_compiler",
-    srcs = ["nvptx_compiler.cc"],
-    hdrs = ["nvptx_compiler.h"],
+    srcs = ["nvptx_compiler.cc", "amdgpu_compiler.cc"],
+    hdrs = ["nvptx_compiler.h", "amdgpu_compiler.h"],
     deps = [
         ":convolution_folding",
         ":copy_insertion",
