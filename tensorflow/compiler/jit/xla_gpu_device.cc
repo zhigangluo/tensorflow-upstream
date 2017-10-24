@@ -40,7 +40,9 @@ Status XlaGpuDeviceFactory::CreateDevices(const SessionOptions& options,
 
   std::unique_ptr<XlaDevice> device;
   Status status =
-      XlaDevice::Create("CUDA", DEVICE_XLA_GPU, 0, DEVICE_GPU_XLA_JIT, options,
+      // XXX FIXME devise a way to cope with multiple platforms
+      //XlaDevice::Create("CUDA", DEVICE_XLA_GPU, 0, DEVICE_GPU_XLA_JIT, options,
+      XlaDevice::Create("ROCM", DEVICE_XLA_GPU, 0, DEVICE_GPU_XLA_JIT, options,
                         name_prefix, &device);
   if (!status.ok()) {
     // Treat failures as non-fatal; there might not be a GPU in the machine.
