@@ -279,7 +279,7 @@ StatusOr<string> CompileModuleToHsaco(llvm::Module* module,
   TF_RETURN_IF_ERROR(
       LinkROCDLIfNecessary(module, amdgpu_version, rocdl_dir_path));
 
-  IrDumpingPassManager module_passes(module->getModuleIdentifier(), "", false);
+  IrDumpingPassManager module_passes(module->getModuleIdentifier(), "", true);
 
   // Add an appropriate TargetLibraryInfo pass for the module's triple.
   llvm::TargetLibraryInfoWrapperPass* tliwp =
