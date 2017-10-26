@@ -19,6 +19,7 @@ limitations under the License.
 #include <memory>
 #include <string>
 #include <utility>
+#include <fstream>
 
 #include "tensorflow/compiler/xla/ptr_util.h"
 #include "tensorflow/compiler/xla/service/gpu/llvm_gpu_backend/dump_ir_pass.h"
@@ -191,9 +192,9 @@ void EmitBitcodeToFile(const Module& module, tensorflow::StringPiece filename) {
 // Emits the given module to HSA Code Object. target_machine is an initialized
 // TargetMachine for the AMDGPU target.
 string EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_machine) {
-  std::string hsaco;  // need a std::string instead of a ::string.
+  std::string gcnisa;  // need a std::string instead of a ::string.
   {
-    llvm::raw_string_ostream stream(hsaco);
+    llvm::raw_string_ostream stream(gcnisa);
     llvm::buffer_ostream pstream(stream);
     // The extension is stripped by IrDumpingPassManager, so we need to
     // get creative to add a suffix.
@@ -206,9 +207,25 @@ string EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_machine) {
         llvm::Triple(module->getTargetTriple())));
 
     target_machine->addPassesToEmitFile(codegen_passes, pstream,
-                                        llvm::TargetMachine::CGFT_AssemblyFile);
+                                        llvm::TargetMachine::CGFT_ObjectFile);
     codegen_passes.run(*module);
   }
+
+  std::error_code error_code;
+  llvm::tool_output_file outfile("amdgcn.isabin", error_code,
+                                 llvm::sys::fs::F_None);
+  if (error_code) {
+    LOG(FATAL) << "opening GCN ISA binary file for writing: " << error_code.message();
+  }
+  outfile.os() << gcnisa;
+  outfile.keep();
+
+  std::string lld_command("/opt/rocm/hcc/bin/ld.lld -shared amdgcn.isabin -o amdgcn.hsaco");
+  std::system(lld_command.c_str());
+
+  std::string hsaco;
+  std::ifstream hsaco_file("amdgcn.hsaco", std::ios::binary);
+  hsaco_file >> hsaco;
 
   return hsaco;
 }
