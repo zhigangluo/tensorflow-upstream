@@ -198,65 +198,64 @@ static string GetBinaryDir(bool strip_exe) {
 
 bool ROCMExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
                              KernelBase *kernel) {
-  // XXX FIXME properly implement this function
-  //ROCMKernel *rocm_kernel = AsROCMKernel(kernel);
-  //hipModule_t module = nullptr;
-  //const string *kernelname;
+  ROCMKernel *rocm_kernel = AsROCMKernel(kernel);
+  hipModule_t module = nullptr;
+  const string *kernelname;
 
-  //const OnDiskKernelLoaderSpec *on_disk_spec = nullptr;
-  //bool has_ptx = spec.has_rocm_ptx_on_disk();
-  //bool has_cubin = spec.has_rocm_cubin_on_disk();
+  const OnDiskKernelLoaderSpec *on_disk_spec = nullptr;
+  bool has_ptx = false;
+  bool has_cubin = false;
   //if (has_cubin && (!has_ptx || FLAGS_prefer_cubin_to_ptx)) {
   //  on_disk_spec = &spec.rocm_cubin_on_disk();
   //} else if (has_ptx) {
   //  on_disk_spec = &spec.rocm_ptx_on_disk();
   //}
 
-  //if (on_disk_spec != nullptr) {
-  //  LOG(WARNING) << "loading ROCM kernel from disk is not supported";
-  //  return false;
-  //} else if (spec.has_rocm_ptx_in_memory()) {
-  //  kernelname = &spec.rocm_ptx_in_memory().kernelname();
+  if (on_disk_spec != nullptr) {
+    LOG(WARNING) << "loading ROCM kernel from disk is not supported";
+    return false;
+  } else if (spec.has_cuda_ptx_in_memory()) {
+    kernelname = &spec.cuda_ptx_in_memory().kernelname();
 
-  //  if (cc_major_ == 0 && cc_minor_ == 0) {
-  //    return false;
-  //  }
+    if (cc_major_ == 0 && cc_minor_ == 0) {
+      return false;
+    }
 
-  //  // Note that the orignal ptx may be compressed, and the ptx we get below is
-  //  // the decompressed result. To cache the module we should use the original
-  //  // ptx (compressed one) as the key. This is because for the same compressed
-  //  // ptx, we may get different decompressed ptx wrt the pointer value.
-  //  const char *ptx = spec.rocm_ptx_in_memory().text(cc_major_, cc_minor_);
-  //  const char *orig_ptx =
-  //      spec.rocm_ptx_in_memory().original_text(cc_major_, cc_minor_);
-  //  if (ptx == nullptr || orig_ptx == nullptr) {
-  //    ptx = spec.rocm_ptx_in_memory().default_text();
-  //    orig_ptx = spec.rocm_ptx_in_memory().original_default_text();
-  //  }
-  //  if (ptx == nullptr || orig_ptx == nullptr) {
-  //    LOG(FATAL) << "could not load ptx for kernel " << kernelname;
-  //    return false;
-  //  }
+    // Note that the orignal ptx may be compressed, and the ptx we get below is
+    // the decompressed result. To cache the module we should use the original
+    // ptx (compressed one) as the key. This is because for the same compressed
+    // ptx, we may get different decompressed ptx wrt the pointer value.
+    const char *ptx = spec.cuda_ptx_in_memory().text(cc_major_, cc_minor_);
+    const char *orig_ptx =
+        spec.cuda_ptx_in_memory().original_text(cc_major_, cc_minor_);
+    if (ptx == nullptr || orig_ptx == nullptr) {
+      ptx = spec.cuda_ptx_in_memory().default_text();
+      orig_ptx = spec.cuda_ptx_in_memory().original_default_text();
+    }
+    if (ptx == nullptr || orig_ptx == nullptr) {
+      LOG(FATAL) << "could not load ptx for kernel " << kernelname;
+      return false;
+    }
 
-  //  mutex_lock lock{in_memory_modules_mu_};
-  //  module = in_memory_modules_[orig_ptx];
+    mutex_lock lock{in_memory_modules_mu_};
+    module = in_memory_modules_[orig_ptx];
 
-  //  if (module == nullptr) {
-  //    if (g_cubinate == nullptr) {
-  //      if (!ROCMDriver::LoadPtx(context_, ptx, &module)) {
-  //        return false;
-  //      }
-  //    } else {
-  //      string cubin = g_cubinate(ptx);
-  //      auto load_status =
-  //          ROCMDriver::LoadCubin(context_, cubin.c_str(), &module);
-  //      if (!load_status.ok()) {
-  //        LOG(ERROR) << "failed to load cubin via hook: " << load_status;
-  //        return false;
-  //      }
-  //    }
-  //    in_memory_modules_[orig_ptx] = module;
-  //  }
+    if (module == nullptr) {
+      if (g_cubinate == nullptr) {
+        if (!ROCMDriver::LoadPtx(context_, ptx, &module)) {
+          return false;
+        }
+      } else {
+        string cubin = g_cubinate(ptx);
+        auto load_status =
+            ROCMDriver::LoadCubin(context_, cubin.c_str(), &module);
+        if (!load_status.ok()) {
+          LOG(ERROR) << "failed to load cubin via hook: " << load_status;
+          return false;
+        }
+      }
+      in_memory_modules_[orig_ptx] = module;
+    }
   //} else if (spec.has_rocm_cubin_in_memory()) {
   //  kernelname = &spec.rocm_cubin_in_memory().kernelname();
   //  const char *cubin = spec.rocm_cubin_in_memory().bytes();
@@ -272,27 +271,27 @@ bool ROCMExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
 
   //    in_memory_modules_[cubin] = module;
   //  }
-  //} else {
-  //  LOG(WARNING) << "no method of loading ROCM kernel provided";
-  //  return false;
-  //}
+  } else {
+    LOG(WARNING) << "no method of loading ROCM kernel provided";
+    return false;
+  }
 
-  //VLOG(2) << "getting function " << kernelname << " from module " << module;
-  //if (!ROCMDriver::GetModuleFunction(context_, module, kernelname->c_str(),
-  //                                   rocm_kernel->rocm_function_ptr())) {
-  //  return false;
-  //}
+  VLOG(2) << "getting function " << kernelname << " from module " << module;
+  if (!ROCMDriver::GetModuleFunction(context_, module, kernelname->c_str(),
+                                     rocm_kernel->rocm_function_ptr())) {
+    return false;
+  }
 
-  //// We have to trust the kernel loader spec arity because there doesn't appear
-  //// to be a way to reflect on the number of expected arguments w/the ROCM API.
-  //rocm_kernel->set_arity(spec.arity());
+  // We have to trust the kernel loader spec arity because there doesn't appear
+  // to be a way to reflect on the number of expected arguments w/the ROCM API.
+  rocm_kernel->set_arity(spec.arity());
 
-  //KernelMetadata kernel_metadata;
-  //if (!GetKernelMetadata(rocm_kernel, &kernel_metadata)) {
-  //  LOG(WARNING) << "Unable to get metadata for kernel " << kernelname;
-  //}
-  //kernel->set_metadata(kernel_metadata);
-  //kernel->set_name(*kernelname);
+  KernelMetadata kernel_metadata;
+  if (!GetKernelMetadata(rocm_kernel, &kernel_metadata)) {
+    LOG(WARNING) << "Unable to get metadata for kernel " << kernelname;
+  }
+  kernel->set_metadata(kernel_metadata);
+  kernel->set_name(*kernelname);
   return true;
 }
 
