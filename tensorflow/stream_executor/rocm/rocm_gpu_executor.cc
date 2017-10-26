@@ -56,22 +56,9 @@ limitations under the License.
     "ROCM runtime being included into ROCM GPU executor; should be driver only."
 #endif
 
-extern bool FLAGS_check_gpu_leaks;
-bool FLAGS_prefer_cubin_to_ptx = true;
-
 namespace perftools {
 namespace gputools {
 namespace rocm {
-
-// Hook that can be used to CUBIN-ate PTX before it is loaded into the driver.
-// It has been observed that loading both PTX and cubins into the driver library
-// can cause it to crash, but loading only CUBINs avoids those crashes;
-// therefore, it's useful to have this hook to hack in uniform CUBIN-ation of
-// PTX code.
-//
-// As this is an implementation-detail workaround, the usage is to declare this
-// variable with extern linkage and populate it from another translation unit.
-std::function<string(const string &)> g_cubinate;
 
 static ROCMEvent *AsROCMEvent(Event *event) {
   DCHECK(event != nullptr);
@@ -203,13 +190,10 @@ bool ROCMExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
   const string *kernelname;
 
   const OnDiskKernelLoaderSpec *on_disk_spec = nullptr;
-  bool has_ptx = false;
-  bool has_cubin = false;
-  //if (has_cubin && (!has_ptx || FLAGS_prefer_cubin_to_ptx)) {
-  //  on_disk_spec = &spec.rocm_cubin_on_disk();
-  //} else if (has_ptx) {
-  //  on_disk_spec = &spec.rocm_ptx_on_disk();
-  //}
+  bool has_ptx = spec.has_cuda_ptx_on_disk();
+  if (has_ptx) {
+    on_disk_spec = &spec.cuda_ptx_on_disk();
+  }
 
   if (on_disk_spec != nullptr) {
     LOG(WARNING) << "loading ROCM kernel from disk is not supported";
@@ -217,60 +201,17 @@ bool ROCMExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
   } else if (spec.has_cuda_ptx_in_memory()) {
     kernelname = &spec.cuda_ptx_in_memory().kernelname();
 
-    if (cc_major_ == 0 && cc_minor_ == 0) {
-      return false;
-    }
-
-    // Note that the orignal ptx may be compressed, and the ptx we get below is
-    // the decompressed result. To cache the module we should use the original
-    // ptx (compressed one) as the key. This is because for the same compressed
-    // ptx, we may get different decompressed ptx wrt the pointer value.
-    const char *ptx = spec.cuda_ptx_in_memory().text(cc_major_, cc_minor_);
-    const char *orig_ptx =
-        spec.cuda_ptx_in_memory().original_text(cc_major_, cc_minor_);
-    if (ptx == nullptr || orig_ptx == nullptr) {
-      ptx = spec.cuda_ptx_in_memory().default_text();
-      orig_ptx = spec.cuda_ptx_in_memory().original_default_text();
-    }
-    if (ptx == nullptr || orig_ptx == nullptr) {
-      LOG(FATAL) << "could not load ptx for kernel " << kernelname;
-      return false;
-    }
-
+    const char *hsaco = spec.cuda_ptx_in_memory().original_default_text();
     mutex_lock lock{in_memory_modules_mu_};
-    module = in_memory_modules_[orig_ptx];
+    module = in_memory_modules_[hsaco];
 
     if (module == nullptr) {
-      if (g_cubinate == nullptr) {
-        if (!ROCMDriver::LoadPtx(context_, ptx, &module)) {
-          return false;
-        }
-      } else {
-        string cubin = g_cubinate(ptx);
-        auto load_status =
-            ROCMDriver::LoadCubin(context_, cubin.c_str(), &module);
-        if (!load_status.ok()) {
-          LOG(ERROR) << "failed to load cubin via hook: " << load_status;
-          return false;
-        }
+      if (!ROCMDriver::LoadHsaco(context_, hsaco, &module)) {
+        LOG(ERROR) << "failed to load HSACO\n";
+        return false;
       }
-      in_memory_modules_[orig_ptx] = module;
+      in_memory_modules_[hsaco] = module;
     }
-  //} else if (spec.has_rocm_cubin_in_memory()) {
-  //  kernelname = &spec.rocm_cubin_in_memory().kernelname();
-  //  const char *cubin = spec.rocm_cubin_in_memory().bytes();
-  //  mutex_lock lock{in_memory_modules_mu_};
-  //  module = in_memory_modules_[cubin];
-
-  //  if (module == nullptr) {
-  //    auto load_status = ROCMDriver::LoadCubin(context_, cubin, &module);
-  //    if (!load_status.ok()) {
-  //      LOG(ERROR) << "failed to load CUBIN: " << load_status;
-  //      return false;
-  //    }
-
-  //    in_memory_modules_[cubin] = module;
-  //  }
   } else {
     LOG(WARNING) << "no method of loading ROCM kernel provided";
     return false;

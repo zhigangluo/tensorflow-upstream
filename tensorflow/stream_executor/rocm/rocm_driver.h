@@ -160,15 +160,10 @@ class ROCMDriver {
                            unsigned int shared_mem_bytes, hipStream_t stream,
                            void **kernel_params, void **extra);
 
-  // Loads ptx_contents with the ROCM driver's PTX JIT and stores the resulting
-  // handle in "module". Any error logs that are produced are logged internally.
-  static bool LoadPtx(ROCmContext* context, const char *ptx_contents,
-                      hipModule_t *module);
-
-  // Loads cubin_bytes with the ROCM driver's blob loading interface and stores
-  // the resulting handle in "module".
-  static port::Status LoadCubin(ROCmContext* context, const char *cubin_bytes,
-                                hipModule_t *module);
+  // Loads HSACO with the ROCM runtime and stores the resulting handle in
+  // "module". Any error logs that are produced are logged internally.
+  static bool LoadHsaco(ROCmContext* context, const char *hsaco_contents,
+                        hipModule_t *module);
 
   // Retrieves a named kernel from a loaded module, and places the resulting
   // handle into function (outparam) on success. Neither kernel_name nor

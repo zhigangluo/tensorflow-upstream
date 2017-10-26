@@ -528,73 +528,24 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ port::Status ROCMDriver::LoadCubin(ROCmContext* context,
-                                                const char *cubin_bytes,
-                                                hipModule_t *module) {
-  ScopedActivateContext activation{context};
-  // XXX FIXME: properly implement this interface
-  hipError_t result = hipSuccess;
-  if (result != hipSuccess) {
-    return port::Status{port::error::INTERNAL,
-                        "failed to load in-memory CUBIN: " + ToString(result)};
-  }
-
-  return port::Status::OK();
-}
-
-/* static */ bool ROCMDriver::LoadPtx(ROCmContext* context,
-                                      const char *ptx_contents,
-                                      hipModule_t *module) {
+/* static */ bool ROCMDriver::LoadHsaco(ROCmContext* context,
+                                        const char *hsaco_contents,
+                                        hipModule_t *module) {
   port::Notification notification;
   bool ret = true;
-  GetDriverExecutor()->Schedule([context, ptx_contents, module, &ret,
+  GetDriverExecutor()->Schedule([context, hsaco_contents, module, &ret,
                                  &notification]() {
     ScopedActivateContext activation{context};
-    void *ptx_data = const_cast<char *>(ptx_contents);
-    static const unsigned int kLogBufferBytesLimit = 1024;
-    unsigned int error_log_buffer_bytes = kLogBufferBytesLimit;
-    unsigned int info_log_buffer_bytes = kLogBufferBytesLimit;
-    port::InlinedVector<char, 4> error_log_buffer(error_log_buffer_bytes);
-    port::InlinedVector<char, 4> info_log_buffer(info_log_buffer_bytes);
-    bool log_verbose = true;
-    // Note that the driver API wants the contents of this values to be stored
-    // in an array of void*s, so we coerce them accordingly.
-    void *option_values[] = {
-        port::bit_cast<void *>(uintptr_t(error_log_buffer_bytes)),
-        port::bit_cast<void *>(error_log_buffer.data()),
-        port::bit_cast<void *>(uintptr_t(info_log_buffer_bytes)),
-        port::bit_cast<void *>(info_log_buffer.data()),
-        port::bit_cast<void *>(uintptr_t(log_verbose))};
+    void *hsaco_data = const_cast<char *>(hsaco_contents);
 
-    hipError_t res;
-    {
-      res = hipModuleLoadData(module, ptx_data);
-    }
-
-    // The PTX JIT mutates the values in the option values array to reflect the
-    // size of the logs it output; now that we've made the call, read the values
-    // back out.
-    error_log_buffer_bytes = reinterpret_cast<uintptr_t>(option_values[0]);
-    info_log_buffer_bytes = reinterpret_cast<uintptr_t>(option_values[2]);
-    CHECK_LE(error_log_buffer_bytes, kLogBufferBytesLimit);
-    CHECK_LE(info_log_buffer_bytes, kLogBufferBytesLimit);
+    hipError_t res = hipModuleLoadData(module, hsaco_data);
 
     if (res != hipSuccess) {
-      LOG(ERROR) << "failed to load PTX text as a module: " << ToString(res);
-      // As a precaution for null termination of the API-provided value, ensure
-      // that at least the last byte is null.
-      error_log_buffer[error_log_buffer_bytes ?
-                       error_log_buffer_bytes - 1 : 0] = '\0';
-      LOG(ERROR) << "error log buffer (" << error_log_buffer_bytes
-                 << " bytes): " << error_log_buffer.data();
+      LOG(ERROR) << "failed to load HSACO text as a module: " << ToString(res);
       ret = false;
       notification.Notify();
     }
 
-    VLOG(3) << "PTX compilation info log (" << info_log_buffer_bytes
-            << " bytes): " << info_log_buffer.data();
-    VLOG(3) << "PTX compilation error log (" << error_log_buffer_bytes
-            << " bytes): " << error_log_buffer.data();
     CHECK(module != nullptr);
     notification.Notify();
   });
