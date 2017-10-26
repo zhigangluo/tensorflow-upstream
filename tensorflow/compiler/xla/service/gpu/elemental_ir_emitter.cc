@@ -250,11 +250,11 @@ llvm::Value* GpuElementalIrEmitter::EmitDeviceFunctionCall(
 
 llvm::Value* GpuElementalIrEmitter::EmitThreadId() const {
   llvm::Value* block_id = ir_builder_->CreateIntCast(
-      llvm_ir::EmitCallToIntrinsic(llvm::Intrinsic::nvvm_read_ptx_sreg_ctaid_x,
+      llvm_ir::EmitCallToIntrinsic(llvm::Intrinsic::amdgcn_workgroup_id_x,
                                    {}, {}, ir_builder_),
       ir_builder_->getIntNTy(128), /*isSigned=*/true, "block.id");
   llvm::Value* thread_id_in_block = ir_builder_->CreateIntCast(
-      llvm_ir::EmitCallToIntrinsic(llvm::Intrinsic::nvvm_read_ptx_sreg_tid_x,
+      llvm_ir::EmitCallToIntrinsic(llvm::Intrinsic::amdgcn_workitem_id_x,
                                    {}, {}, ir_builder_),
       ir_builder_->getIntNTy(128), /*isSigned=*/true, "thread.id");
   llvm::Value* threads_per_block = ir_builder_->CreateIntCast(

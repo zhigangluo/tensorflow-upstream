@@ -584,7 +584,7 @@ int64 EmitTranspose021Tiled(llvm_ir::IrArray input, llvm_ir::IrArray output,
 
   // let x = threadIdx.x
   llvm::Value* x = llvm_ir::EmitCallToIntrinsic(
-      llvm::Intrinsic::nvvm_read_ptx_sreg_tid_x, {}, {}, builder);
+      llvm::Intrinsic::amdgcn_workitem_id_x, {}, {}, builder);
   llvm_ir::AddRangeMetadata(0, tile_size, static_cast<llvm::Instruction*>(x));
   x = builder->CreateIntCast(x, builder->getInt64Ty(), /*isSigned=*/true,
                              "thread.id.x");
@@ -653,7 +653,7 @@ int64 EmitTranspose021Tiled(llvm_ir::IrArray input, llvm_ir::IrArray output,
           llvm_ir::AddRangeMetadata(
               0, num_tiles,
               static_cast<llvm::Instruction*>(llvm_ir::EmitCallToIntrinsic(
-                  llvm::Intrinsic::nvvm_read_ptx_sreg_ctaid_x, {}, {},
+                  llvm::Intrinsic::amdgcn_workgroup_id_x, {}, {},
                   builder))),
           builder->getInt64Ty(), /*isSigned=*/true, "block.id.x"),
       ShapeUtil::MakeShapeWithMonotonicDim0MajorLayout(
