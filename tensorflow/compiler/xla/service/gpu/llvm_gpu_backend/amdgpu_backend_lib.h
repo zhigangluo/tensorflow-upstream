@@ -19,6 +19,7 @@ limitations under the License.
 
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "external/llvm/include/llvm/IR/Module.h"
 #include "tensorflow/compiler/xla/service/hlo_module_config.h"
@@ -36,10 +37,10 @@ namespace gpu {
 // The Compile.* interfaces each create their own llvm::LLVMContext objects for
 // thread safety, but note that LLVM's multithreaded support is very
 // preliminary; multithreaded use is not recommended at this time.
-StatusOr<string> CompileToHsaco(llvm::Module* module,
-                                const string& amdgpu_version,
-                                const HloModuleConfig& hlo_module_config,
-                                const string& rocdl_dir_path);
+StatusOr<std::vector<char>> CompileToHsaco(llvm::Module* module,
+                                           const string& amdgpu_version,
+                                           const HloModuleConfig& hlo_module_config,
+                                           const string& rocdl_dir_path);
 
 }  // namespace gpu
 }  // namespace xla

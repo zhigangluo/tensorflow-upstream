@@ -515,7 +515,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   VLOG(2) << "launching kernel: " << function << "; gdx: " << grid_dim_x
           << " gdy: " << grid_dim_y << " gdz: " << grid_dim_z
           << " bdx: " << block_dim_x << " bdy: " << block_dim_y
-          << " bdz: " << block_dim_z;
+          << " bdz: " << block_dim_z << " smem: " << shared_mem_bytes;
   hipError_t res = hipModuleLaunchKernel(
      function, grid_dim_x, grid_dim_y, grid_dim_z, block_dim_x, block_dim_y,
      block_dim_z, shared_mem_bytes, stream, kernel_params, extra);
@@ -541,7 +541,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
     hipError_t res = hipModuleLoadData(module, hsaco_data);
 
     if (res != hipSuccess) {
-      LOG(ERROR) << "failed to load HSACO text as a module: " << ToString(res);
+      LOG(ERROR) << "failed to load HSACO: " << ToString(res);
       ret = false;
       notification.Notify();
     }

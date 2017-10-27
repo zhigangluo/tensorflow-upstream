@@ -46,6 +46,7 @@ limitations under the License.
 #include "external/llvm/include/llvm/Support/CommandLine.h"
 #include "external/llvm/include/llvm/Support/FileSystem.h"
 #include "external/llvm/include/llvm/Support/FormattedStream.h"
+#include "external/llvm/include/llvm/Support/Program.h"
 #include "external/llvm/include/llvm/Support/TargetRegistry.h"
 #include "external/llvm/include/llvm/Support/TargetSelect.h"
 #include "external/llvm/include/llvm/Support/ToolOutputFile.h"
@@ -191,7 +192,7 @@ void EmitBitcodeToFile(const Module& module, tensorflow::StringPiece filename) {
 
 // Emits the given module to HSA Code Object. target_machine is an initialized
 // TargetMachine for the AMDGPU target.
-string EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_machine) {
+std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_machine) {
   std::string gcnisa;  // need a std::string instead of a ::string.
   {
     llvm::raw_string_ostream stream(gcnisa);
@@ -207,27 +208,70 @@ string EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_machine) {
         llvm::Triple(module->getTargetTriple())));
 
     target_machine->addPassesToEmitFile(codegen_passes, pstream,
-                                        llvm::TargetMachine::CGFT_ObjectFile);
+                                        llvm::TargetMachine::CGFT_AssemblyFile);
     codegen_passes.run(*module);
   }
 
-  std::error_code error_code;
-  llvm::tool_output_file outfile("amdgcn.isabin", error_code,
-                                 llvm::sys::fs::F_None);
-  if (error_code) {
-    LOG(FATAL) << "opening GCN ISA binary file for writing: " << error_code.message();
+  // dump GCN ISA text
+  std::ofstream gcnisa_file("amdgcn.isa", std::ios::binary);
+  gcnisa_file.write(gcnisa.c_str(), gcnisa.size());
+  gcnisa_file.close();
+  
+  // execute llvm-mc to convertr GCN ISA text to GCN ISA binary
+  auto llvm_mc_program = llvm::sys::findProgramByName("llvm-mc");
+  if (!llvm_mc_program) {
+    LOG(FATAL) << "unable to find llvm-mc in PATH: "
+               << llvm_mc_program.getError().message();
   }
-  outfile.os() << gcnisa;
-  outfile.keep();
+  const char* llvm_mc_args[] = {
+    "llvm-mc",
+    "-arch", "amdgcn",
+    "-mcpu", "gfx803",
+    "amdgcn.isa",
+    "-filetype", "obj",
+    "-o", "amdgcn.isabin",
+    nullptr,
+  };
+  std::string error_message;
+  int llvm_mc_result = llvm::sys::ExecuteAndWait(*llvm_mc_program,
+                                                 llvm_mc_args,
+                                                 nullptr, {}, 0, 0,
+                                                 &error_message);
 
-  std::string lld_command("/opt/rocm/hcc/bin/ld.lld -shared amdgcn.isabin -o amdgcn.hsaco");
-  std::system(lld_command.c_str());
+  if (llvm_mc_result) {
+    LOG(FATAL) << "llvm-mc execute fail: " << error_message;
+  }
 
-  std::string hsaco;
-  std::ifstream hsaco_file("amdgcn.hsaco", std::ios::binary);
-  hsaco_file >> hsaco;
+  // execute ld.lld to convert GCN ISA binary into HSACO
+  auto lld_program = llvm::sys::findProgramByName("ld.lld");
+  if (!lld_program) {
+    LOG(FATAL) << "unable to find ld.lld in PATH: "
+               << lld_program.getError().message();
+  }
+  const char* lld_args[] = {
+    "ld.lld",
+    "-flavor", "gnu",
+    "-shared", "amdgcn.isabin",
+    "-o", "amdgcn.hsaco",
+    nullptr,
+  };
+  int lld_result = llvm::sys::ExecuteAndWait(*lld_program, lld_args,
+                                             nullptr, {}, 0, 0,
+                                             &error_message); 
 
-  return hsaco;
+  if (lld_result) {
+    LOG(FATAL) << "ld.lld execute fail: " << error_message;
+  }
+
+  // read HSACO
+  std::ifstream hsaco_file("amdgcn.hsaco", std::ios::binary|std::ios::ate);
+  std::ifstream::pos_type hsaco_file_size = hsaco_file.tellg();
+
+  std::vector<char> hsaco(hsaco_file_size);
+  hsaco_file.seekg(0, std::ios::beg);
+  hsaco_file.read(&hsaco[0], hsaco_file_size);
+
+  return std::move(hsaco);
 }
 
 // LLVM has an extensive flags mechanism of its own, which is only accessible
@@ -287,7 +331,7 @@ tensorflow::Status LinkROCDLIfNecessary(
   return tensorflow::Status::OK();
 }
 
-StatusOr<string> CompileModuleToHsaco(llvm::Module* module,
+StatusOr<std::vector<char>> CompileModuleToHsaco(llvm::Module* module,
                                       const string& amdgpu_version,
                                       const HloModuleConfig& hlo_module_config,
                                       const string& rocdl_dir_path) {
@@ -296,7 +340,7 @@ StatusOr<string> CompileModuleToHsaco(llvm::Module* module,
   TF_RETURN_IF_ERROR(
       LinkROCDLIfNecessary(module, amdgpu_version, rocdl_dir_path));
 
-  IrDumpingPassManager module_passes(module->getModuleIdentifier(), "", true);
+  IrDumpingPassManager module_passes(module->getModuleIdentifier(), "", false);
 
   // Add an appropriate TargetLibraryInfo pass for the module's triple.
   llvm::TargetLibraryInfoWrapperPass* tliwp =
@@ -364,7 +408,7 @@ StatusOr<string> CompileModuleToHsaco(llvm::Module* module,
   module_passes.run(*module);
 
   // Finally, produce HSA Code Object.
-  return EmitModuleToHsaco(module, target_machine.get());
+  return std::move(EmitModuleToHsaco(module, target_machine.get()));
 }
 
 // One-time module initializer.
@@ -387,14 +431,14 @@ void GPUBackendInit() {
 
 }  // namespace
 
-StatusOr<string> CompileToHsaco(llvm::Module* module,
+StatusOr<std::vector<char>> CompileToHsaco(llvm::Module* module,
                                 const string& amdgpu_version,
                                 const HloModuleConfig& hlo_module_config,
                                 const string& rocdl_dir_path) {
   static std::once_flag backend_init_flag;
   std::call_once(backend_init_flag, GPUBackendInit);
 
-  string hsaco;
+  std::vector<char> hsaco;
   {
     ScopedLoggingTimer compilation_timer(
         "Compile module " + llvm_ir::AsString(module->getName()),
@@ -403,7 +447,7 @@ StatusOr<string> CompileToHsaco(llvm::Module* module,
         hsaco, CompileModuleToHsaco(module, amdgpu_version, hlo_module_config,
                                   rocdl_dir_path));
   }
-  return hsaco;
+  return std::move(hsaco);
 }
 
 }  // namespace gpu

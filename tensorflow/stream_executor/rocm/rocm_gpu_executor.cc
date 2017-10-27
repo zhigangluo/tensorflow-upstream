@@ -262,7 +262,7 @@ bool ROCMExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
                           const BlockDim &block_dims, const KernelBase &kernel,
                           const KernelArgsArrayBase &args) {
   CHECK_EQ(kernel.Arity(), args.number_of_arguments());
-  hipStream_t custream = AsROCMStreamValue(stream);
+  hipStream_t hipstream = AsROCMStreamValue(stream);
   const ROCMKernel *rocm_kernel = AsROCMKernel(&kernel);
   hipFunction_t hipfunc = rocm_kernel->AsROCMFunctionValue();
 
@@ -285,12 +285,18 @@ bool ROCMExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
   }
 
   void **kernel_params = const_cast<void **>(args.argument_addresses().data());
+  size_t size = sizeof(void*) * args.number_of_arguments();
+  void *config[] = {
+    HIP_LAUNCH_PARAM_BUFFER_POINTER, kernel_params,
+    HIP_LAUNCH_PARAM_BUFFER_SIZE, &size,
+    HIP_LAUNCH_PARAM_END
+  };
 
   if (!ROCMDriver::LaunchKernel(GetROCmContext(stream), hipfunc, block_dims.x,
                                 block_dims.y, block_dims.z, thread_dims.x,
                                 thread_dims.y, thread_dims.z,
-                                args.number_of_shared_bytes(), custream,
-                                kernel_params, nullptr /* = extra */)) {
+                                args.number_of_shared_bytes(), hipstream,
+                                nullptr, (void**)&config)) {
     LOG(ERROR) << "failed to launch ROCM kernel with args: "
                << args.number_of_arguments()
                << "; thread dim: " << thread_dims.ToString()

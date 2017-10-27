@@ -186,10 +186,6 @@ tensorflow::Status PrepareHloModuleForIrEmitting(HloModule* hlo_module) {
   return pipeline.Run(hlo_module).status();
 }
 
-void DumpHsacoInfo(const string& hsaco) {
-  // XXX FIXME properly implment this function
-}
-
 }  // namespace
 
 AMDGPUCompiler::AMDGPUCompiler()
@@ -265,10 +261,10 @@ StatusOr<std::unique_ptr<Executable>> AMDGPUCompiler::Compile(
   }
 
   // Reserve space for the HSACO to be generated for this module.
-  string* hsaco;
+  std::vector<char>* hsaco;
   {
     tensorflow::mutex_lock lock(mutex_);
-    generated_hsaco_.emplace_back(MakeUnique<string>());
+    generated_hsaco_.emplace_back(MakeUnique<std::vector<char>>());
     hsaco = generated_hsaco_.back().get();
   }
   
@@ -291,11 +287,6 @@ StatusOr<std::unique_ptr<Executable>> AMDGPUCompiler::Compile(
 
   VLOG(2) << "LLVM module after optimizations:";
   XLA_VLOG_LINES(2, llvm_ir::DumpModuleToString(llvm_module));
-  VLOG(2) << "HSACO:";
-  XLA_VLOG_LINES(2, *hsaco);
-  if (VLOG_IS_ON(2)) {
-    DumpHsacoInfo(*hsaco);
-  }
 
   auto thunk_schedule = MakeUnique<ThunkSchedule>(
       ir_emitter.ConsumeThunkSequence(), std::move(stream_assignment),
@@ -304,7 +295,7 @@ StatusOr<std::unique_ptr<Executable>> AMDGPUCompiler::Compile(
   XLA_VLOG_LINES(2, thunk_schedule->ToString());
 
   auto* gpu_executable =
-      new GpuExecutable(*hsaco, std::move(thunk_schedule), std::move(module),
+      new GpuExecutable(std::move(hsaco->data()), std::move(thunk_schedule), std::move(module),
                         std::move(buffer_assignment), ShapeSizeBytesFunction());
   if (embed_ir_in_executable) {
     DCHECK_NE("", ir_module_string_before_opt);

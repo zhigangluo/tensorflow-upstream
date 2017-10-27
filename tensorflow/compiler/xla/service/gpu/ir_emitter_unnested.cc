@@ -179,6 +179,8 @@ llvm::Function* IrEmitterUnnested::BuildKernelPrototype(
       llvm::Function::Create(kernel_type, llvm::GlobalValue::ExternalLinkage,
                              kernel_name.c_str(), module);
 
+  kernel->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
+
   // Add dereferenceable information to each of the escaped HLO parameters.
   for (size_t arg_no = 0; arg_no < escaped_hlos.size(); ++arg_no) {
     const HloInstruction* escaped_hlo = escaped_hlos[arg_no];
