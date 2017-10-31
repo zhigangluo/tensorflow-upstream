@@ -313,49 +313,50 @@ bool ROCMExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
 void ROCMExecutor::VlogOccupancyInfo(const KernelBase &kernel,
                                      const ThreadDim &thread_dims,
                                      const BlockDim &block_dims) {
-  VLOG(2) << "Computing kernel occupancy for kernel "
-          << kernel.demangled_name();
-  VLOG(2) << "Thread dimensions (" << thread_dims.x << ", " << thread_dims.y
-          << ", " << thread_dims.z << ")";
+  // FIXME XXX review implementation later
+  //VLOG(2) << "Computing kernel occupancy for kernel "
+  //        << kernel.demangled_name();
+  //VLOG(2) << "Thread dimensions (" << thread_dims.x << ", " << thread_dims.y
+  //        << ", " << thread_dims.z << ")";
 
-  int regs_per_thread;
-  if (!kernel.metadata().registers_per_thread(&regs_per_thread)) {
-    return;
-  }
+  //int regs_per_thread;
+  //if (!kernel.metadata().registers_per_thread(&regs_per_thread)) {
+  //  return;
+  //}
 
-  int smem_per_block;
-  if (!kernel.metadata().shared_memory_bytes(&smem_per_block)) {
-    return;
-  }
+  //int smem_per_block;
+  //if (!kernel.metadata().shared_memory_bytes(&smem_per_block)) {
+  //  return;
+  //}
 
-  const DeviceDescription &device_description =
-      kernel.parent()->GetDeviceDescription();
+  //const DeviceDescription &device_description =
+  //    kernel.parent()->GetDeviceDescription();
 
-  uint64 blocks_per_sm = CalculateOccupancy(
-      device_description, regs_per_thread, smem_per_block, thread_dims);
-  VLOG(2) << "Resident blocks per CU is " << blocks_per_sm;
+  //uint64 blocks_per_sm = CalculateOccupancy(
+  //    device_description, regs_per_thread, smem_per_block, thread_dims);
+  //VLOG(2) << "Resident blocks per CU is " << blocks_per_sm;
 
-  // To increase occupancy, there must be a sufficient number of blocks
-  // available to spread across the sm's at this new improved occupancy level.
-  int multiprocessor_count = device_description.core_count();
-  int block_count = block_dims.x * block_dims.y * block_dims.z;
-  int available_blocks_per_sm =
-      port::MathUtil::CeilOfRatio(block_count, multiprocessor_count);
-  if (available_blocks_per_sm <= static_cast<int64>(blocks_per_sm)) {
-    VLOG(2) << "Occupancy is limited by number of blocks available per sm.";
-    return;
-  }
+  //// To increase occupancy, there must be a sufficient number of blocks
+  //// available to spread across the sm's at this new improved occupancy level.
+  //int multiprocessor_count = device_description.core_count();
+  //int block_count = block_dims.x * block_dims.y * block_dims.z;
+  //int available_blocks_per_sm =
+  //    port::MathUtil::CeilOfRatio(block_count, multiprocessor_count);
+  //if (available_blocks_per_sm <= static_cast<int64>(blocks_per_sm)) {
+  //  VLOG(2) << "Occupancy is limited by number of blocks available per sm.";
+  //  return;
+  //}
 
-  uint64 improved_regs_per_thread = CalculateRegisterLimitForTargetOccupancy(
-      device_description, smem_per_block, thread_dims, blocks_per_sm + 1);
-  if (improved_regs_per_thread != 0) {
-    VLOG(2) << "Reducing register usage from " << regs_per_thread
-            << " to " << improved_regs_per_thread
-            << " could increase resident blocks per CU by one.";
-  } else {
-    VLOG(2) << "Resident blocks per SM cannot be increased by reducing "
-        "register usage.";
-  }
+  //uint64 improved_regs_per_thread = CalculateRegisterLimitForTargetOccupancy(
+  //    device_description, smem_per_block, thread_dims, blocks_per_sm + 1);
+  //if (improved_regs_per_thread != 0) {
+  //  VLOG(2) << "Reducing register usage from " << regs_per_thread
+  //          << " to " << improved_regs_per_thread
+  //          << " could increase resident blocks per CU by one.";
+  //} else {
+  //  VLOG(2) << "Resident blocks per SM cannot be increased by reducing "
+  //      "register usage.";
+  //}
 }
 
 void *ROCMExecutor::Allocate(uint64 size) {
