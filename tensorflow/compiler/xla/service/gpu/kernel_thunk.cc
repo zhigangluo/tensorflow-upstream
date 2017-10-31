@@ -43,11 +43,11 @@ tensorflow::Status KernelThunk::Initialize(const GpuExecutable& executable) {
   }
 
   loader_spec_.reset(new se::MultiKernelLoaderSpec(io_buffers_.size() + 1));
-  tensorflow::StringPiece ptx = executable.ptx();
+  tensorflow::StringPiece text = executable.text();
   // Convert tensorflow::StringPiece to se::port::StringPiece because
   // StreamExecutor uses the latter.
   loader_spec_->AddCudaPtxInMemory(
-      se::port::StringPiece(ptx.data(), ptx.size()), kernel_name_);
+      se::port::StringPiece(text.data(), text.size()), kernel_name_);
   return tensorflow::Status::OK();
 }
 
