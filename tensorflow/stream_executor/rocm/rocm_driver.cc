@@ -1164,20 +1164,11 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return DeviceFromContext(result.ValueOrDie());
 }
 
-/* static */ port::Status ROCMDriver::GetComputeCapability(int *cc_major,
-                                                           int *cc_minor,
-                                                           hipDevice_t device) {
-  *cc_major = 0;
-  *cc_minor = 0;
-  hipError_t result = hipDeviceComputeCapability(cc_major, cc_minor, device);
-  if (result == hipSuccess) {
-    return port::Status::OK();
-  }
-
-  return port::Status{
-      port::error::INTERNAL,
-      port::Printf("failed to get compute capability for device: %s; %d",
-                   ToString(result).c_str(), device)};
+/* static */ port::Status ROCMDriver::GetAMDGPUISAVersion(int *version,
+                                                          hipDevice_t device) {
+  // XXX FIXME call proper HIP / ROCR runtime API
+  *version = 803;
+  return port::Status::OK();
 }
 
 // Helper function that turns the integer output of hipDeviceGetAttribute to type

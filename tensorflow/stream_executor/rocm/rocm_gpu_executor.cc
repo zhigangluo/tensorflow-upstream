@@ -133,26 +133,26 @@ port::Status ROCMExecutor::Init(int device_ordinal,
     return status;
   }
 
-  return ROCMDriver::GetComputeCapability(&cc_major_, &cc_minor_, device_);
+  return ROCMDriver::GetAMDGPUISAVersion(&version_, device_);
 }
 
-bool ROCMExecutor::FindOnDiskForComputeCapability(
+bool ROCMExecutor::FindOnDiskForISAVersion(
     port::StringPiece filename, port::StringPiece canonical_suffix,
     string *found_filename) const {
-  if (cc_major_ == 0 && cc_minor_ == 0) {
+  if (version_ == 0) {
     return false;
   }
 
   string cc_specific =
-      port::StrCat(filename, ".cc", cc_major_, cc_minor_, canonical_suffix);
+      port::StrCat(filename, ".cc", version_, canonical_suffix);
   if (port::FileExists(cc_specific).ok()) {
-    VLOG(2) << "found compute-capability-specific file, using that: "
+    VLOG(2) << "found AMDGPU ISA version-specific file, using that: "
             << cc_specific;
     *found_filename = cc_specific;
     return true;
   }
 
-  VLOG(2) << "could not find compute-capability specific file at: "
+  VLOG(2) << "could not find AMDGPU ISA version-specific file at: "
           << cc_specific;
   if (port::FileExists(filename.ToString()).ok()) {
     *found_filename = filename.ToString();
@@ -834,12 +834,11 @@ static int TryToReadNumaNode(const string &pci_bus_id, int device_ordinal) {
 #endif
 }
 
-// Set of compute capability specific device parameters that cannot be
+// Set of device-specific parameters that cannot be
 // queried from the driver API.  These values instead are baked into a
-// lookup table indexed by compute capability version.
+// lookup table indexed by AMDGPU ISA version.
 struct UnqueryableDeviceParams {
-  int cc_major;
-  int cc_minor;
+  int version;
   uint64 blocks_per_core_limit;
   uint64 registers_per_core_limit;
   uint64 registers_per_thread_limit;
@@ -850,7 +849,7 @@ struct UnqueryableDeviceParams {
 
 static const UnqueryableDeviceParams kAllUnqueryableDeviceParams[] = {
   {
-    3, 5,       // compute capability (3.5)
+    803,        // AMDGPU ISA version (803)
     16,         // blocks_per_core_limit
     64 * 1024,  // registers_per_core_limit
     255,        // registers_per_thread_limit
@@ -924,7 +923,7 @@ DeviceDescription *ROCMExecutor::PopulateDeviceDescription() const {
 
   for (size_t i = 0; i < ARRAYSIZE(kAllUnqueryableDeviceParams); i++) {
     const auto &params = kAllUnqueryableDeviceParams[i];
-    if (params.cc_major == cc_major_ && params.cc_minor == cc_minor_) {
+    if (params.version == version_) {
       builder.set_blocks_per_core_limit(params.blocks_per_core_limit);
       builder.set_registers_per_core_limit(params.registers_per_core_limit);
       builder.set_registers_per_thread_limit(params.registers_per_thread_limit);
@@ -936,15 +935,14 @@ DeviceDescription *ROCMExecutor::PopulateDeviceDescription() const {
   }
 
   builder.set_platform_version(
-      port::StrCat("Compute Capability ", cc_major_, ".", cc_minor_));
+      port::StrCat("AMDGPU ISA version: gfx", version_));
 
   // TODO(leary) should be a way to query this from the driver, but this is
   // unlikely to change for us any time soon.
   builder.set_device_address_bits(64);
 
   builder.set_device_vendor("Advanced Micro Devices, Inc");
-  // XXX FIXME properly refactor relevant interfaces
-  //builder.set_rocm_compute_capability(cc_major_, cc_minor_);
+  builder.set_rocm_amdgpu_isa_version(version_);
   builder.set_shared_memory_per_core(
       ROCMDriver::GetMaxSharedMemoryPerCore(device_).ValueOrDie());
   builder.set_shared_memory_per_block(

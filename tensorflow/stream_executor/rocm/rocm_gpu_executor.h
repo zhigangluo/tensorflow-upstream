@@ -49,8 +49,7 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
       : device_(0),
         context_(nullptr),
         device_ordinal_(0),
-        cc_major_(0),
-        cc_minor_(0),
+        version_(0),
         plugin_config_(plugin_config) {}
 
   // See the corresponding StreamExecutor methods for method comments on the
@@ -208,12 +207,10 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
 
  private:
   // Attempts to find a more specific version of the file indicated by
-  // filename by looking for compute-capability-specific suffixed versions; i.e.
-  // looking for "foo.ptx" will check to see if "foo.ptx.cc30.ptx" is present if
-  // we're on a compute capability 3.0 machine.
-  bool FindOnDiskForComputeCapability(port::StringPiece filename,
-                                      port::StringPiece canonical_suffix,
-                                      string *found_filename) const;
+  // filename by looking for AMDGPU ISA-specific suffixed versions.
+  bool FindOnDiskForISAVersion(port::StringPiece filename,
+                               port::StringPiece canonical_suffix,
+                               string *found_filename) const;
 
   // Host callback landing routine invoked by ROCM.
   // data: User-provided callback provided to HostCallback() above, captured
@@ -263,11 +260,8 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
   // for use in getting device metadata. Immutable post-initialization.
   int device_ordinal_;
 
-  // The major verion of the compute capability for device_.
-  int cc_major_;
-
-  // The minor verion of the compute capability for device_.
-  int cc_minor_;
+  // AMDGPU ISA version for device_.
+  int version_;
 
   // The plugin configuration associated with this instance.
   PluginConfig plugin_config_;

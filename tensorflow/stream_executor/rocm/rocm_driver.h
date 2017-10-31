@@ -308,10 +308,9 @@ class ROCMDriver {
 
   // -- Device-specific calls.
 
-  // Returns the compute capability for the device; i.e (3, 5).
-  // This is currently done via the deprecated device API.
-  static port::Status GetComputeCapability(int *cc_major, int *cc_minor,
-                                           hipDevice_t device);
+  // Returns AMDGPU ISA version for the device; i.e 803, 900.
+  static port::Status GetAMDGPUISAVersion(int *version,
+                                          hipDevice_t device);
 
   // Returns the number of multiprocessors on the device (note that the device
   // may be multi-GPU-per-board).

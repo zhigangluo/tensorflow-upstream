@@ -72,7 +72,7 @@ namespace {
 const int kDefaultInlineThreshold = 1048576;
 
 // Gets the ROCm-Device-Libs filename for a particular AMDGPU version.
-static string GetROCDLFilename(const string& amdgpu_version) {
+static string GetROCDLFilename(int amdgpu_version) {
   // XXX FIXME properly implement it
   return tensorflow::strings::StrCat("oclc_isa_version_", amdgpu_version,
                                      ".amdgcn.bc");
@@ -305,7 +305,7 @@ bool CouldNeedROCDL(const llvm::Module& module) {
 
 // Links ROCm-Device-Libs into the given module if the module needs it.
 tensorflow::Status LinkROCDLIfNecessary(
-    llvm::Module* module, const string& amdgpu_version,
+    llvm::Module* module, int amdgpu_version,
     const string& rocdl_dir_path) {
   if (!CouldNeedROCDL(*module)) {
     return tensorflow::Status::OK();
@@ -332,7 +332,7 @@ tensorflow::Status LinkROCDLIfNecessary(
 }
 
 StatusOr<std::vector<char>> CompileModuleToHsaco(llvm::Module* module,
-                                      const string& amdgpu_version,
+                                      int amdgpu_version,
                                       const HloModuleConfig& hlo_module_config,
                                       const string& rocdl_dir_path) {
   // Link the input module with ROCDL, to pull in implementations of some
@@ -359,7 +359,8 @@ StatusOr<std::vector<char>> CompileModuleToHsaco(llvm::Module* module,
   // Figure out the exact name of the processor as known to the AMDGPU backend
   // from the gpu_architecture flag.
   std::unique_ptr<llvm::TargetMachine> target_machine = GetTargetMachine(
-      target_triple, amdgpu_version, hlo_module_config);
+      target_triple, tensorflow::strings::StrCat("gfx", amdgpu_version),
+      hlo_module_config);
   module_passes.add(llvm::createTargetTransformInfoWrapperPass(
       target_machine->getTargetIRAnalysis()));
 
@@ -432,7 +433,7 @@ void GPUBackendInit() {
 }  // namespace
 
 StatusOr<std::vector<char>> CompileToHsaco(llvm::Module* module,
-                                const string& amdgpu_version,
+                                int amdgpu_version,
                                 const HloModuleConfig& hlo_module_config,
                                 const string& rocdl_dir_path) {
   static std::once_flag backend_init_flag;

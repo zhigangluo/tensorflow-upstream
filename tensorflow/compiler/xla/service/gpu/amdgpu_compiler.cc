@@ -268,21 +268,18 @@ StatusOr<std::unique_ptr<Executable>> AMDGPUCompiler::Compile(
     hsaco = generated_hsaco_.back().get();
   }
   
-  // XXX FIXME fix stream_executor device_description
-  //int cc_major, cc_minor;
-  //if (!stream_exec->GetDeviceDescription().cuda_compute_capability(&cc_major,
-  //                                                                 &cc_minor)) {
-  //  LOG(WARNING)
-  //      << "Couldn't get compute capability for device; assuming sm_20.";
-  //  cc_major = 2;
-  //  cc_minor = 0;
-  //}
+  int isa_version = 0;
+  if (!stream_exec->GetDeviceDescription().
+                    rocm_amdgpu_isa_version(&isa_version)) {
+    LOG(WARNING)
+        << "Couldn't get AMDGPU ISA version for device; assuming gfx803.";
+    isa_version = 803;
+  }
   if (rocdl_dir_.empty()) {
     // Compute rocdl_dir_ just once and cache it in this member.
     rocdl_dir_ = GetROCDLDir(module->config());
   }
-  // XXX FIXME force use gfx803 for now
-  TF_ASSIGN_OR_RETURN(*hsaco, CompileToHsaco(&llvm_module, "gfx803",
+  TF_ASSIGN_OR_RETURN(*hsaco, CompileToHsaco(&llvm_module, isa_version,
                                              module->config(), rocdl_dir_));
 
   VLOG(2) << "LLVM module after optimizations:";
