@@ -1064,8 +1064,20 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 /* static */ port::Status ROCMDriver::CreateEvent(ROCmContext* context,
                                                   hipEvent_t *result,
                                                   EventFlags flags) {
+  int hipflags;
+  switch (flags) {
+    case EventFlags::kDefault:
+      hipflags = hipEventDefault;
+      break;
+    case EventFlags::kDisableTiming:
+      hipflags = hipEventDisableTiming | hipEventReleaseToSystem;
+      break;
+    default:
+      LOG(FATAL) << "impossible event flags: " << int(hipflags);
+  }
+
   ScopedActivateContext activated{context};
-  hipError_t res = hipEventCreate(result);
+  hipError_t res = hipEventCreateWithFlags(result, hipflags);
 
   if (res == hipSuccess) {
     return port::Status::OK();
