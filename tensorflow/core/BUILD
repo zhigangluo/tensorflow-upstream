@@ -1531,6 +1531,7 @@ tf_gpu_library(
     srcs = tf_additional_stream_executor_srcs(),
     hdrs = [
         "platform/cuda.h",
+        "platform/rocm.h",
         "platform/stream_executor.h",
     ],
     deps = [

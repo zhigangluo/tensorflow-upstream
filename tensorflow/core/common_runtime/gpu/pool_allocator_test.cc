@@ -13,7 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
 
 #include "tensorflow/core/common_runtime/gpu/pool_allocator.h"
 
@@ -27,10 +26,10 @@ namespace {
 
 TEST(PoolAllocatorTest, ZeroSizeBuffers) {
   gpu::Platform* platform =
-      gpu::MultiPlatformManager::PlatformWithName("cuda").ValueOrDie();
+      gpu::MultiPlatformManager::PlatformWithName("rocm").ValueOrDie();
   PoolAllocator pool(
       2 /*pool_size_limit*/, false /*auto_resize*/,
-      new CUDAHostAllocator(
+      new ROCMHostAllocator(
           platform->GetExecutor(gpu::StreamExecutorConfig(/*ordinal=*/0))
               .ValueOrDie()),
       new NoopRounder, "pool");
@@ -45,10 +44,10 @@ TEST(PoolAllocatorTest, ZeroSizeBuffers) {
 
 TEST(PoolAllocatorTest, ZeroSizePool) {
   gpu::Platform* platform =
-      gpu::MultiPlatformManager::PlatformWithName("cuda").ValueOrDie();
+      gpu::MultiPlatformManager::PlatformWithName("rocm").ValueOrDie();
   PoolAllocator pool(
       0 /*pool_size_limit*/, false /*auto_resize*/,
-      new CUDAHostAllocator(
+      new ROCMHostAllocator(
           platform->GetExecutor(gpu::StreamExecutorConfig(/*ordinal=*/0))
               .ValueOrDie()),
       new NoopRounder, "pool");
@@ -78,10 +77,10 @@ TEST(PoolAllocatorTest, ZeroSizePool) {
 
 TEST(PoolAllocatorTest, Alignment) {
   gpu::Platform* platform =
-      gpu::MultiPlatformManager::PlatformWithName("cuda").ValueOrDie();
+      gpu::MultiPlatformManager::PlatformWithName("rocm").ValueOrDie();
   PoolAllocator pool(
       0 /*pool_size_limit*/, false /*auto_resize*/,
-      new CUDAHostAllocator(
+      new ROCMHostAllocator(
           platform->GetExecutor(gpu::StreamExecutorConfig(/*ordinal=*/0))
               .ValueOrDie()),
       new NoopRounder, "pool");
@@ -124,10 +123,10 @@ TEST(PoolAllocatorTest, AutoResize) {
 
 TEST(PoolAllocatorTest, CudaHostAllocator) {
   gpu::Platform* platform =
-      gpu::MultiPlatformManager::PlatformWithName("cuda").ValueOrDie();
+      gpu::MultiPlatformManager::PlatformWithName("rocm").ValueOrDie();
   PoolAllocator pool(
       2 /*pool_size_limit*/, false /*auto_resize*/,
-      new CUDAHostAllocator(
+      new ROCMHostAllocator(
           platform->GetExecutor(gpu::StreamExecutorConfig(/*ordinal=*/0))
               .ValueOrDie()),
       new NoopRounder, "pool");
@@ -201,10 +200,10 @@ TEST(PoolAllocatorTest, Pow2Rounder) {
 
 TEST(PoolAllocatorTest, Name) {
   gpu::Platform* platform =
-      gpu::MultiPlatformManager::PlatformWithName("cuda").ValueOrDie();
+      gpu::MultiPlatformManager::PlatformWithName("rocm").ValueOrDie();
   PoolAllocator pool(
       2 /*pool_size_limit*/, false /*auto_resize*/,
-      new CUDAHostAllocator(
+      new ROCMHostAllocator(
           platform->GetExecutor(gpu::StreamExecutorConfig(/*ordinal=*/0))
               .ValueOrDie()),
       new NoopRounder, "pool");
@@ -213,5 +212,3 @@ TEST(PoolAllocatorTest, Name) {
 
 }  // namespace
 }  // namespace tensorflow
-
-#endif  // GOOGLE_CUDA

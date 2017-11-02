@@ -13,8 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
-
 #include "tensorflow/core/common_runtime/gpu/gpu_event_mgr.h"
 
 #include <atomic>
@@ -248,5 +246,3 @@ TEST(EventMgr, NonEmptyShutdown) {
 
 }  // namespace
 }  // namespace tensorflow
-
-#endif  // GOOGLE_CUDA

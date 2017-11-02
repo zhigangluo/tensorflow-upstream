@@ -176,16 +176,16 @@ class BasicCPUAllocator : public SubAllocator {
   void Free(void* ptr, size_t num_bytes) override { port::AlignedFree(ptr); }
 };
 
-// Allocator for pinned CPU RAM that is made known to CUDA for the
+// Allocator for pinned CPU RAM that is made known to ROCM for the
 // purpose of efficient DMA with a GPU.
-class CUDAHostAllocator : public SubAllocator {
+class ROCMHostAllocator : public SubAllocator {
  public:
   // Note: stream_exec cannot be null.
-  explicit CUDAHostAllocator(perftools::gputools::StreamExecutor* stream_exec)
+  explicit ROCMHostAllocator(perftools::gputools::StreamExecutor* stream_exec)
       : stream_exec_(stream_exec) {
     CHECK(stream_exec_ != nullptr);
   }
-  ~CUDAHostAllocator() override {}
+  ~ROCMHostAllocator() override {}
 
   void* Alloc(size_t alignment, size_t num_bytes) override {
     void* ptr = nullptr;
@@ -208,7 +208,7 @@ class CUDAHostAllocator : public SubAllocator {
  private:
   perftools::gputools::StreamExecutor* stream_exec_;  // not owned, non-null
 
-  TF_DISALLOW_COPY_AND_ASSIGN(CUDAHostAllocator);
+  TF_DISALLOW_COPY_AND_ASSIGN(ROCMHostAllocator);
 };
 
 }  // namespace tensorflow

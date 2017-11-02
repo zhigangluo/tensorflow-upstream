@@ -13,9 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// TODO(opensource): Use a more generic sounding preprocessor name than
-// GOOGLE_CUDA
-#if GOOGLE_CUDA
+#include "rocm/include/hip/hip_runtime.h"
 
 #define EIGEN_USE_GPU
 
@@ -50,7 +48,7 @@ limitations under the License.
 #include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/lib/strings/strcat.h"
-#include "tensorflow/core/platform/cuda.h"
+#include "tensorflow/core/platform/rocm.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/platform/stream_executor.h"
@@ -74,14 +72,14 @@ namespace tensorflow {
 // corresponding stream have completed.  The following two classes
 // serve this purpose in two different compilation environments.
 
-class EigenCudaStreamDevice : public ::Eigen::StreamInterface {
+class EigenROCmStreamDevice : public ::Eigen::StreamInterface {
  public:
-  EigenCudaStreamDevice()
+  EigenROCmStreamDevice()
       : scratch_(nullptr), semaphore_(nullptr), context_(nullptr) {
     Eigen::initializeDeviceProp();
   }
-  ~EigenCudaStreamDevice() override {}
-  void Reinitialize(OpKernelContext* context, const cudaStream_t* cuda_stream,
+  ~EigenROCmStreamDevice() override {}
+  void Reinitialize(OpKernelContext* context, const hipStream_t* rocm_stream,
                     int gpu_id, ::tensorflow::Allocator* alloc, char* scratch) {
     if (LogMemory::IsEnabled()) {
       operation_ = context->op_kernel().name() + "/EigenAllocator";
@@ -90,14 +88,14 @@ class EigenCudaStreamDevice : public ::Eigen::StreamInterface {
     context_ = context;
     scratch_ = scratch;
     semaphore_ =
-        reinterpret_cast<unsigned int*>(scratch + Eigen::kCudaScratchSize);
-    stream_ = cuda_stream;
+        reinterpret_cast<unsigned int*>(scratch + Eigen::kHipScratchSize);
+    stream_ = rocm_stream;
     allocator_ = alloc;
     device_prop_ = &Eigen::m_deviceProperties[gpu_id];
   }
 
-  const cudaStream_t& stream() const override { return *stream_; }
-  const cudaDeviceProp& deviceProperties() const override {
+  const hipStream_t& stream() const { return *stream_; }
+  const hipDeviceProp_t& deviceProperties() const override {
     return *device_prop_;
   }
 
@@ -127,8 +125,8 @@ class EigenCudaStreamDevice : public ::Eigen::StreamInterface {
     }
     AsyncFreeData* afData =
         new AsyncFreeData(allocator_, buffer, operation_, step_id_);
-    cudaError_t err = cudaStreamAddCallback(*stream_, asyncFree, afData, 0);
-    CHECK_EQ(err, cudaSuccess);
+    hipError_t err = hipStreamAddCallback(*stream_, asyncFree, afData, 0);
+    CHECK_EQ(err, hipSuccess);
   }
 
   // Return a pointer to a per stream scratchpad of 1024 bytes residing
@@ -152,7 +150,7 @@ class EigenCudaStreamDevice : public ::Eigen::StreamInterface {
     const int64 step_id_;
   };
 
-  static void CUDART_CB asyncFree(cudaStream_t stream, cudaError_t status,
+  static void asyncFree(hipStream_t stream, hipError_t status,
                                   void* userData) {
     AsyncFreeData* data = static_cast<AsyncFreeData*>(userData);
     if (LogMemory::IsEnabled()) {
@@ -165,14 +163,14 @@ class EigenCudaStreamDevice : public ::Eigen::StreamInterface {
 
   string operation_;
   int64 step_id_;
-  const cudaStream_t* stream_;          // Not owned.
-  const cudaDeviceProp* device_prop_;   // Not owned.
+  const hipStream_t* stream_;          // Not owned.
+  const hipDeviceProp_t* device_prop_;   // Not owned.
   ::tensorflow::Allocator* allocator_;  // Not owned.
   mutable char* scratch_;
   mutable unsigned int* semaphore_;
   OpKernelContext* context_;
 
-  TF_DISALLOW_COPY_AND_ASSIGN(EigenCudaStreamDevice);
+  TF_DISALLOW_COPY_AND_ASSIGN(EigenROCmStreamDevice);
 };
 
 // This factory helps to ensure that different GPU device objects that refer to
@@ -272,7 +270,7 @@ Status BaseGPUDevice::Init(const SessionOptions& options) {
     streams_.push_back(
         StreamGroupFactory::Global().GetOrCreate(gpu_id_, i, executor_));
 
-    size_t scratch_buffer_size = Eigen::kCudaScratchSize + sizeof(unsigned int);
+    size_t scratch_buffer_size = Eigen::kHipScratchSize + sizeof(unsigned int);
     void* scratch_buffer = gpu_allocator_->AllocateRaw(
         Allocator::kAllocatorAlignment, scratch_buffer_size);
     if (scratch_buffer == nullptr) {
@@ -286,7 +284,7 @@ Status BaseGPUDevice::Init(const SessionOptions& options) {
                                               scratch_buffer_size));
 
     bool ok = executor_->SynchronousMemZero(
-        &mem, Eigen::kCudaScratchSize + sizeof(unsigned int));
+        &mem, Eigen::kHipScratchSize + sizeof(unsigned int));
     if (!ok) {
       return errors::FailedPrecondition(
           "Failed to memcopy into scratch buffer for device ", gpu_id_);
@@ -358,7 +356,7 @@ void BaseGPUDevice::Compute(OpKernel* op_kernel, OpKernelContext* context) {
 
   // NOTE(tucker): We need to discriminate between Eigen GPU
   // operations and all others.  If an operation is Eigen
-  // implemented (or otherwise tries to launch a cuda kernel
+  // implemented (or otherwise tries to launch a rocm kernel
   // directly), we need to establish a stacked-scoped environment
   // that directs it to execute on the proper device.  Otherwise we
   // expect the Op to use StreamExecutor directly and correctly.  The
@@ -428,7 +426,7 @@ void BaseGPUDevice::ComputeHelper(OpKernel* op_kernel,
       if (idc->stream() != stream) stream->ThenWaitFor(idc->stream());
     }
   }
-  gpu::cuda::ScopedActivateExecutorContext scoped_activation{stream->parent()};
+  gpu::rocm::ScopedActivateExecutorContext scoped_activation{stream->parent()};
   op_kernel->Compute(context);
   if (context->status().ok()) {
     if (sync_every_op_) {
@@ -474,7 +472,7 @@ void BaseGPUDevice::ComputeAsync(AsyncOpKernel* op_kernel,
   // following TraceMe constructor is simply a conditional test of
   // false value. Measurements show that its overhead is negligible.
   port::Tracing::TraceMe activity(op_kernel->name(), op_kernel->type_string());
-  gpu::cuda::ScopedActivateExecutorContext scoped_activation{stream->parent()};
+  gpu::rocm::ScopedActivateExecutorContext scoped_activation{stream->parent()};
   op_kernel->ComputeAsync(context, done);
 }
 
@@ -525,16 +523,16 @@ class ConcretePerOpGpuDevice : public PerOpGpuDevice {
  public:
   ConcretePerOpGpuDevice() : device_(&stream_device_) {}
 
-  void Reinitialize(OpKernelContext* context, const cudaStream_t* cuda_stream,
+  void Reinitialize(OpKernelContext* context, const hipStream_t* rocm_stream,
                     int gpu_id, Allocator* base_allocator, char* scratch) {
-    stream_device_.Reinitialize(context, cuda_stream, gpu_id, base_allocator,
+    stream_device_.Reinitialize(context, rocm_stream, gpu_id, base_allocator,
                                 scratch);
   }
 
   const Eigen::GpuDevice& device() const override { return device_; }
 
  private:
-  EigenCudaStreamDevice stream_device_;
+  EigenROCmStreamDevice stream_device_;
   Eigen::GpuDevice device_;
 };
 }  // namespace
@@ -545,9 +543,9 @@ void BaseGPUDevice::ReinitializeDevice(OpKernelContext* context,
   ConcretePerOpGpuDevice* concrete_device =
       static_cast<ConcretePerOpGpuDevice*>(device);
   DCHECK(concrete_device);
-  const cudaStream_t* cuda_stream = reinterpret_cast<const cudaStream_t*>(
-      streams_[stream_id]->compute->implementation()->CudaStreamMemberHack());
-  concrete_device->Reinitialize(context, cuda_stream, gpu_id_, allocator,
+  const hipStream_t* rocm_stream = reinterpret_cast<const hipStream_t*>(
+      streams_[stream_id]->compute->implementation()->GPUStreamMemberHack());
+  concrete_device->Reinitialize(context, rocm_stream, gpu_id_, allocator,
                                 scratch_[stream_id]);
 }
 
@@ -747,56 +745,10 @@ static int GetMinGPUMultiprocessorCount(
 
 namespace {
 
-struct CudaVersion {
-  // Initialize from version_name in the form of "3.5"
-  explicit CudaVersion(const std::string& version_name) {
-    size_t dot_pos = version_name.find('.');
-    CHECK(dot_pos != string::npos)
-        << "Illegal version name: [" << version_name << "]";
-    string major_str = version_name.substr(0, dot_pos);
-    CHECK(strings::safe_strto32(major_str, &major_part))
-        << "Illegal version name: [" << version_name << "]";
-    string minor_str = version_name.substr(dot_pos + 1);
-    CHECK(strings::safe_strto32(minor_str, &minor_part))
-        << "Illegal version name: [" << version_name << "]";
-  }
-  CudaVersion() {}
-  bool operator<(const CudaVersion& other) const {
-    if (this->major_part != other.major_part) {
-      return this->major_part < other.major_part;
-    }
-    return this->minor_part < other.minor_part;
-  }
-  friend std::ostream& operator<<(std::ostream& os,
-                                  const CudaVersion& version) {
-    os << version.major_part << "." << version.minor_part;
-    return os;
-  }
-  int major_part = -1;
-  int minor_part = -1;
-};
+std::vector<int> supported_amdgpu_isa_versions = { 803, 900 };
 
-std::vector<CudaVersion> supported_cuda_compute_capabilities = {
-    TF_CUDA_CAPABILITIES,};
-
-std::vector<CudaVersion> GetSupportedCudaComputeCapabilities() {
-  auto cuda_caps = supported_cuda_compute_capabilities;
-#ifdef TF_EXTRA_CUDA_CAPABILITIES
-// TF_EXTRA_CUDA_CAPABILITIES should be defined a sequence separated by commas,
-// for example:
-//   TF_EXTRA_CUDA_CAPABILITIES=3.0,4.0,5.0
-// Use two-level macro expansion for stringification.
-#define TF_XSTRING(...) #__VA_ARGS__
-#define TF_STRING(s) TF_XSTRING(s)
-  string extra_cuda_caps = TF_STRING(TF_EXTRA_CUDA_CAPABILITIES);
-#undef TF_STRING
-#undef TF_XSTRING
-  auto extra_capabilities = str_util::Split(extra_cuda_caps, ',');
-  for (const auto& capability : extra_capabilities) {
-    cuda_caps.push_back(CudaVersion(capability));
-  }
-#endif
-  return cuda_caps;
+std::vector<int> GetSupportedAMDGPUISAVersions() {
+  return supported_amdgpu_isa_versions;
 }
 
 std::unique_ptr<std::map<std::pair<int, int>, bool>> GetPeerAccessMap(
@@ -945,16 +897,14 @@ Status BaseGPUDeviceFactory::GetValidDeviceIds(
       total_bytes = 0;
     }
     const auto& description = stream_exec->GetDeviceDescription();
-    int cc_major;
-    int cc_minor;
-    if (!description.cuda_compute_capability(&cc_major, &cc_minor)) {
+    int isa_version;
+    if (!description.rocm_amdgpu_isa_version(&isa_version)) {
       // Logs internally on failure.
-      cc_major = 0;
-      cc_minor = 0;
+      isa_version = 0;
     }
     LOG(INFO) << "Found device " << i << " with properties: "
-              << "\nname: " << description.name() << "\nmajor: " << cc_major
-              << " minor: " << cc_minor << " memoryClockRate (GHz) "
+              << "\nname: " << description.name() << "\n"
+              << "AMDGPU ISA: gfx" << isa_version << " memoryClockRate (GHz) "
               << description.clock_rate_ghz() << "\npciBusID "
               << description.pci_bus_id() << "\nTotal memory: "
               << strings::HumanReadableNumBytes(total_bytes)
@@ -987,13 +937,13 @@ Status BaseGPUDeviceFactory::GetValidDeviceIds(
     }
   }
 
-  auto cuda_supported_capabilities = GetSupportedCudaComputeCapabilities();
-  if (cuda_supported_capabilities.empty()) {
+  auto rocm_supported_isas = GetSupportedAMDGPUISAVersions();
+  if (rocm_supported_isas.empty()) {
     return errors::FailedPrecondition(
-        "No supported cuda capabilities in binary.");
+        "No supported rocm capabilities in binary.");
   }
-  CudaVersion min_supported_capability = *std::min_element(
-      cuda_supported_capabilities.begin(), cuda_supported_capabilities.end());
+  int min_supported_isa = *std::min_element(
+      rocm_supported_isas.begin(), rocm_supported_isas.end());
 
   int min_gpu_core_count =
       GetMinGPUMultiprocessorCount(gpu_manager, visible_gpu_order);
@@ -1007,20 +957,19 @@ Status BaseGPUDeviceFactory::GetValidDeviceIds(
     }
     gpu::StreamExecutor* se = exec_status.ValueOrDie();
     const gpu::DeviceDescription& desc = se->GetDeviceDescription();
-    CudaVersion device_capability;
-    if (!desc.cuda_compute_capability(&device_capability.major_part,
-                                      &device_capability.minor_part)) {
+    int device_isa;
+    if (!desc.rocm_amdgpu_isa_version(&device_isa)) {
       continue;
     }
     // Only GPUs with no less than the minimum supported compute capability is
     // accepted.
-    if (device_capability < min_supported_capability) {
+    if (device_isa < min_supported_isa) {
       LOG(INFO) << "Ignoring visible gpu device "
                 << "(" << GetShortDeviceDescription(visible_gpu_id, desc)
                 << ") "
-                << "with Cuda compute capability " << device_capability
-                << ". The minimum required Cuda capability is "
-                << min_supported_capability << ".";
+                << "with AMDGPU ISA gfx" << device_isa
+                << ". The minimum required AMDGPU ISA is gfx"
+                << min_supported_isa << ".";
       continue;
     }
 
@@ -1032,7 +981,7 @@ Status BaseGPUDeviceFactory::GetValidDeviceIds(
       LOG(INFO) << "Ignoring gpu device "
                 << "(" << GetShortDeviceDescription(visible_gpu_id, desc)
                 << ") "
-                << "with Cuda multiprocessor count: " << desc.core_count()
+                << "with ROCm multiprocessor count: " << desc.core_count()
                 << ". The minimum required count is " << min_gpu_core_count
                 << ". You can adjust this requirement with the env var "
                    "TF_MIN_GPU_MULTIPROCESSOR_COUNT.";
@@ -1050,5 +999,3 @@ Status BaseGPUDeviceFactory::GetValidDeviceIds(
 }
 
 }  // namespace tensorflow
-
-#endif  // GOOGLE_CUDA

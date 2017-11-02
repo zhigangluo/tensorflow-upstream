@@ -13,8 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
-
 #include "tensorflow/core/common_runtime/gpu/gpu_debug_allocator.h"
 
 #include <algorithm>
@@ -217,5 +215,3 @@ TEST(GPUDebugAllocatorTest, AllocatedVsRequested) {
 }
 
 }  // namespace tensorflow
-
-#endif  // GOOGLE_CUDA

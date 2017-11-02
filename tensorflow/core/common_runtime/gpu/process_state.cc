@@ -35,7 +35,7 @@ limitations under the License.
 // options to ConfigProto.
 
 // If true, register CPU RAM used to copy to/from GPU RAM with the
-// CUDA driver.
+// ROCM driver.
 const bool FLAGS_brain_mem_reg_cuda_dma = true;
 
 // If true, record attributes of memory allocations and
@@ -87,7 +87,6 @@ ProcessState::MemDesc ProcessState::PtrType(const void* ptr) {
 
 Allocator* ProcessState::GetGPUAllocator(const GPUOptions& options, int gpu_id,
                                          size_t total_bytes) {
-#if GOOGLE_CUDA
   const string& allocator_type = options.allocator_type();
   mutex_lock lock(mu_);
   gpu::Platform* gpu_platform = GPUMachineManager();
@@ -145,10 +144,6 @@ Allocator* ProcessState::GetGPUAllocator(const GPUOptions& options, int gpu_id,
   }
   if (FLAGS_brain_gpu_record_mem_types) return gpu_al_[gpu_id];
   return gpu_allocators_[gpu_id];
-#else
-  LOG(FATAL) << "GPUAllocator unavailable. Not compiled with --config=cuda.";
-  return nullptr;
-#endif  // GOOGLE_CUDA
 }
 
 Allocator* ProcessState::GetCPUAllocator(int numa_node) {
@@ -199,7 +194,7 @@ Allocator* ProcessState::GetCPUAllocator(int numa_node) {
   return cpu_allocators_[0];
 }
 
-Allocator* ProcessState::GetCUDAHostAllocator(int numa_node) {
+Allocator* ProcessState::GetROCMHostAllocator(int numa_node) {
   if (!HasGPUDevice() || !FLAGS_brain_mem_reg_cuda_dma) {
     return cpu_allocator();
   }
@@ -210,7 +205,7 @@ Allocator* ProcessState::GetCUDAHostAllocator(int numa_node) {
   numa_node = 0;
   mutex_lock lock(mu_);
 
-  // Find the first valid StreamExecutor to request CUDA host memory
+  // Find the first valid StreamExecutor to request ROCM host memory
   // through, since any will work.
   //
   // This search isn't super clean, and it would be nice to use a
@@ -230,15 +225,15 @@ Allocator* ProcessState::GetCUDAHostAllocator(int numa_node) {
   while (static_cast<int>(cuda_host_allocators_.size()) <= numa_node) {
     // TODO(zheng-xq): evaluate whether 64GB by default is the best choice.
     int64 cuda_host_mem_limit_in_mb = -1;
-    Status status = ReadInt64FromEnvVar("TF_CUDA_HOST_MEM_LIMIT_IN_MB",
+    Status status = ReadInt64FromEnvVar("TF_ROCM_HOST_MEM_LIMIT_IN_MB",
                                         1LL << 16 /*64GB max by default*/,
                                         &cuda_host_mem_limit_in_mb);
     if (!status.ok()) {
-      LOG(ERROR) << "GetCUDAHostAllocator: " << status.error_message();
+      LOG(ERROR) << "GetROCMHostAllocator: " << status.error_message();
     }
     int64 cuda_host_mem_limit = cuda_host_mem_limit_in_mb * (1LL << 20);
     Allocator* allocator =
-        new BFCAllocator(new CUDAHostAllocator(se), cuda_host_mem_limit,
+        new BFCAllocator(new ROCMHostAllocator(se), cuda_host_mem_limit,
                          true /*allow_growth*/, "cuda_host_bfc" /*name*/);
 
     if (LogMemory::IsEnabled()) {
@@ -262,7 +257,6 @@ Allocator* ProcessState::GetCUDAHostAllocator(int numa_node) {
 }
 
 void ProcessState::AddGPUAllocVisitor(int bus_id, AllocVisitor visitor) {
-#if GOOGLE_CUDA
   mutex_lock lock(mu_);
   gpu::Platform* gpu_platform = GPUMachineManager();
   for (int gpu_id = 0; gpu_id < static_cast<int64>(gpu_allocators_.size());
@@ -278,7 +272,6 @@ void ProcessState::AddGPUAllocVisitor(int bus_id, AllocVisitor visitor) {
     gpu_visitors_.push_back(std::vector<AllocVisitor>());
   }
   gpu_visitors_[bus_id].push_back(visitor);
-#endif  // GOOGLE_CUDA
 }
 
 }  // namespace tensorflow

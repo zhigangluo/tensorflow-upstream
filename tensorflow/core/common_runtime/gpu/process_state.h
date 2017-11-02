@@ -92,7 +92,7 @@ class ProcessState {
   virtual Allocator* GetGPUAllocator(const GPUOptions& options, int gpu_id,
                                      size_t total_bytes);
 
-  virtual Allocator* GetCUDAHostAllocator(int numa_node);
+  virtual Allocator* GetROCMHostAllocator(int numa_node);
 
   // Registers a function to be called once on every new Region
   // allocated by every GPURegionAllocator proximate to the specified

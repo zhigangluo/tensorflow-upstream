@@ -13,8 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
-
 #define EIGEN_USE_GPU
 
 #include "tensorflow/core/common_runtime/gpu/gpu_device.h"
@@ -42,7 +40,7 @@ class GPUDevice : public BaseGPUDevice {
     if (attr.on_host()) {
       if (attr.gpu_compatible() || force_gpu_compatible_) {
         ProcessState* ps = ProcessState::singleton();
-        return ps->GetCUDAHostAllocator(0);
+        return ps->GetROCMHostAllocator(0);
       } else {
         return cpu_allocator_;
       }
@@ -90,7 +88,7 @@ class GPUCompatibleCPUDevice : public ThreadPoolDevice {
   Allocator* GetAllocator(AllocatorAttributes attr) override {
     ProcessState* ps = ProcessState::singleton();
     if (attr.gpu_compatible() || force_gpu_compatible_) {
-      return ps->GetCUDAHostAllocator(0);
+      return ps->GetROCMHostAllocator(0);
     } else {
       // Call the parent's implementation.
       return ThreadPoolDevice::GetAllocator(attr);
@@ -123,5 +121,3 @@ class GPUCompatibleCPUDeviceFactory : public DeviceFactory {
 REGISTER_LOCAL_DEVICE_FACTORY("CPU", GPUCompatibleCPUDeviceFactory, 70);
 
 }  // namespace tensorflow
-
-#endif  // GOOGLE_CUDA

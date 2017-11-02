@@ -31,7 +31,7 @@ namespace gpu = ::perftools::gputools;
 namespace tensorflow {
 
 Status ValidateGPUMachineManager() {
-  auto result = gpu::MultiPlatformManager::PlatformWithName("CUDA");
+  auto result = gpu::MultiPlatformManager::PlatformWithName("ROCM");
   if (!result.ok()) {
     return StreamExecutorUtil::ConvertStatus(result.status());
   }
@@ -40,9 +40,9 @@ Status ValidateGPUMachineManager() {
 }
 
 gpu::Platform* GPUMachineManager() {
-  auto result = gpu::MultiPlatformManager::PlatformWithName("CUDA");
+  auto result = gpu::MultiPlatformManager::PlatformWithName("ROCM");
   if (!result.ok()) {
-    LOG(FATAL) << "Could not find Platform with name CUDA";
+    LOG(FATAL) << "Could not find Platform with name ROCM";
     return nullptr;
   }
 

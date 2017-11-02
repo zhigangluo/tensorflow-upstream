@@ -13,8 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
-
 #include "tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.h"
 
 #include <algorithm>
@@ -349,5 +347,3 @@ BENCHMARK(BM_AllocationDelayed)->Arg(1)->Arg(10)->Arg(100)->Arg(1000);
 
 }  // namespace
 }  // namespace tensorflow
-
-#endif  // GOOGLE_CUDA
