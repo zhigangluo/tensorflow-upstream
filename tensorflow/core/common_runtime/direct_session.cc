@@ -61,10 +61,6 @@ limitations under the License.
 #include "tensorflow/core/util/device_name_utils.h"
 #include "tensorflow/core/util/env_var.h"
 
-#if GOOGLE_CUDA
-#include "tensorflow/core/common_runtime/gpu/gpu_tracer.h"
-#endif  // GOOGLE_CUDA
-
 namespace tensorflow {
 
 namespace {

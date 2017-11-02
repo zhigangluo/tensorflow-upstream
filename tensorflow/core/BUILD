@@ -871,8 +871,6 @@ filegroup(
         "//tensorflow/core/platform/default/build_config:android_srcs",
         "//tensorflow/core/util/ctc:android_srcs",
         "//tensorflow/core/util/tensor_bundle:android_srcs",
-        "common_runtime/gpu/gpu_tracer.cc",
-        "common_runtime/gpu/gpu_tracer.h",
     ] + glob(
         [
             "client/**/*.cc",
@@ -1749,7 +1747,6 @@ tf_gpu_library(
     ],
     copts = tf_copts(),
     cuda_deps = [
-        ":gpu_tracer",
     ],
     linkstatic = 1,
     deps = [
@@ -1782,23 +1779,6 @@ cc_library(
         ":protos_all_cc",
     ],
     alwayslink = 1,
-)
-
-tf_gpu_library(
-    name = "gpu_tracer",
-    srcs = [
-        "common_runtime/gpu/gpu_tracer.cc",
-    ],
-    hdrs = [
-        "common_runtime/gpu/gpu_tracer.h",
-    ],
-    copts = tf_copts(),
-    cuda_deps = tf_additional_cupti_wrapper_deps(),
-    deps = [
-        ":core_cpu_internal",
-        ":lib",
-        ":protos_all_cc",
-    ],
 )
 
 tf_gpu_library(
@@ -2903,34 +2883,6 @@ cc_test(
         ":testlib",
         "//tensorflow/cc:cc_ops",
         "//tensorflow/core/kernels:example_parsing_ops",
-    ],
-)
-
-tf_cc_test_gpu(
-    name = "gpu_tracer_test",
-    size = "small",
-    srcs = ["common_runtime/gpu/gpu_tracer_test.cc"],
-    args = ["--heap_check=local"],
-    linkstatic = tf_kernel_tests_linkstatic(),
-    tags = tf_gpu_tests_tags() + ["nomac"],
-    deps = [
-        ":all_kernels",
-        ":core_cpu",
-        ":core_cpu_internal",
-        ":direct_session",
-        ":direct_session_internal",
-        ":framework",
-        ":framework_internal",
-        ":gpu_runtime",
-        ":gpu_tracer",
-        ":lib",
-        ":lib_internal",
-        ":protos_all_cc",
-        ":test",
-        ":test_main",
-        ":testlib",
-        "//tensorflow/cc:cc_ops",
-        "//tensorflow/core/kernels:ops_util",
     ],
 )
 

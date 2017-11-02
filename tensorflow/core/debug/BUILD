@@ -76,7 +76,6 @@ tf_gpu_library(
         "//tensorflow/core:core_cpu_internal",
         "//tensorflow/core:direct_session_internal",
         "//tensorflow/core:framework",
-        "//tensorflow/core:gpu_tracer",
         "//tensorflow/core:lib",
         "//tensorflow/core:lib_internal",
         "//tensorflow/core:proto_text",
