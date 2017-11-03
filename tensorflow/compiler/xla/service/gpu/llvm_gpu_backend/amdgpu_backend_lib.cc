@@ -223,10 +223,11 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
     LOG(FATAL) << "unable to find llvm-mc in PATH: "
                << llvm_mc_program.getError().message();
   }
+  //LOG(INFO) << "EmitModuleToHsaco, CPU: " << target_machine->getTargetCPU().str();
   const char* llvm_mc_args[] = {
     "llvm-mc",
     "-arch", "amdgcn",
-    "-mcpu", "gfx803",
+    "-mcpu", "gfx900",
     "amdgcn.isa",
     "-filetype", "obj",
     "-o", "amdgcn.isabin",

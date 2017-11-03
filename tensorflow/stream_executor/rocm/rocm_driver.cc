@@ -1179,7 +1179,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 /* static */ port::Status ROCMDriver::GetAMDGPUISAVersion(int *version,
                                                           hipDevice_t device) {
   // XXX FIXME call proper HIP / ROCR runtime API
-  *version = 803;
+  *version = 900;
   return port::Status::OK();
 }
 
