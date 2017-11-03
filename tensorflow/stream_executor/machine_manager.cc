@@ -38,8 +38,10 @@ PlatformKind MachineManager::DetectPreferredPlatform() {
   return PlatformKind::kOpenCL;
 #elif defined TENSORFLOW_STREAM_EXECUTOR_MACHINE_MANAGER_PREFER_HOST
   return PlatformKind::kHost;
-#else
+#elif defined TENSORFLOW_STREAM_EXECUTOR_MACHINE_MANAGER_PREFER_CUDA
   return PlatformKind::kCuda;
+#else
+  return PlatformKind::kROCm;
 #endif
 }
 
