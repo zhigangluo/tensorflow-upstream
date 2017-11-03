@@ -903,10 +903,11 @@ Status BaseGPUDeviceFactory::GetValidDeviceIds(
       isa_version = 0;
     }
     LOG(INFO) << "Found device " << i << " with properties: "
-              << "\nname: " << description.name() << "\n"
-              << "AMDGPU ISA: gfx" << isa_version << " memoryClockRate (GHz) "
-              << description.clock_rate_ghz() << "\npciBusID "
-              << description.pci_bus_id() << "\nTotal memory: "
+              << "\nname: " << description.name()
+              << "\nAMDGPU ISA: gfx" << isa_version
+              << "\nmemoryClockRate (GHz) " << description.clock_rate_ghz()
+              << "\npciBusID " << description.pci_bus_id()
+              << "\nTotal memory: "
               << strings::HumanReadableNumBytes(total_bytes)
               << "\nFree memory: "
               << strings::HumanReadableNumBytes(free_bytes);
