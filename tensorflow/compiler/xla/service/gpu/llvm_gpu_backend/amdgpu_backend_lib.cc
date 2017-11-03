@@ -15,6 +15,7 @@ limitations under the License.
 
 #include "tensorflow/compiler/xla/service/gpu/llvm_gpu_backend/amdgpu_backend_lib.h"
 
+#include <array>
 #include <map>
 #include <memory>
 #include <string>
@@ -223,19 +224,22 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
     LOG(FATAL) << "unable to find llvm-mc in PATH: "
                << llvm_mc_program.getError().message();
   }
-  //LOG(INFO) << "EmitModuleToHsaco, CPU: " << target_machine->getTargetCPU().str();
-  const char* llvm_mc_args[] = {
+
+  std::array<const char*, 11> llvm_mc_args {
     "llvm-mc",
     "-arch", "amdgcn",
-    "-mcpu", "gfx900",
+    "-mcpu", "XXXX",
     "amdgcn.isa",
     "-filetype", "obj",
     "-o", "amdgcn.isabin",
     nullptr,
   };
+  std::string mcpu_str = target_machine->getTargetCPU().str();
+  llvm_mc_args[4] = mcpu_str.c_str();
+
   std::string error_message;
   int llvm_mc_result = llvm::sys::ExecuteAndWait(*llvm_mc_program,
-                                                 llvm_mc_args,
+                                                 llvm_mc_args.data(),
                                                  nullptr, {}, 0, 0,
                                                  &error_message);
 
