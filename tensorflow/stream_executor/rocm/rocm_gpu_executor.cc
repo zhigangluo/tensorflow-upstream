@@ -284,10 +284,20 @@ bool ROCMExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
     ROCMDriver::FuncSetCacheConfig(hipfunc, rocm_kernel->GetROCMCacheConfig());
   }
 
-  void **kernel_params = const_cast<void **>(args.argument_addresses().data());
-  size_t size = sizeof(void*) * args.number_of_arguments();
+  // prepare kernargs
+  // KernelArgsArrayBase keeps the pointer of arguments
+  // deference them here
+  std::vector<void*> kernargs;
+  KernelArgIterator iter = args.arg_iterator();
+  while (iter.has_next()) {
+    KernelArg arg = iter.next();
+    VLOG(2) << "*(arg.address): " << reinterpret_cast<void*>(*static_cast<const uint64_t*>(arg.address));
+    kernargs.push_back(reinterpret_cast<void*>(*static_cast<const uint64_t*>(arg.address)));
+  }
+
+  size_t size = sizeof(void*) * kernargs.size();
   void *config[] = {
-    HIP_LAUNCH_PARAM_BUFFER_POINTER, kernel_params,
+    HIP_LAUNCH_PARAM_BUFFER_POINTER, kernargs.data(),
     HIP_LAUNCH_PARAM_BUFFER_SIZE, &size,
     HIP_LAUNCH_PARAM_END
   };
