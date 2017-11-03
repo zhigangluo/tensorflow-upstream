@@ -273,6 +273,7 @@ cc_library(
         "//tensorflow/core/platform/default/build_config:cublas_plugin",
         "//tensorflow/core/platform/default/build_config:cudnn_plugin",
         "//tensorflow/core/platform/default/build_config:stream_executor_cuda",  # build_cleaner: keep
+        "//tensorflow/core/platform/default/build_config:stream_executor_rocm",
     ],
 )
 
