@@ -1178,9 +1178,16 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 
 /* static */ port::Status ROCMDriver::GetAMDGPUISAVersion(int *version,
                                                           hipDevice_t device) {
-  // XXX FIXME call proper HIP / ROCR runtime API
-  *version = 900;
-  return port::Status::OK();
+  hipDeviceProp_t props;
+  hipError_t result = hipGetDeviceProperties(&props, device);
+  if (result == hipSuccess) {
+    *version = props.gcnArch;
+    return port::Status::OK();
+  }
+  *version = 0;
+  return port::Status{
+      port::error::INTERNAL,
+      port::Printf("failed to determine AMDGPU ISA version for device %d", device)};
 }
 
 // Helper function that turns the integer output of hipDeviceGetAttribute to type
