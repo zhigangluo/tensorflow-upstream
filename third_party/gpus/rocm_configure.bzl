@@ -140,6 +140,7 @@ def _host_compiler_includes(repository_ctx, cc):
 
   # define __HIP_PLATFORM_HCC__
   entries.append("  unfiltered_cxx_flag: \"-D__HIP_PLATFORM_HCC__\"")
+  entries.append("  unfiltered_cxx_flag: \"-DTENSORFLOW_USE_ROCM\"")
 
   return "\n".join(entries)
 
