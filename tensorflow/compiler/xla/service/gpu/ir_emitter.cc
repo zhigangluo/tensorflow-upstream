@@ -43,6 +43,21 @@ limitations under the License.
 #include "tensorflow/compiler/xla/window_util.h"
 #include "tensorflow/core/lib/core/errors.h"
 
+namespace {
+
+static llvm::Value* MayAddrSpaceCastArg(llvm::Value* arg, llvm::IRBuilder<>& builder) {
+  llvm::Type* arg_type = arg->getType();
+  CHECK_EQ(true, arg_type->isPointerTy());
+  if (arg_type->getPointerAddressSpace() != 0) {
+    llvm::Type* generic_arg_type = arg_type->getPointerElementType()->getPointerTo(0);
+    llvm::Value* addrspacecast_arg = builder.CreateAddrSpaceCast(arg, generic_arg_type);
+    return addrspacecast_arg;
+  }
+  return arg;
+}
+
+}
+
 namespace xla {
 
 using llvm_ir::SetToFirstInsertPoint;
@@ -157,8 +172,19 @@ Status IrEmitter::EmitCallToNestedComputation(
     emitted_function = ir_emitter_nested.GetEmittedFunction();
   }
 
-  std::vector<llvm::Value*> arguments(operands.begin(), operands.end());
-  arguments.push_back(output);
+  // For AMDGPU target, may need to addrspacecast alloca variables from
+  // addrspace 5 to addrspace 0
+  std::vector<llvm::Value*> arguments;
+  for (auto& arg : operands) {
+    llvm::Value* casted_arg = MayAddrSpaceCastArg(arg, ir_builder_);
+    arguments.push_back(casted_arg);
+  }
+
+  llvm::Value* casted_output = MayAddrSpaceCastArg(output, ir_builder_);
+  arguments.push_back(casted_output);
+
+  // temp buffer base is always in addrspace 0 so it's not required to
+  // do addrspacecast
   arguments.push_back(bindings_.GetTempBufferBase());
   ir_builder_.CreateCall(emitted_function, arguments);
 
