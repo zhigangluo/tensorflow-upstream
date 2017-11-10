@@ -208,14 +208,6 @@ bool IrEmitter::MaybeEmitSpecialAtomicOperation(
       computation.root_instruction()->shape().element_type();
   llvm::Value* source = ir_builder_.CreateLoad(source_address, "source");
   if (root_opcode == HloOpcode::kAdd) {
-    // NVPTX supports atomicAdd on F32 and integer types.
-    if (element_type == F32) {
-      // F32 + F32
-      llvm_ir::EmitCallToIntrinsic(llvm::Intrinsic::nvvm_atomic_load_add_f32,
-                                   {output_address, source},
-                                   {output_address->getType()}, &ir_builder_);
-      return true;
-    }
     if (primitive_util::IsIntegralType(element_type)) {
       // integral + integral
       ir_builder_.CreateAtomicRMW(llvm::AtomicRMWInst::Add, output_address,
