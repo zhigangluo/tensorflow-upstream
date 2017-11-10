@@ -695,8 +695,7 @@ int64 EmitTranspose021Tiled(llvm_ir::IrArray input, llvm_ir::IrArray output,
 
   // Wait for all threads to reach this point, lest we copy a value from tile to
   // output before the other thread copies it from input to tile.
-  // This is `__syncthreads` in CUDA.
-  llvm_ir::EmitCallToIntrinsic(llvm::Intrinsic::nvvm_barrier0, {}, {}, builder);
+  llvm_ir::EmitCallToIntrinsic(llvm::Intrinsic::amdgcn_s_barrier, {}, {}, builder);
 
   const llvm_ir::IrArray::Index output_tile_index(
       Permute({0, 2, 1}, input_tile_index.multidim()));
