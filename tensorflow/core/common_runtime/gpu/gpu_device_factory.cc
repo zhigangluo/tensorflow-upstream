@@ -15,6 +15,8 @@ limitations under the License.
 
 #define EIGEN_USE_GPU
 
+#define EIGEN_USE_HIP
+
 #include "tensorflow/core/common_runtime/gpu/gpu_device.h"
 #include "tensorflow/core/common_runtime/gpu/process_state.h"
 #include "tensorflow/core/common_runtime/threadpool_device.h"
