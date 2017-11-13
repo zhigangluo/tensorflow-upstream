@@ -203,15 +203,6 @@ llvm::Function* IrEmitterUnnested::BuildKernelPrototype(
   }
   kernel->addAttribute(temp_buffer_arg_no + 1, llvm::Attribute::NoAlias);
 
-  // Add the declaration of this kernel to llvm.nvvm.annotations so that NVPTX
-  // treats it as a CUDA kernel.
-  llvm::NamedMDNode* nvvm_annotations_node =
-      module->getOrInsertNamedMetadata("nvvm.annotations");
-  nvvm_annotations_node->addOperand(llvm::MDNode::get(
-      context, {llvm::ConstantAsMetadata::get(kernel),
-                llvm::MDString::get(context, "kernel"),
-                llvm::ConstantAsMetadata::get(ir_builder_.getInt32(1))}));
-
   // Update the insert point to the entry basic block.
   llvm::BasicBlock* entry_bb =
       llvm::BasicBlock::Create(context,
