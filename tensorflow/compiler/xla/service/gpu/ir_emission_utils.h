@@ -25,7 +25,7 @@ limitations under the License.
 namespace xla {
 namespace gpu {
 
-constexpr int64 kWarpSize = 32;
+constexpr int64 kWarpSize = 64;
 
 // Returns true if `hlo` will be implemented as a call to BLAS gemm.
 bool ImplementedAsGemm(const HloInstruction& hlo);
