@@ -36,7 +36,7 @@ limitations under the License.
 
 // If true, register CPU RAM used to copy to/from GPU RAM with the
 // ROCM driver.
-const bool FLAGS_brain_mem_reg_cuda_dma = true;
+const bool FLAGS_brain_mem_reg_rocm_dma = true;
 
 // If true, record attributes of memory allocations and
 // dynamically check for appropriate use of registered memory.
@@ -195,7 +195,7 @@ Allocator* ProcessState::GetCPUAllocator(int numa_node) {
 }
 
 Allocator* ProcessState::GetROCMHostAllocator(int numa_node) {
-  if (!HasGPUDevice() || !FLAGS_brain_mem_reg_cuda_dma) {
+  if (!HasGPUDevice() || !FLAGS_brain_mem_reg_rocm_dma) {
     return cpu_allocator();
   }
   // Although we're temporarily ignoring numa_node, check for legality.
@@ -222,38 +222,38 @@ Allocator* ProcessState::GetROCMHostAllocator(int numa_node) {
 
   CHECK_NE(nullptr, se);
 
-  while (static_cast<int>(cuda_host_allocators_.size()) <= numa_node) {
+  while (static_cast<int>(rocm_host_allocators_.size()) <= numa_node) {
     // TODO(zheng-xq): evaluate whether 64GB by default is the best choice.
-    int64 cuda_host_mem_limit_in_mb = -1;
+    int64 rocm_host_mem_limit_in_mb = -1;
     Status status = ReadInt64FromEnvVar("TF_ROCM_HOST_MEM_LIMIT_IN_MB",
                                         1LL << 16 /*64GB max by default*/,
-                                        &cuda_host_mem_limit_in_mb);
+                                        &rocm_host_mem_limit_in_mb);
     if (!status.ok()) {
       LOG(ERROR) << "GetROCMHostAllocator: " << status.error_message();
     }
-    int64 cuda_host_mem_limit = cuda_host_mem_limit_in_mb * (1LL << 20);
+    int64 rocm_host_mem_limit = rocm_host_mem_limit_in_mb * (1LL << 20);
     Allocator* allocator =
-        new BFCAllocator(new ROCMHostAllocator(se), cuda_host_mem_limit,
-                         true /*allow_growth*/, "cuda_host_bfc" /*name*/);
+        new BFCAllocator(new ROCMHostAllocator(se), rocm_host_mem_limit,
+                         true /*allow_growth*/, "rocm_host_bfc" /*name*/);
 
     if (LogMemory::IsEnabled()) {
       // Wrap the allocator to track allocation ids for better logging
       // at the cost of performance.
       allocator = new TrackingAllocator(allocator, true);
     }
-    cuda_host_allocators_.push_back(allocator);
+    rocm_host_allocators_.push_back(allocator);
     if (FLAGS_brain_gpu_record_mem_types) {
       MemDesc md;
       md.loc = MemDesc::CPU;
       md.dev_index = 0;
       md.gpu_registered = true;
       md.nic_registered = false;
-      cuda_al_.push_back(new internal::RecordingAllocator(
-          &mem_desc_map_, cuda_host_allocators_.back(), md, &mu_));
+      rocm_al_.push_back(new internal::RecordingAllocator(
+          &mem_desc_map_, rocm_host_allocators_.back(), md, &mu_));
     }
   }
-  if (FLAGS_brain_gpu_record_mem_types) return cuda_al_[0];
-  return cuda_host_allocators_[0];
+  if (FLAGS_brain_gpu_record_mem_types) return rocm_al_[0];
+  return rocm_host_allocators_[0];
 }
 
 void ProcessState::AddGPUAllocVisitor(int bus_id, AllocVisitor visitor) {

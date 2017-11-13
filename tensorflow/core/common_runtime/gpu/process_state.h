@@ -120,7 +120,7 @@ class ProcessState {
   std::vector<Allocator*> cpu_allocators_ GUARDED_BY(mu_);
   std::vector<VisitableAllocator*> gpu_allocators_ GUARDED_BY(mu_);
   std::vector<std::vector<AllocVisitor>> gpu_visitors_ GUARDED_BY(mu_);
-  std::vector<Allocator*> cuda_host_allocators_ GUARDED_BY(mu_);
+  std::vector<Allocator*> rocm_host_allocators_ GUARDED_BY(mu_);
 
   virtual ~ProcessState();
 
@@ -129,7 +129,7 @@ class ProcessState {
   MDMap mem_desc_map_;
   std::vector<Allocator*> cpu_al_ GUARDED_BY(mu_);
   std::vector<Allocator*> gpu_al_ GUARDED_BY(mu_);
-  std::vector<Allocator*> cuda_al_ GUARDED_BY(mu_);
+  std::vector<Allocator*> rocm_al_ GUARDED_BY(mu_);
 };
 
 namespace internal {
