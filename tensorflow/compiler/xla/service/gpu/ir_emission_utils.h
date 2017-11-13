@@ -39,11 +39,6 @@ bool ImplementedAsLibraryCall(const HloInstruction& hlo);
 
 bool IsReductionToVector(const HloInstruction& reduce);
 
-// Emits call to "vprintf" with given format and arguments.
-llvm::Value* EmitPrintf(tensorflow::StringPiece fmt,
-                        tensorflow::gtl::ArraySlice<llvm::Value*> arguments,
-                        llvm::IRBuilder<>* builder);
-
 // Emits code to shuffle data between threads of a warp. This has the same
 // semantics as the PTX "shfl.down" instruction [0] but works for values of any
 // size. The last operand of the emitted "shfl" is `kWarpSize - 1`.

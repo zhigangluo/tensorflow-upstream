@@ -150,35 +150,6 @@ bool IsReductionToVector(const HloInstruction& reduce) {
                                               input->shape()));
 }
 
-// This emits a device-side call to
-// "i32 vprintf(i8* fmt, arguments_type* arguments)" in the driver; see
-// http://docs.nvidia.com/cuda/ptx-writers-guide-to-interoperability/index.html#system-calls
-llvm::Value* EmitPrintf(tensorflow::StringPiece fmt,
-                        tensorflow::gtl::ArraySlice<llvm::Value*> arguments,
-                        llvm::IRBuilder<>* builder) {
-  std::vector<llvm::Type*> argument_types;
-  for (auto argument : arguments) {
-    argument_types.push_back(argument->getType());
-  }
-  auto* arguments_type = llvm::StructType::create(argument_types);
-  llvm::Value* arguments_ptr = builder->CreateAlloca(arguments_type);
-  for (size_t i = 0; i < arguments.size(); ++i) {
-    builder->CreateStore(
-        arguments[i],
-        builder->CreateGEP(arguments_ptr,
-                           {builder->getInt64(0), builder->getInt32(i)}));
-  }
-  return builder->CreateCall(
-      builder->GetInsertBlock()->getParent()->getParent()->getOrInsertFunction(
-          "vprintf",
-          llvm::FunctionType::get(builder->getInt32Ty(),
-                                  {builder->getInt8Ty()->getPointerTo(),
-                                   arguments_type->getPointerTo()},
-                                  /*isVarArg=*/false)),
-      {builder->CreateGlobalStringPtr(llvm_ir::AsStringRef(fmt)),
-       arguments_ptr});
-}
-
 llvm::Value* EmitShuffleDown(llvm::Value* value, llvm::Value* offset,
                              llvm::IRBuilder<>* builder) {
   int bit_width = value->getType()->getPrimitiveSizeInBits();
