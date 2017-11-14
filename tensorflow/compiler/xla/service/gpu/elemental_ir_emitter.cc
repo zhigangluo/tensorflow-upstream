@@ -65,7 +65,7 @@ GpuElementalIrEmitter::GpuElementalIrEmitter(
       hlo_module_config_(hlo_module_config),
       compute_nested_(std::move(compute_nested)) {}
 
-StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitLibdeviceMathCall(
+StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitROCDLMathCall(
     const string& callee_name,
     tensorflow::gtl::ArraySlice<llvm::Value*> operands,
     tensorflow::gtl::ArraySlice<PrimitiveType> input_types,
@@ -135,7 +135,7 @@ StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitFloatBinaryOp(
   PrimitiveType output_type = op->shape().element_type();
   switch (op->opcode()) {
     case HloOpcode::kRemainder: {
-      return EmitLibdeviceMathCall("__nv_fmod", {lhs_value, rhs_value},
+      return EmitROCDLMathCall("ocml_fmod", {lhs_value, rhs_value},
                                    {lhs_input_type, rhs_input_type},
                                    output_type);
     }
@@ -185,13 +185,13 @@ StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitPowerOp(
   }
 
   VLOG(10) << "emitting pow as regular call to pow(): " << op->ToString();
-  return EmitLibdeviceMathCall("__nv_pow", {lhs_value, rhs_value},
+  return EmitROCDLMathCall("ocml_pow", {lhs_value, rhs_value},
                                {lhs_input_type, rhs_input_type}, output_type);
 }
 
 StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitErfcInv(
     PrimitiveType prim_type, llvm::Value* value) const {
-  return EmitLibdeviceMathCall("__nv_erfcinv", {value}, {prim_type}, prim_type);
+  return EmitROCDLMathCall("ocml_erfcinv", {value}, {prim_type}, prim_type);
 }
 
 StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitFloatUnaryOp(
@@ -200,19 +200,19 @@ StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitFloatUnaryOp(
   PrimitiveType output_type = op->shape().element_type();
   switch (op->opcode()) {
     case HloOpcode::kExp:
-      return EmitLibdeviceMathCall("__nv_exp", {operand_value}, {input_type},
+      return EmitROCDLMathCall("ocml_exp", {operand_value}, {input_type},
                                    output_type);
     case HloOpcode::kFloor:
-      return EmitLibdeviceMathCall("__nv_floor", {operand_value}, {input_type},
+      return EmitROCDLMathCall("ocml_floor", {operand_value}, {input_type},
                                    output_type);
     case HloOpcode::kCeil:
-      return EmitLibdeviceMathCall("__nv_ceil", {operand_value}, {input_type},
+      return EmitROCDLMathCall("ocml_ceil", {operand_value}, {input_type},
                                    output_type);
     case HloOpcode::kLog:
-      return EmitLibdeviceMathCall("__nv_log", {operand_value}, {input_type},
+      return EmitROCDLMathCall("ocml_log", {operand_value}, {input_type},
                                    output_type);
     case HloOpcode::kTanh:
-      return EmitLibdeviceMathCall("__nv_tanh", {operand_value}, {input_type},
+      return EmitROCDLMathCall("ocml_tanh", {operand_value}, {input_type},
                                    output_type);
     default:
       return ElementalIrEmitter::EmitFloatUnaryOp(op, operand_value);
