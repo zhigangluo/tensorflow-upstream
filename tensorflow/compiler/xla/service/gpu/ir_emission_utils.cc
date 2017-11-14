@@ -186,9 +186,10 @@ llvm::Value* EmitShuffleDown(llvm::Value* value, llvm::Value* offset,
 
   // Special case for efficiency
   if (value->getType()->isFloatTy() && bit_width == 32) {
-    return llvm_ir::EmitCallToIntrinsic(
-        llvm::Intrinsic::nvvm_shfl_down_f32,
-        {value, offset, builder->getInt32(kWarpSize - 1)}, {}, builder);
+    return EmitDeviceFunctionCall(
+        "amdgcn.shfl.down.f32",
+        {value, offset, builder->getInt32(kWarpSize - 1)},
+        {F32, S32, S32}, F32, {}, builder);
   }
 
   // We must split values wider than 32 bits as the "shfl" instruction operates
@@ -202,10 +203,10 @@ llvm::Value* EmitShuffleDown(llvm::Value* value, llvm::Value* offset,
   for (int i = 0; i < num_segments; ++i) {
     x = builder->CreateInsertElement(
         x,
-        llvm_ir::EmitCallToIntrinsic(llvm::Intrinsic::nvvm_shfl_down_i32,
-                                     {builder->CreateExtractElement(x, i),
-                                      offset, builder->getInt32(kWarpSize - 1)},
-                                     {}, builder),
+        EmitDeviceFunctionCall("amdgcn.shfl.down.f32",
+                               {builder->CreateExtractElement(x, i),
+                                offset, builder->getInt32(kWarpSize - 1)},
+                               {F32, S32, S32}, F32, {}, builder),
         i);
   }
   return builder->CreateBitCast(
