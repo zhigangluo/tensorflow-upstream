@@ -72,11 +72,25 @@ namespace {
 // Default inline threshold value to use in llvm.
 const int kDefaultInlineThreshold = 1048576;
 
-// Gets the ROCm-Device-Libs filename for a particular AMDGPU version.
-static string GetROCDLFilename(int amdgpu_version) {
-  // XXX FIXME properly implement it
-  return tensorflow::strings::StrCat("oclc_isa_version_", amdgpu_version,
-                                     ".amdgcn.bc");
+// Gets the ROCm-Device-Libs filenames for a particular AMDGPU version.
+static std::vector<string> GetROCDLFilenames(int amdgpu_version) {
+  // AMDGPU version-neutral bitcodes
+  std::vector<string> result {
+    "hc.amdgcn.bc",
+    "opencl.amdgcn.bc",
+    "ocml.amdgcn.bc",
+    "ockl.amdgcn.bc",
+    "irif.amdgcn.bc",
+    "oclc_finite_only_off.amdgcn.bc",
+    "oclc_daz_opt_off.amdgcn.bc",
+    "oclc_correctly_rounded_sqrt_on.amdgcn.bc",
+    "oclc_unsafe_math_off.amdgcn.bc"
+  };
+
+  // AMDGPU version-specific bitcodes
+  result.push_back(tensorflow::strings::StrCat("oclc_isa_version_",
+                                               amdgpu_version, ".amdgcn.bc"));
+  return std::move(result);
 }
 
 // Convenience function for producing a name of a temporary compilation product
@@ -317,21 +331,27 @@ tensorflow::Status LinkROCDLIfNecessary(
   }
 
   llvm::Linker linker(*module);
-  string rocdl_path = tensorflow::io::JoinPath(
-      rocdl_dir_path, GetROCDLFilename(amdgpu_version));
-  TF_RETURN_IF_ERROR(tensorflow::Env::Default()->FileExists(rocdl_path));
-  VLOG(1) << "Linking with ROCDL from: " << rocdl_path;
-  std::unique_ptr<llvm::Module> rocdl_module =
-      LoadIRModule(rocdl_path, &module->getContext());
-  if (linker.linkInModule(
-          std::move(rocdl_module), llvm::Linker::Flags::LinkOnlyNeeded,
-          [](Module& M, const StringSet<>& GVS) {
-            internalizeModule(M, [&M, &GVS](const GlobalValue& GV) {
-              return !GV.hasName() || (GVS.count(GV.getName()) == 0);
-            });
-          })) {
-    return tensorflow::errors::Internal(tensorflow::strings::StrCat(
-        "Error linking ROCm-Device-Libs from ", rocdl_path));
+
+  // ROCm-Device-Libs is shipped as a collection of bitcodes
+  std::vector<string> rocdl_bitcode_vector = GetROCDLFilenames(amdgpu_version);
+
+  for (auto& rocdl_bitcode : rocdl_bitcode_vector) {
+    string rocdl_path = tensorflow::io::JoinPath(rocdl_dir_path,
+                                                 rocdl_bitcode);
+    TF_RETURN_IF_ERROR(tensorflow::Env::Default()->FileExists(rocdl_path));
+    VLOG(1) << "Linking with ROCDL bitcode from: " << rocdl_path;
+    std::unique_ptr<llvm::Module> rocdl_module =
+        LoadIRModule(rocdl_path, &module->getContext());
+    if (linker.linkInModule(
+            std::move(rocdl_module), llvm::Linker::Flags::LinkOnlyNeeded,
+            [](Module& M, const StringSet<>& GVS) {
+              internalizeModule(M, [&M, &GVS](const GlobalValue& GV) {
+                return !GV.hasName() || (GVS.count(GV.getName()) == 0);
+              });
+            })) {
+      return tensorflow::errors::Internal(tensorflow::strings::StrCat(
+          "Error linking ROCm-Device-Libs from ", rocdl_path));
+    }
   }
   return tensorflow::Status::OK();
 }
