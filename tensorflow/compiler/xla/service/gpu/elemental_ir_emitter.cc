@@ -252,15 +252,16 @@ llvm::Value* GpuElementalIrEmitter::EmitThreadId() const {
   llvm::Value* block_id = ir_builder_->CreateIntCast(
       llvm_ir::EmitCallToIntrinsic(llvm::Intrinsic::amdgcn_workgroup_id_x,
                                    {}, {}, ir_builder_),
-      ir_builder_->getIntNTy(128), /*isSigned=*/true, "block.id");
+      ir_builder_->getInt32Ty(), /*isSigned=*/true, "block.id");
   llvm::Value* thread_id_in_block = ir_builder_->CreateIntCast(
       llvm_ir::EmitCallToIntrinsic(llvm::Intrinsic::amdgcn_workitem_id_x,
                                    {}, {}, ir_builder_),
-      ir_builder_->getIntNTy(128), /*isSigned=*/true, "thread.id");
+      ir_builder_->getInt32Ty(), /*isSigned=*/true, "thread.id");
   llvm::Value* threads_per_block = ir_builder_->CreateIntCast(
-      llvm_ir::EmitCallToIntrinsic(llvm::Intrinsic::nvvm_read_ptx_sreg_ntid_x,
-                                   {}, {}, ir_builder_),
-      ir_builder_->getIntNTy(128), /*isSigned=*/true, "threads_per_block");
+      EmitDeviceFunctionCall("__ockl_get_local_size",
+                             {ir_builder_->getInt32(0)},
+                             {U32}, U64, {}),
+      ir_builder_->getInt32Ty(), /*isSigned=*/true, "threads_per_block");
   return ir_builder_->CreateNSWAdd(
       ir_builder_->CreateNSWMul(block_id, threads_per_block),
       thread_id_in_block);
