@@ -118,7 +118,7 @@ void UpdateLaunchDimensions(const LaunchDimensions& launch_dims, Thunk* thunk,
       llvm_module->getFunction(kernel_thunk->kernel_name().c_str());
   llvm::LLVMContext& llvm_context = llvm_module->getContext();
   llvm::ConstantInt* threads_per_block_ir_value = llvm::ConstantInt::get(
-      llvm::IntegerType::get(llvm_context, /*NumBits=*/32),
+      llvm::IntegerType::get(llvm_context, /*NumBits=*/64),
       launch_dims.threads_per_block());
   nvvm_annotations_node->addOperand(llvm::MDNode::get(
       llvm_context,
@@ -1118,7 +1118,7 @@ Status IrEmitterUnnested::EmitRowReduction(
     // from the warp.
     llvm_ir::SetToFirstInsertPoint(if_tile_in_bounds_data.after_block,
                                    &ir_builder_);
-    for (int shuffle_distance = 16; shuffle_distance >= 1;
+    for (int shuffle_distance = (kWarpSize / 2); shuffle_distance >= 1;
          shuffle_distance /= 2) {
       llvm::Value* partial_reduction_result = ir_builder_.CreateLoad(
           partial_reduction_result_address, "partial_reduction_result");
