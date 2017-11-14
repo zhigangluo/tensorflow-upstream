@@ -39,7 +39,17 @@ bool ImplementedAsLibraryCall(const HloInstruction& hlo);
 
 bool IsReductionToVector(const HloInstruction& reduce);
 
-// Emits code to shuffle data between threads of a warp. This has the same
+// Emits IR to call a device function named "callee_name" on the given
+// operand. Returns the IR value that represents the return value.
+llvm::Value* EmitDeviceFunctionCall(
+    const string& callee_name,
+    tensorflow::gtl::ArraySlice<llvm::Value*> operands,
+    tensorflow::gtl::ArraySlice<PrimitiveType> input_types,
+    PrimitiveType output_type,
+    tensorflow::gtl::ArraySlice<llvm::Attribute::AttrKind> attributes,
+    llvm::IRBuilder<>* builder);
+
+// Emits code to shuffle data between workitems of a wavefront. This has the same
 // semantics as the PTX "shfl.down" instruction [0] but works for values of any
 // size. The last operand of the emitted "shfl" is `kWarpSize - 1`.
 //

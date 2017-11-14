@@ -32,6 +32,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/literal_util.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 #include "tensorflow/compiler/xla/service/hlo_opcode.h"
+#include "tensorflow/compiler/xla/service/gpu/ir_emission_utils.h"
 #include "tensorflow/compiler/xla/service/llvm_ir/ir_array.h"
 #include "tensorflow/compiler/xla/service/llvm_ir/llvm_loop.h"
 #include "tensorflow/compiler/xla/service/llvm_ir/llvm_util.h"
@@ -124,7 +125,7 @@ StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitMathCall(
 
   return EmitDeviceFunctionCall(
       callee_name, operands, input_types, output_type,
-      {llvm::Attribute::ReadNone, llvm::Attribute::NoUnwind});
+      {llvm::Attribute::ReadNone, llvm::Attribute::NoUnwind}, ir_builder_);
 }
 
 StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitFloatBinaryOp(
@@ -219,35 +220,6 @@ StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitFloatUnaryOp(
   }
 }
 
-llvm::Value* GpuElementalIrEmitter::EmitDeviceFunctionCall(
-    const string& callee_name,
-    tensorflow::gtl::ArraySlice<llvm::Value*> operands,
-    tensorflow::gtl::ArraySlice<PrimitiveType> input_types,
-    PrimitiveType output_type,
-    tensorflow::gtl::ArraySlice<llvm::Attribute::AttrKind> attributes) const {
-  std::vector<llvm::Type*> ir_input_types;
-  for (PrimitiveType input_type : input_types) {
-    ir_input_types.push_back(
-        llvm_ir::PrimitiveTypeToIrType(input_type, ir_builder_));
-  }
-  llvm::FunctionType* callee_type = llvm::FunctionType::get(
-      llvm_ir::PrimitiveTypeToIrType(output_type,
-                                     ir_builder_),  // The return type.
-      ir_input_types,                               // The parameter types.
-      false);                                       // No variadic arguments.
-
-  // Declares the callee if it is not declared already.
-  llvm::Function* callee = llvm::cast<llvm::Function>(
-      ir_builder_->GetInsertBlock()->getModule()->getOrInsertFunction(
-          llvm_ir::AsStringRef(callee_name), callee_type));
-
-  for (auto attribute : attributes) {
-    callee->addFnAttr(attribute);
-  }
-
-  return ir_builder_->CreateCall(callee, llvm_ir::AsArrayRef(operands));
-}
-
 llvm::Value* GpuElementalIrEmitter::EmitThreadId() const {
   llvm::Value* block_id = ir_builder_->CreateIntCast(
       llvm_ir::EmitCallToIntrinsic(llvm::Intrinsic::amdgcn_workgroup_id_x,
@@ -260,7 +232,7 @@ llvm::Value* GpuElementalIrEmitter::EmitThreadId() const {
   llvm::Value* threads_per_block = ir_builder_->CreateIntCast(
       EmitDeviceFunctionCall("__ockl_get_local_size",
                              {ir_builder_->getInt32(0)},
-                             {U32}, U64, {}),
+                             {U32}, U64, {}, ir_builder_),
       ir_builder_->getInt32Ty(), /*isSigned=*/true, "threads_per_block");
   return ir_builder_->CreateNSWAdd(
       ir_builder_->CreateNSWMul(block_id, threads_per_block),

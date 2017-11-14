@@ -150,6 +150,36 @@ bool IsReductionToVector(const HloInstruction& reduce) {
                                               input->shape()));
 }
 
+llvm::Value* EmitDeviceFunctionCall(
+    const string& callee_name,
+    tensorflow::gtl::ArraySlice<llvm::Value*> operands,
+    tensorflow::gtl::ArraySlice<PrimitiveType> input_types,
+    PrimitiveType output_type,
+    tensorflow::gtl::ArraySlice<llvm::Attribute::AttrKind> attributes,
+    llvm::IRBuilder<>* builder) {
+  std::vector<llvm::Type*> ir_input_types;
+  for (PrimitiveType input_type : input_types) {
+    ir_input_types.push_back(
+        llvm_ir::PrimitiveTypeToIrType(input_type, builder));
+  }
+  llvm::FunctionType* callee_type = llvm::FunctionType::get(
+      llvm_ir::PrimitiveTypeToIrType(output_type,
+                                     builder),  // The return type.
+      ir_input_types,                           // The parameter types.
+      false);                                   // No variadic arguments.
+
+  // Declares the callee if it is not declared already.
+  llvm::Function* callee = llvm::cast<llvm::Function>(
+      builder->GetInsertBlock()->getModule()->getOrInsertFunction(
+          llvm_ir::AsStringRef(callee_name), callee_type));
+
+  for (auto attribute : attributes) {
+    callee->addFnAttr(attribute);
+  }
+
+  return builder->CreateCall(callee, llvm_ir::AsArrayRef(operands));
+}
+
 llvm::Value* EmitShuffleDown(llvm::Value* value, llvm::Value* offset,
                              llvm::IRBuilder<>* builder) {
   int bit_width = value->getType()->getPrimitiveSizeInBits();
