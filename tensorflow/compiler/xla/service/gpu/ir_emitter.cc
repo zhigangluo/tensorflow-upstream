@@ -98,7 +98,10 @@ Status IrEmitter::HandleConstant(HloInstruction* constant,
   llvm::GlobalVariable* global_for_const = new llvm::GlobalVariable(
       *ir_emitter_context_->llvm_module(), initializer->getType(),
       /*isConstant=*/true, llvm::GlobalValue::PrivateLinkage, initializer,
-      /*Name=*/"");
+      /*Name=*/"",
+      /*insertBefore*/nullptr,
+      llvm::GlobalValue::NotThreadLocal,
+      /*AddressSpace=*/1 /* GPU global memory */);
   VLOG(2) << "HandleConstant: " << constant->ToString() << std::endl
           << "  emitted_value: " << llvm_ir::DumpToString(*global_for_const)
           << std::endl
