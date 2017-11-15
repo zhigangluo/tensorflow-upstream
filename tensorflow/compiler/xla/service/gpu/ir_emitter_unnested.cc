@@ -110,21 +110,22 @@ void UpdateLaunchDimensions(const LaunchDimensions& launch_dims, Thunk* thunk,
   KernelThunk* kernel_thunk = static_cast<KernelThunk*>(thunk);
   kernel_thunk->SetLaunchDimensions(launch_dims);
 
-  // Add __launch_bounds__ to metadata. This limits registers per thread to
-  // avoid out-of-resources launching errors.
-  llvm::NamedMDNode* nvvm_annotations_node =
-      llvm_module->getOrInsertNamedMetadata("nvvm.annotations");
-  llvm::Function* ir_kernel =
-      llvm_module->getFunction(kernel_thunk->kernel_name().c_str());
-  llvm::LLVMContext& llvm_context = llvm_module->getContext();
-  llvm::ConstantInt* threads_per_block_ir_value = llvm::ConstantInt::get(
-      llvm::IntegerType::get(llvm_context, /*NumBits=*/64),
-      launch_dims.threads_per_block());
-  nvvm_annotations_node->addOperand(llvm::MDNode::get(
-      llvm_context,
-      {llvm::ConstantAsMetadata::get(ir_kernel),
-       llvm::MDString::get(llvm_context, "maxntidx"),
-       llvm::ConstantAsMetadata::get(threads_per_block_ir_value)}));
+  // XXX FIXME add proper AMDGPU function attributes
+  //// Add __launch_bounds__ to metadata. This limits registers per thread to
+  //// avoid out-of-resources launching errors.
+  //llvm::NamedMDNode* nvvm_annotations_node =
+  //    llvm_module->getOrInsertNamedMetadata("nvvm.annotations");
+  //llvm::Function* ir_kernel =
+  //    llvm_module->getFunction(kernel_thunk->kernel_name().c_str());
+  //llvm::LLVMContext& llvm_context = llvm_module->getContext();
+  //llvm::ConstantInt* threads_per_block_ir_value = llvm::ConstantInt::get(
+  //    llvm::IntegerType::get(llvm_context, /*NumBits=*/64),
+  //    launch_dims.threads_per_block());
+  //nvvm_annotations_node->addOperand(llvm::MDNode::get(
+  //    llvm_context,
+  //    {llvm::ConstantAsMetadata::get(ir_kernel),
+  //     llvm::MDString::get(llvm_context, "maxntidx"),
+  //     llvm::ConstantAsMetadata::get(threads_per_block_ir_value)}));
 }
 }  // namespace
 
