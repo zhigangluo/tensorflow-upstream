@@ -51,6 +51,7 @@ limitations under the License.
 #include "external/llvm/include/llvm/Support/TargetRegistry.h"
 #include "external/llvm/include/llvm/Support/TargetSelect.h"
 #include "external/llvm/include/llvm/Support/ToolOutputFile.h"
+#include "external/llvm/include/llvm/Support/raw_ostream.h"
 #include "external/llvm/include/llvm/Target/TargetMachine.h"
 #include "external/llvm/include/llvm/Transforms/IPO.h"
 #include "external/llvm/include/llvm/Transforms/IPO/AlwaysInliner.h"
@@ -208,6 +209,27 @@ void EmitBitcodeToFile(const Module& module, tensorflow::StringPiece filename) {
 // Emits the given module to HSA Code Object. target_machine is an initialized
 // TargetMachine for the AMDGPU target.
 std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_machine) {
+  // FIXME make file output to a temp directory
+
+  // prepare filenames for all stages of compilation:
+  // IR, ISA, binary ISA, and HSACO
+  std::string ir_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".ll");
+  std::string isa_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".isa");
+  std::string isabin_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".isabin");
+  std::string hsaco_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".hsaco");
+
+  std::error_code ec;
+  SmallString<128> path;
+
+  // dump LLVM IR
+  // FIXME make it an optional flag
+  std::unique_ptr<llvm::raw_fd_ostream> ir_fs(new llvm::raw_fd_ostream(ir_filename, ec, llvm::sys::fs::F_None));
+  module->print(*ir_fs, nullptr);
+  ir_fs->flush();
+
+  LOG(INFO) << "LLVM IR dumped for: " << module->getModuleIdentifier();
+  LOG(INFO) << "Lower into GCN ISA";
+
   std::string gcnisa;  // need a std::string instead of a ::string.
   {
     llvm::raw_string_ostream stream(gcnisa);
@@ -228,10 +250,10 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
   }
 
   // dump GCN ISA text
-  std::ofstream gcnisa_file("amdgcn.isa", std::ios::binary);
-  gcnisa_file.write(gcnisa.c_str(), gcnisa.size());
-  gcnisa_file.close();
-  
+  std::unique_ptr<llvm::raw_fd_ostream> isa_fs(new llvm::raw_fd_ostream(isa_filename, ec, llvm::sys::fs::F_None));
+  *isa_fs << gcnisa;
+  isa_fs->flush();
+
   // execute llvm-mc to convertr GCN ISA text to GCN ISA binary
   auto llvm_mc_program = llvm::sys::findProgramByName("llvm-mc");
   if (!llvm_mc_program) {
@@ -242,14 +264,16 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
   std::array<const char*, 11> llvm_mc_args {
     "llvm-mc",
     "-arch", "amdgcn",
-    "-mcpu", "XXXX",
-    "amdgcn.isa",
+    "-mcpu", "amdgpu_version",
+    "isa_filename",
     "-filetype", "obj",
-    "-o", "amdgcn.isabin",
+    "-o", "isabin_filename",
     nullptr,
   };
   std::string mcpu_str = target_machine->getTargetCPU().str();
   llvm_mc_args[4] = mcpu_str.c_str();
+  llvm_mc_args[5] = isa_filename.c_str();
+  llvm_mc_args[9] = isabin_filename.c_str();
 
   std::string error_message;
   int llvm_mc_result = llvm::sys::ExecuteAndWait(*llvm_mc_program,
@@ -270,10 +294,13 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
   const char* lld_args[] = {
     "ld.lld",
     "-flavor", "gnu",
-    "-shared", "amdgcn.isabin",
-    "-o", "amdgcn.hsaco",
+    "-shared", "isabin_filename",
+    "-o", "hsaco_filename",
     nullptr,
   };
+  lld_args[4] = isabin_filename.c_str();
+  lld_args[6] = hsaco_filename.c_str();
+
   int lld_result = llvm::sys::ExecuteAndWait(*lld_program, lld_args,
                                              nullptr, {}, 0, 0,
                                              &error_message); 
@@ -283,7 +310,7 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
   }
 
   // read HSACO
-  std::ifstream hsaco_file("amdgcn.hsaco", std::ios::binary|std::ios::ate);
+  std::ifstream hsaco_file(hsaco_filename, std::ios::binary|std::ios::ate);
   std::ifstream::pos_type hsaco_file_size = hsaco_file.tellg();
 
   std::vector<char> hsaco(hsaco_file_size);
