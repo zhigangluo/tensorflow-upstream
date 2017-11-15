@@ -76,9 +76,10 @@ StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitROCDLMathCall(
   string munged_callee = callee_name;
   switch (output_type) {
     case F32:
-      StrAppend(&munged_callee, "f");
+      StrAppend(&munged_callee, "_f32");
       break;
     case F64:
+      StrAppend(&munged_callee, "_f64");
       break;
     default:
       return Unimplemented("Bad type for libdevice math call: %s",
@@ -136,7 +137,7 @@ StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitFloatBinaryOp(
   PrimitiveType output_type = op->shape().element_type();
   switch (op->opcode()) {
     case HloOpcode::kRemainder: {
-      return EmitROCDLMathCall("ocml_fmod", {lhs_value, rhs_value},
+      return EmitROCDLMathCall("__ocml_fmod", {lhs_value, rhs_value},
                                    {lhs_input_type, rhs_input_type},
                                    output_type);
     }
@@ -186,13 +187,13 @@ StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitPowerOp(
   }
 
   VLOG(10) << "emitting pow as regular call to pow(): " << op->ToString();
-  return EmitROCDLMathCall("ocml_pow", {lhs_value, rhs_value},
+  return EmitROCDLMathCall("__ocml_pow", {lhs_value, rhs_value},
                                {lhs_input_type, rhs_input_type}, output_type);
 }
 
 StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitErfcInv(
     PrimitiveType prim_type, llvm::Value* value) const {
-  return EmitROCDLMathCall("ocml_erfcinv", {value}, {prim_type}, prim_type);
+  return EmitROCDLMathCall("__ocml_erfcinv", {value}, {prim_type}, prim_type);
 }
 
 StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitFloatUnaryOp(
@@ -201,19 +202,19 @@ StatusOr<llvm::Value*> GpuElementalIrEmitter::EmitFloatUnaryOp(
   PrimitiveType output_type = op->shape().element_type();
   switch (op->opcode()) {
     case HloOpcode::kExp:
-      return EmitROCDLMathCall("ocml_exp", {operand_value}, {input_type},
+      return EmitROCDLMathCall("__ocml_exp", {operand_value}, {input_type},
                                    output_type);
     case HloOpcode::kFloor:
-      return EmitROCDLMathCall("ocml_floor", {operand_value}, {input_type},
+      return EmitROCDLMathCall("__ocml_floor", {operand_value}, {input_type},
                                    output_type);
     case HloOpcode::kCeil:
-      return EmitROCDLMathCall("ocml_ceil", {operand_value}, {input_type},
+      return EmitROCDLMathCall("__ocml_ceil", {operand_value}, {input_type},
                                    output_type);
     case HloOpcode::kLog:
-      return EmitROCDLMathCall("ocml_log", {operand_value}, {input_type},
+      return EmitROCDLMathCall("__ocml_log", {operand_value}, {input_type},
                                    output_type);
     case HloOpcode::kTanh:
-      return EmitROCDLMathCall("ocml_tanh", {operand_value}, {input_type},
+      return EmitROCDLMathCall("__ocml_tanh", {operand_value}, {input_type},
                                    output_type);
     default:
       return ElementalIrEmitter::EmitFloatUnaryOp(op, operand_value);
