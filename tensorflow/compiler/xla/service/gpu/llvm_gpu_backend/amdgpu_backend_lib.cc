@@ -222,13 +222,12 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
   SmallString<128> path;
 
   // dump LLVM IR
-  // FIXME make it an optional flag
   std::unique_ptr<llvm::raw_fd_ostream> ir_fs(new llvm::raw_fd_ostream(ir_filename, ec, llvm::sys::fs::F_None));
   module->print(*ir_fs, nullptr);
   ir_fs->flush();
 
-  LOG(INFO) << "LLVM IR dumped for: " << module->getModuleIdentifier();
-  LOG(INFO) << "Lower into GCN ISA";
+  VLOG(2) << "LLVM IR dumped for: " << module->getModuleIdentifier();
+  VLOG(2) << "Lower into GCN ISA";
 
   std::string gcnisa;  // need a std::string instead of a ::string.
   {
