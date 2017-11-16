@@ -791,8 +791,10 @@ Status IrEmitterUnnested::EmitColumnReduction(
     // Emit the loop body that reduces one tile.
     llvm::Type* element_ir_type = llvm_ir::PrimitiveTypeToIrType(
         input_shape.element_type(), &ir_builder_);
-    llvm::Value* partial_reduction_result_address = ir_builder_.CreateAlloca(
-        element_ir_type, /*ArraySize=*/nullptr, "partial_reduction_result");
+    llvm::Value* partial_reduction_result_address =
+        llvm_ir::EmitAllocaAtFunctionEntry(element_ir_type,
+                                           "partial_reduction_result",
+                                           &ir_builder_);
     {
       TF_ASSIGN_OR_RETURN(llvm::Value * init_ir_value,
                           init_value_gen(llvm_ir::IrArray::Index({})));
