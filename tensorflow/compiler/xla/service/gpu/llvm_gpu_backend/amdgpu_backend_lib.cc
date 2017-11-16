@@ -209,25 +209,32 @@ void EmitBitcodeToFile(const Module& module, tensorflow::StringPiece filename) {
 // Emits the given module to HSA Code Object. target_machine is an initialized
 // TargetMachine for the AMDGPU target.
 std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_machine) {
-  // FIXME make file output to a temp directory
+  char tempdir_template[] = "/tmp/amdgpu_xla-XXXXXX";
+  char* tempdir_name = mkdtemp(tempdir_template);
+
+  VLOG(1) << "Compile-time artifacts located at: " << tempdir_name;
 
   // prepare filenames for all stages of compilation:
   // IR, ISA, binary ISA, and HSACO
   std::string ir_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".ll");
+  std::string ir_path = tensorflow::io::JoinPath(tempdir_name, ir_filename);
+
   std::string isa_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".isa");
+  std::string isa_path = tensorflow::io::JoinPath(tempdir_name, isa_filename);
+
   std::string isabin_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".isabin");
+  std::string isabin_path = tensorflow::io::JoinPath(tempdir_name, isabin_filename);
+
   std::string hsaco_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".hsaco");
+  std::string hsaco_path = tensorflow::io::JoinPath(tempdir_name, hsaco_filename);
 
   std::error_code ec;
   SmallString<128> path;
 
   // dump LLVM IR
-  std::unique_ptr<llvm::raw_fd_ostream> ir_fs(new llvm::raw_fd_ostream(ir_filename, ec, llvm::sys::fs::F_None));
+  std::unique_ptr<llvm::raw_fd_ostream> ir_fs(new llvm::raw_fd_ostream(ir_path, ec, llvm::sys::fs::F_None));
   module->print(*ir_fs, nullptr);
   ir_fs->flush();
-
-  VLOG(2) << "LLVM IR dumped for: " << module->getModuleIdentifier();
-  VLOG(2) << "Lower into GCN ISA";
 
   std::string gcnisa;  // need a std::string instead of a ::string.
   {
@@ -249,7 +256,7 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
   }
 
   // dump GCN ISA text
-  std::unique_ptr<llvm::raw_fd_ostream> isa_fs(new llvm::raw_fd_ostream(isa_filename, ec, llvm::sys::fs::F_None));
+  std::unique_ptr<llvm::raw_fd_ostream> isa_fs(new llvm::raw_fd_ostream(isa_path, ec, llvm::sys::fs::F_None));
   *isa_fs << gcnisa;
   isa_fs->flush();
 
@@ -264,15 +271,15 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
     "llvm-mc",
     "-arch", "amdgcn",
     "-mcpu", "amdgpu_version",
-    "isa_filename",
+    "isa_path",
     "-filetype", "obj",
-    "-o", "isabin_filename",
+    "-o", "isabin_path",
     nullptr,
   };
   std::string mcpu_str = target_machine->getTargetCPU().str();
   llvm_mc_args[4] = mcpu_str.c_str();
-  llvm_mc_args[5] = isa_filename.c_str();
-  llvm_mc_args[9] = isabin_filename.c_str();
+  llvm_mc_args[5] = isa_path.c_str();
+  llvm_mc_args[9] = isabin_path.c_str();
 
   std::string error_message;
   int llvm_mc_result = llvm::sys::ExecuteAndWait(*llvm_mc_program,
@@ -293,12 +300,12 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
   const char* lld_args[] = {
     "ld.lld",
     "-flavor", "gnu",
-    "-shared", "isabin_filename",
-    "-o", "hsaco_filename",
+    "-shared", "isabin_path",
+    "-o", "hsaco_path",
     nullptr,
   };
-  lld_args[4] = isabin_filename.c_str();
-  lld_args[6] = hsaco_filename.c_str();
+  lld_args[4] = isabin_path.c_str();
+  lld_args[6] = hsaco_path.c_str();
 
   int lld_result = llvm::sys::ExecuteAndWait(*lld_program, lld_args,
                                              nullptr, {}, 0, 0,
@@ -309,7 +316,7 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
   }
 
   // read HSACO
-  std::ifstream hsaco_file(hsaco_filename, std::ios::binary|std::ios::ate);
+  std::ifstream hsaco_file(hsaco_path, std::ios::binary|std::ios::ate);
   std::ifstream::pos_type hsaco_file_size = hsaco_file.tellg();
 
   std::vector<char> hsaco(hsaco_file_size);
