@@ -21,6 +21,10 @@ limitations under the License.
 #define EIGEN_USE_GPU
 #endif  // GOOGLE_CUDA
 
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
+
 #include <numeric>
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
@@ -34,7 +38,7 @@ limitations under the License.
 #include "tensorflow/core/lib/gtl/array_slice.h"
 #if GOOGLE_CUDA
 #include "tensorflow/core/common_runtime/gpu/gpu_event_mgr.h"
-#include "tensorflow/core/kernels/cuda_device_array.h"
+#include "tensorflow/core/kernels/gpu_device_array.h"
 #include "tensorflow/core/platform/stream_executor.h"
 #endif  // GOOGLE_CUDA
 
@@ -241,8 +245,8 @@ template <typename T, typename IntType>
 struct SplitVOpGPULaunch {
   void Run(const Eigen::GpuDevice& d, bool fixed, const T* input,
            int total_cols, int total_rows,
-           const CudaDeviceArrayStruct<IntType>& output_scan,
-           const CudaDeviceArrayStruct<T*>& output_ptr_data);
+           const GpuDeviceArrayStruct<IntType>& output_scan,
+           const GpuDeviceArrayStruct<T*>& output_ptr_data);
 };
 
 // Partial specialization for GPU
@@ -280,10 +284,10 @@ class SplitVOpGPU : public SplitVOpBase<GPUDevice, T, Tlen> {
     // reshape to 2D
 
     if (num_split > 16) {
-      CudaDeviceArrayOnHost<T*> ptrs(context, num_split);
+      GpuDeviceArrayOnHost<T*> ptrs(context, num_split);
       OP_REQUIRES_OK(context, ptrs.Init());
 
-      CudaDeviceArrayOnHost<Tlen> offsets(context, num_split + 1);
+      GpuDeviceArrayOnHost<Tlen> offsets(context, num_split + 1);
       OP_REQUIRES_OK(context, offsets.Init());
 
       Tlen offset = 0;

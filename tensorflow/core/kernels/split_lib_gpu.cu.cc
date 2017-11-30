@@ -23,7 +23,7 @@ limitations under the License.
 
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/tensor_types.h"
-#include "tensorflow/core/kernels/cuda_device_array_gpu.h"
+#include "tensorflow/core/kernels/gpu_device_array_gpu.h"
 #include "tensorflow/core/util/cuda_kernel_helper.h"
 
 namespace tensorflow {
@@ -71,9 +71,9 @@ namespace {
 template <typename T>
 __global__ void SplitOpKernel(const T* input, int32 prefix_dim_size,
                               int32 split_dim_size, int32 suffix_dim_size,
-                              CudaDeviceArrayStruct<T*> output_ptr_data) {
+                              GpuDeviceArrayStruct<T*> output_ptr_data) {
   const int32 num_split = output_ptr_data.size;
-  T** output_ptrs = GetCudaDeviceArrayOnDevice(&output_ptr_data);
+  T** output_ptrs = GetGpuDeviceArrayOnDevice(&output_ptr_data);
 
   eigen_assert(blockDim.y == 1);
   eigen_assert(blockDim.z == 1);
@@ -108,11 +108,11 @@ __global__ void SplitOpKernel(const T* input, int32 prefix_dim_size,
 // is reversed
 template <typename T, typename IntType, bool useSmem>
 __global__ void split_v_kernel(const T* input_ptr,
-                               CudaDeviceArrayStruct<IntType> output_scan,
+                               GpuDeviceArrayStruct<IntType> output_scan,
                                IntType total_rows, IntType total_cols,
-                               CudaDeviceArrayStruct<T*> output_ptr_data) {
-  T** output_ptrs = GetCudaDeviceArrayOnDevice(&output_ptr_data);
-  IntType* col_scan = GetCudaDeviceArrayOnDevice(&output_scan);
+                               GpuDeviceArrayStruct<T*> output_ptr_data) {
+  T** output_ptrs = GetGpuDeviceArrayOnDevice(&output_ptr_data);
+  IntType* col_scan = GetGpuDeviceArrayOnDevice(&output_scan);
 
   // do upper_bound on col to find which pointer we should be using
   IntType gidx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -166,9 +166,9 @@ __global__ void split_v_kernel(const T* input_ptr,
 template <typename T>
 __global__ void SplitVOpKernel_fixed(
     const T* input, int32 prefix_dim_size, int32 suffix_dim_size,
-    CudaDeviceArrayStruct<T*> output_ptr_data) {
+    GpuDeviceArrayStruct<T*> output_ptr_data) {
   const int32 num_split = output_ptr_data.size;
-  T** output_ptrs = GetCudaDeviceArrayOnDevice(&output_ptr_data);
+  T** output_ptrs = GetGpuDeviceArrayOnDevice(&output_ptr_data);
 
   eigen_assert(blockDim.y == 1);
   eigen_assert(blockDim.z == 1);
@@ -192,7 +192,7 @@ template <typename T>
 struct SplitOpGPULaunch {
   void Run(const Eigen::GpuDevice& d, const T* input, int32 prefix_dim_size,
            int32 split_dim_size, int32 suffix_dim_size,
-           const CudaDeviceArrayStruct<T*>& output_ptr_data) {
+           const GpuDeviceArrayStruct<T*>& output_ptr_data) {
     CudaLaunchConfig config = GetCudaLaunchConfig(
         prefix_dim_size * split_dim_size * suffix_dim_size, d);
 
@@ -207,8 +207,8 @@ template <typename T, typename IntType>
 struct SplitVOpGPULaunch {
   void Run(const Eigen::GpuDevice& gpu_device, bool fixed_size,
            const T* input_ptr, int total_rows, int total_cols,
-           const CudaDeviceArrayStruct<IntType>& output_scan,
-           const CudaDeviceArrayStruct<T*>& output_ptr_data) {
+           const GpuDeviceArrayStruct<IntType>& output_scan,
+           const GpuDeviceArrayStruct<T*>& output_ptr_data) {
     if (fixed_size) {
       CudaLaunchConfig config =
           GetCudaLaunchConfig(total_rows * total_cols, gpu_device);
