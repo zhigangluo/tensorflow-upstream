@@ -7,13 +7,14 @@ def if_rocm(if_true, if_false = []):
 
     """
     return select({
-        "//conditions:default": if_true
+        "@local_config_rocm//rocm:using_hipcc": if_true,
+        "//conditions:default": if_false
     })
 
 
 def rocm_default_copts():
-    """Default options for all CUDA compilations."""
-    return if_rocm(["-DGOOGLE_CUDA=1"])
+    """Default options for all ROCm compilations."""
+    return if_rocm([""])
 
 
 def rocm_is_configured():

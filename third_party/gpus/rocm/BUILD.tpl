@@ -2,6 +2,12 @@ licenses(["restricted"])  # MPL2, portions GPL v3, LGPL v3, BSD-like
 
 package(default_visibility = ["//visibility:public"])
 
+config_setting(
+    name = "using_hipcc",
+    values = {
+        "define": "using_rocm_hipcc=true",
+    },
+)
 
 config_setting(
     name = "darwin",
