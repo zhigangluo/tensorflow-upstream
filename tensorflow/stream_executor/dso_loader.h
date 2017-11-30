@@ -30,7 +30,7 @@ limitations under the License.
 
 #if !defined(PLATFORM_GOOGLE)
 #if TENSORFLOW_USE_ROCM
-#include "rocm/rocm_config.h"
+//#include "rocm/rocm_config.h"
 #else
 #include "cuda/cuda_config.h"
 #endif
