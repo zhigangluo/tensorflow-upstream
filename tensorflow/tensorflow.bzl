@@ -593,8 +593,13 @@ def tf_gpu_kernel_library(srcs,
       srcs=srcs,
       hdrs=hdrs,
       copts=copts,
-      deps=deps + if_cuda([
-          clean_dep("//tensorflow/core:cuda"),
+      # XXX FIXME figure this out
+      #deps=deps + if_cuda([
+      #    clean_dep("//tensorflow/core:cuda"),
+      #    clean_dep("//tensorflow/core:gpu_lib"),
+      #]),
+      deps=deps + if_rocm([
+          clean_dep("//tensorflow/core:rocm"),
           clean_dep("//tensorflow/core:gpu_lib"),
       ]),
       alwayslink=1,
@@ -625,9 +630,14 @@ def tf_gpu_library(deps=None, cuda_deps=None, copts=None, **kwargs):
     copts = []
 
   native.cc_library(
-      deps=deps + if_cuda(cuda_deps + [
-          clean_dep("//tensorflow/core:cuda"),
-          "@local_config_cuda//cuda:cuda_headers"
+      # XXX FIXME figure this out
+      #deps=deps + if_cuda(cuda_deps + [
+      #    clean_dep("//tensorflow/core:cuda"),
+      #    "@local_config_cuda//cuda:cuda_headers"
+      #]),
+      deps=deps + if_rocm(cuda_deps + [
+          clean_dep("//tensorflow/core:rocm"),
+          "@local_config_rocm//rocm:rocm_headers"
       ]),
       copts=copts + if_cuda(["-DGOOGLE_CUDA=1"]) + if_mkl(["-DINTEL_MKL=1"]),
       **kwargs)
