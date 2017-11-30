@@ -29,7 +29,11 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform/mutex.h"
 
 #if !defined(PLATFORM_GOOGLE)
+#if TENSORFLOW_USE_ROCM
+#include "rocm/rocm_config.h"
+#else
 #include "cuda/cuda_config.h"
+#endif
 #endif
 
 namespace perftools {
