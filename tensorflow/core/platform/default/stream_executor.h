@@ -21,6 +21,7 @@ limitations under the License.
 
 #include "tensorflow/core/platform/default/from_stream_executor_status.h"
 #include "tensorflow/stream_executor/cuda/cuda_platform_id.h"
+#include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 #include "tensorflow/stream_executor/device_memory.h"
 #include "tensorflow/stream_executor/dnn.h"
 #include "tensorflow/stream_executor/dso_loader.h"
