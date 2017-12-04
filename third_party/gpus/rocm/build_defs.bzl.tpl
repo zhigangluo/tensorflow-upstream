@@ -14,7 +14,7 @@ def if_rocm(if_true, if_false = []):
 
 def rocm_default_copts():
     """Default options for all ROCm compilations."""
-    return if_rocm([""])
+    return if_rocm(["-x", "rocm"] + %{rocm_extra_copts})
 
 
 def rocm_is_configured():

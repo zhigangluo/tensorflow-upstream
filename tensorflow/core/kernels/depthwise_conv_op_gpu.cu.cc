@@ -715,11 +715,11 @@ struct DepthwiseConv2dGPULaunch {
   }
 };
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template struct DepthwiseConv2dGPULaunch<float>;
 template struct DepthwiseConv2dGPULaunch<double>;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 // A Cuda kernel to compute the depthwise convolution backprop w.r.t. input.
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
           int kKnownDepthMultiplier>
@@ -926,11 +926,11 @@ struct DepthwiseConv2dBackpropInputGPULaunch {
   }
 };
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template struct DepthwiseConv2dBackpropInputGPULaunch<float>;
 template struct DepthwiseConv2dBackpropInputGPULaunch<double>;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 // A Cuda kernel to compute the depthwise convolution backprop w.r.t. filter.
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
           int kKnownDepthMultiplier>

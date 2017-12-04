@@ -105,7 +105,7 @@ TensorShape PoolParameters::forward_output_shape() {
   }
 }
 
-#ifdef GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace {
 template <typename T>

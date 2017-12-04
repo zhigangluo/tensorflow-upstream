@@ -138,8 +138,7 @@ def _host_compiler_includes(repository_ctx, cc):
   for inc_dir in inc_dirs:
     entries.append("  cxx_builtin_include_directory: \"%s\"" % inc_dir)
 
-  # define __HIP_PLATFORM_HCC__
-  entries.append("  unfiltered_cxx_flag: \"-D__HIP_PLATFORM_HCC__\"")
+  # define TENSORFLOW_USE_ROCM
   entries.append("  unfiltered_cxx_flag: \"-DTENSORFLOW_USE_ROCM\"")
 
   return "\n".join(entries)
@@ -588,12 +587,15 @@ def _create_local_rocm_repository(repository_ctx):
            "%{clang_path}": str(cc),
        }
 
-  _tpl(repository_ctx, "crosstool:CROSSTOOL_clang", rocm_defines, out="crosstool/CROSSTOOL")
+  _tpl(repository_ctx, "crosstool:CROSSTOOL_hipcc", rocm_defines, out="crosstool/CROSSTOOL")
+
+  # FIXME enable this once CUDA clang for AMDGPU target is enabled
+  #_tpl(repository_ctx, "crosstool:CROSSTOOL_clang", rocm_defines, out="crosstool/CROSSTOOL")
   _tpl(repository_ctx,
-       "crosstool:clang/bin/crosstool_wrapper_driver_is_not_gcc",
+       "crosstool:clang/bin/crosstool_wrapper_driver_rocm",
        {
            "%{cpu_compiler}": str(cc),
-           "%{rocm_version}": rocm_config.rocm_version,
+           "%{hipcc_path}": "/opt/rocm/bin/hipcc",
            "%{gcc_host_compiler_path}": str(cc),
            "%{rocm_amdgpu_targets}": ",".join(
                ["\"%s\"" % c for c in rocm_config.amdgpu_targets]),

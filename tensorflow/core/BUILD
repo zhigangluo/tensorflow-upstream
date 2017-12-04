@@ -1747,7 +1747,7 @@ tf_gpu_library(
         "util/env_var.h",
     ],
     copts = tf_copts(),
-    cuda_deps = [
+    gpu_deps = [
     ],
     linkstatic = 1,
     deps = [
