@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/kernels/inplace_ops_functor.h"
@@ -26,6 +30,8 @@ namespace functor {
 
 typedef Eigen::GpuDevice Device;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T>
 __global__ void DoParallelConcatOpKernel(int nthreads, const int64 rows,
                                          const int64 cols, int32 loc,
@@ -38,10 +44,13 @@ __global__ void DoParallelConcatOpKernel(int nthreads, const int64 rows,
     *p = ldg(q);
   }
 }
+#endif
 
 template <typename T>
 Status DoParallelConcatUpdate(const Device& d, const Tensor& value, int32 loc,
                               Tensor* output) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   const int64 nelem = value.NumElements();
   CudaLaunchConfig cfg = GetCudaLaunchConfig(nelem, d);
   auto Toutput = output->flat_outer_dims<T>();
@@ -52,6 +61,7 @@ Status DoParallelConcatUpdate(const Device& d, const Tensor& value, int32 loc,
   DoParallelConcatOpKernel<T>
       <<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(
           cfg.virtual_thread_count, nrows, ncols, loc, src, dst);
+#endif
   return Status::OK();
 }
 
@@ -79,4 +89,4 @@ Status DoParallelConcat(const Device& d, const Tensor& value, int32 loc,
 
 }  // end namespace functor
 }  // namespace tensorflow
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

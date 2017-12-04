@@ -129,7 +129,7 @@ TF_CALL_double(REGISTER);
 
 #undef REGISTER
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define REGISTER(TYPE)                                                 \
   REGISTER_KERNEL_BUILDER(                                             \
@@ -168,6 +168,6 @@ TF_CALL_double(REGISTER);
 
 #undef REGISTER
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow

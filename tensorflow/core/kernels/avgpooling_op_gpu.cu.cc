@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include <stdio.h>
 #include <iostream>
@@ -38,6 +42,8 @@ DEFINE_GPU_KERNELS(float)
 
 #undef DEFINE_GPU_KERNELS
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename dtype>
 __global__ void AvePoolBackwardNHWC(const int nthreads,
                                     const dtype* const top_diff, const int num,
@@ -78,6 +84,7 @@ __global__ void AvePoolBackwardNHWC(const int nthreads,
     bottom_diff[index] = gradient;
   }
 }
+#endif
 
 template <typename T>
 bool RunAvePoolBackwardNHWC(const T* const top_diff, const int num,
@@ -89,12 +96,15 @@ bool RunAvePoolBackwardNHWC(const T* const top_diff, const int num,
                             const int pad_l, T* const bottom_diff,
                             const GPUDevice& d) {
   int x_size = num * height * width * channels;
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   CudaLaunchConfig config = GetCudaLaunchConfig(x_size, d);
   AvePoolBackwardNHWC<
       T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
       config.virtual_thread_count, top_diff, num, height, width, channels,
       pooled_height, pooled_width, kernel_h, kernel_w, stride_h, stride_w,
       pad_t, pad_t, bottom_diff);
+#endif
 
   return d.ok();
 }
@@ -114,4 +124,4 @@ template bool RunAvePoolBackwardNHWC(
 
 }  // end namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

@@ -68,7 +68,7 @@ TF_CALL_half(REGISTER_CPU);
 TF_CALL_float(REGISTER_CPU);
 TF_CALL_double(REGISTER_CPU);
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 REGISTER_KERNEL_BUILDER(
     Name("Softmax").Device(DEVICE_GPU).TypeConstraint<Eigen::half>("T"),
     SoftmaxOp<GPUDevice, Eigen::half>);
@@ -84,7 +84,7 @@ REGISTER_KERNEL_BUILDER(
 REGISTER_KERNEL_BUILDER(
     Name("LogSoftmax").Device(DEVICE_GPU).TypeConstraint<float>("T"),
     SoftmaxOp<GPUDevice, float>);
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #ifdef TENSORFLOW_USE_SYCL
 REGISTER_KERNEL_BUILDER(

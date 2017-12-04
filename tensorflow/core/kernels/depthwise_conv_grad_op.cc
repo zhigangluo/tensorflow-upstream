@@ -35,9 +35,9 @@ limitations under the License.
 #include "tensorflow/core/util/tensor_format.h"
 #include "tensorflow/core/util/work_sharder.h"
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/platform/stream_executor.h"
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace tensorflow {
 
@@ -512,7 +512,7 @@ static void DepthwiseConvBackpropInputReference(const DepthwiseArgs& args,
   }
 }
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename T>
 struct DepthwiseConv2dBackpropInputGPULaunch {
@@ -536,7 +536,7 @@ struct LaunchDepthwiseConvBackpropInputOp<GPUDevice, T> {
   }
 };
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 // Kernel to compute the input backprop for depthwise convolution.
 template <typename Device, class T>
@@ -621,7 +621,7 @@ TF_CALL_float(REGISTER_CPU_KERNEL);
 TF_CALL_double(REGISTER_CPU_KERNEL);
 #undef REGISTER_CPU_KERNEL
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 REGISTER_KERNEL_BUILDER(Name("DepthwiseConv2dNativeBackpropInput")
                             .Device(DEVICE_GPU)
                             .TypeConstraint<float>("T")
@@ -634,7 +634,7 @@ REGISTER_KERNEL_BUILDER(
         .TypeConstraint<double>("T")
         .HostMemory("input_sizes"),
     DepthwiseConv2dNativeBackpropInputOp<GPUDevice, double>);
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 // Kernels to compute the gradients of the filters for depthwise convolution.
 
@@ -905,7 +905,7 @@ static void DepthwiseConvBackpropFilterReference(const DepthwiseArgs& args,
   }
 }
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename T>
 struct DepthwiseConv2dBackpropFilterGPULaunch {
@@ -937,7 +937,7 @@ struct LaunchDepthwiseConvBackpropFilterOp<GPUDevice, T> {
   }
 };
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 // Kernel to compute the filter backprop for depthwise convolution.
 template <typename Device, class T>
@@ -1025,7 +1025,7 @@ TF_CALL_float(REGISTER_CPU_KERNEL);
 TF_CALL_double(REGISTER_CPU_KERNEL);
 #undef REGISTER_CPU_KERNEL
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 REGISTER_KERNEL_BUILDER(
     Name("DepthwiseConv2dNativeBackpropFilter")
         .Device(DEVICE_GPU)
@@ -1039,6 +1039,6 @@ REGISTER_KERNEL_BUILDER(
         .TypeConstraint<double>("T")
         .HostMemory("filter_sizes"),
     DepthwiseConv2dNativeBackpropFilterOp<GPUDevice, double>);
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow

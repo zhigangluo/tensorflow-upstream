@@ -13,8 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include <assert.h>
 #include <stdio.h>
@@ -31,6 +35,8 @@ namespace {
 
 typedef Eigen::GpuDevice GPUDevice;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 // A Cuda kernel to check if each element is Inf or Nan. If any exists, the
 // relevant elements in abnormal_detected will be set
 template <typename T>
@@ -51,6 +57,7 @@ __global__ void CheckNumericsKernel(const T *data, int size,
     offset += total_thread_count;
   }
 }
+#endif
 
 }  // namespace
 
@@ -60,6 +67,8 @@ template <typename T>
 struct CheckNumericsLaunch {
   void Run(const GPUDevice &d, const T *data, int size,
            int abnormal_detected[2]) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     const int32 block_size = d.maxCudaThreadsPerBlock();
     const int32 num_blocks =
         (d.getNumCudaMultiProcessors() * d.maxCudaThreadsPerMultiProcessor()) /
@@ -67,6 +76,7 @@ struct CheckNumericsLaunch {
 
     CheckNumericsKernel<T><<<num_blocks, block_size, 0, d.stream()>>>(
         data, size, abnormal_detected);
+#endif
   }
 };
 
@@ -75,4 +85,4 @@ template struct CheckNumericsLaunch<float>;
 template struct CheckNumericsLaunch<double>;
 
 }  // namespace tensorflow
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

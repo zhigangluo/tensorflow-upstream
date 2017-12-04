@@ -38,11 +38,11 @@ limitations under the License.
 #include "tensorflow/core/util/tensor_format.h"
 #include "tensorflow/core/util/use_cudnn.h"
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/kernels/maxpooling_op_gpu.h"
 #include "tensorflow/core/kernels/pooling_ops_common_gpu.h"
 #include "tensorflow/core/platform/stream_executor.h"
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace tensorflow {
 
@@ -273,7 +273,7 @@ class MaxPoolingGradOp : public OpKernel {
   TensorFormat data_format_;
 };
 
-#ifdef GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename T>
 static void MaxPoolingBackwardCustomKernel(
@@ -364,7 +364,7 @@ class MaxPoolingGradOp<Eigen::GpuDevice, T> : public OpKernel {
   bool use_dnn_;
 };
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 // The operation to compute gradient of MaxPool gradients.
 // It takes three inputs:
@@ -542,7 +542,7 @@ class MaxPoolingGradGradOp : public OpKernel {
   TensorFormat data_format_;
 };
 
-#ifdef GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <class T>
 class MaxPoolingGradGradOp<Eigen::GpuDevice, T> : public OpKernel {
@@ -611,7 +611,7 @@ class MaxPoolingGradGradOp<Eigen::GpuDevice, T> : public OpKernel {
   bool use_dnn_;
 };
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename Device, typename T>
 struct LaunchMaxPoolingNoMask;
@@ -816,7 +816,7 @@ class MaxPoolingGradGradWithArgmaxOp : public OpKernel {
   Padding padding_;
 };
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 template <typename T>
 class MaxPoolingNoMaskOp<GPUDevice, T> : public OpKernel {
  public:
@@ -961,7 +961,7 @@ struct LaunchMaxPoolingGradGradWithArgmax<Eigen::GpuDevice, T> {
   }
 };
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define REGISTER_MAX_POOL_KERNELS(D, T)                                  \
   REGISTER_KERNEL_BUILDER(                                               \
@@ -983,7 +983,7 @@ TF_CALL_REAL_NUMBER_TYPES(REGISTER_CPU_ONLY_POOL_KERNELS);
 TF_CALL_REAL_NUMBER_TYPES(REGISTER_CPU_MAX_POOL_KERNELS);
 #undef REGISTER_CPU_KERNELS
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 // Forward declarations for the functor specializations for GPU.
 namespace functor {
@@ -1036,7 +1036,7 @@ TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU_MAX_POOL_KERNELS);
 TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU_ONLY_POOL_KERNELS);
 #undef REGISTER_GPU_ONLY_POOL_KERNELS
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #undef REGISTER_MAX_POOL_KERNELS
 

@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include <stdio.h>
 #include <cfloat>
@@ -28,6 +32,9 @@ limitations under the License.
 
 namespace tensorflow {
 namespace {
+
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 // This is Yangqing's custom kernel for the maxpooling operation. There are
 // three functions: MaxPoolForwardNCHW and MaxPoolForwardNHWC are the two
 // forward functions, dealing with the forward case. MaxPoolBackward is the
@@ -324,6 +331,8 @@ __global__ void MaxPoolGradBackward(const int nthreads, const dtype* top_diff,
 }
 
 #undef CUDA_1D_KERNEL_LOOP
+
+#endif // GOOGLE_CUDA
 }  // namespace
 
 namespace functor {
@@ -335,6 +344,8 @@ bool MaxPoolForwardWithOptionalArgmax<T>::operator()(
     const int kernel_h, const int kernel_w, const int stride_h,
     const int stride_w, const int pad_t, const int pad_l, T* top_data,
     int64* mask, const Eigen::GpuDevice& d) {
+  // FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   const int kThreadsPerBlock = 1024;
   const int output_size = batch * channels * pooled_height * pooled_width;
 
@@ -343,6 +354,7 @@ bool MaxPoolForwardWithOptionalArgmax<T>::operator()(
       output_size, bottom_data, height, width, channels, pooled_height,
       pooled_width, kernel_h, kernel_w, stride_h, stride_w, pad_t, pad_l,
       top_data, mask);
+#endif
   return d.ok();
 }
 
@@ -353,6 +365,8 @@ bool MaxPoolBackwardNoMask<T>::operator()(
     const int kernel_h, const int kernel_w, const int stride_h,
     const int stride_w, const int pad_t, const int pad_l, const T* top_diff,
     T* bottom_diff, const Eigen::GpuDevice& d) {
+  // FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   const int kThreadsPerBlock = 1024;
 
   const int bottom_size = batch * channels * height * width;
@@ -366,6 +380,7 @@ bool MaxPoolBackwardNoMask<T>::operator()(
       top_size, bottom_data, height, width, channels, pooled_height,
       pooled_width, kernel_h, kernel_w, stride_h, stride_w, pad_t, pad_l,
       top_diff, bottom_diff);
+#endif
   return d.ok();
 }
 
@@ -374,12 +389,15 @@ bool MaxPoolBackwardWithArgmax<T>::operator()(
     const int output_size, const int input_size, const T* top_diff,
     const int64* mask, const int top_offset, const int bottom_offset,
     T* bottom_diff, const Eigen::GpuDevice& d) {
+  // FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   const int kThreadsPerBlock = 1024;
   SetZero<<<(input_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
     kThreadsPerBlock, 0, d.stream()>>>(input_size, bottom_diff);
   MaxPoolBackward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                     kThreadsPerBlock, 0, d.stream()>>>(
                                         output_size, top_diff, mask, top_offset, bottom_offset, bottom_diff);
+#endif
   return d.ok();
 }
 
@@ -392,6 +410,8 @@ bool MaxPoolGradBackwardNoMask<T>::operator()(
     const int pad_l, const T* top_diff, T* bottom_diff,
     const Eigen::GpuDevice& d) {
   const int num_kernels = batch * channels * pooled_height * pooled_width;
+  // FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   CudaLaunchConfig config = GetCudaLaunchConfig(num_kernels, d);
 
   if (data_format == FORMAT_NHWC) {
@@ -407,6 +427,7 @@ bool MaxPoolGradBackwardNoMask<T>::operator()(
         channels, height, width, kernel_h, kernel_w, stride_h, stride_w, pad_t,
         pad_l, top_diff, bottom_diff);
   }
+#endif
   return d.ok();
 }
 
@@ -415,10 +436,13 @@ bool MaxPoolGradBackwardWithArgmax<T>::operator()(
     const int output_size, const int input_size, const T* top_diff,
     const int64* mask, const int top_offset, const int bottom_offset,
     T* bottom_diff, const Eigen::GpuDevice& d) {
+  // FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   CudaLaunchConfig config = GetCudaLaunchConfig(output_size, d);
   MaxPoolGradBackward<<<config.block_count, config.thread_per_block, 0,
                         d.stream()>>>(output_size, top_diff, mask, top_offset,
                                       bottom_offset, bottom_diff);
+#endif
   return d.ok();
 }
 
@@ -440,4 +464,4 @@ TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_KERNELS);
 
 }  // end namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

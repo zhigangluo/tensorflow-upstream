@@ -24,10 +24,10 @@ namespace tensorflow {
 
 REGISTER6(BinaryOp, CPU, "Add", functor::add, int8, int16, complex64,
           uint8, complex128, string);
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 REGISTER4(BinaryOp, GPU, "Add", functor::add, uint8, int64, complex64,
           complex128);
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #endif  // !defined(__ANDROID_TYPES_SLIM__)
 

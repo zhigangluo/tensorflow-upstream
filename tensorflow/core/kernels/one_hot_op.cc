@@ -17,9 +17,13 @@ limitations under the License.
 
 #define EIGEN_USE_THREADS
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define EIGEN_USE_GPU
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/kernels/one_hot_op.h"
 
@@ -140,7 +144,7 @@ class OneHotOp : public OpKernel {
 
 TF_CALL_ALL_TYPES(REGISTER_ONE_HOT);
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 // Forward declarations of the functor specializations for GPU.
 namespace functor {
@@ -184,6 +188,6 @@ TF_CALL_GPU_NUMBER_TYPES(REGISTER_ONE_HOT_GPU);
 #undef REGISTER_ONE_HOT_GPU_INDEX
 #undef REGISTER_ONE_HOT_GPU
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow

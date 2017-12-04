@@ -24,15 +24,15 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/types.h"
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/platform/stream_executor.h"
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 namespace tensorflow {
 
 typedef Eigen::ThreadPoolDevice CPUDevice;
 typedef Eigen::GpuDevice GPUDevice;
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 template <typename T>
 struct CheckNumericsLaunch {
   void Run(const GPUDevice& d, const T* data, int size,
@@ -96,7 +96,7 @@ class CheckNumericsOp<CPUDevice, T> : public OpKernel {
   static const int kNaNBit = 0x02;
 };
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 // Partial specialization for GPU
 template <typename T>
 class CheckNumericsOp<GPUDevice, T> : public OpKernel {
@@ -179,7 +179,7 @@ class CheckNumericsOp<GPUDevice, T> : public OpKernel {
  private:
   string message_;
 };
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace
 
@@ -191,7 +191,7 @@ TF_CALL_half(REGISTER_CPU_KERNEL);
 TF_CALL_float(REGISTER_CPU_KERNEL);
 TF_CALL_double(REGISTER_CPU_KERNEL);
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 REGISTER_KERNEL_BUILDER(Name("CheckNumerics")
                             .Device(DEVICE_GPU)
                             .TypeConstraint<Eigen::half>("T"),
@@ -204,6 +204,6 @@ REGISTER_KERNEL_BUILDER(Name("CheckNumerics")
                             .Device(DEVICE_GPU)
                             .TypeConstraint<double>("T"),
                         CheckNumericsOp<GPUDevice, double>);
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow

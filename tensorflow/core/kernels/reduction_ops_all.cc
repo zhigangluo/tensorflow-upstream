@@ -24,7 +24,7 @@ REGISTER_KERNEL_BUILDER(
         .HostMemory("reduction_indices"),
     ReductionOp<CPUDevice, bool, Eigen::internal::AndReducer>);
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 REGISTER_KERNEL_BUILDER(
     Name("All")
         .TypeConstraint<int32>("Tidx")

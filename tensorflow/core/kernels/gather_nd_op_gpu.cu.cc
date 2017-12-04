@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/kernels/gather_nd_op.h"
@@ -26,6 +30,8 @@ namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T, typename Index, int IXDIM>
 __global__ void GatherSliceOpKernel(
     const T* params, const Index* indices, T* out,
@@ -56,6 +62,7 @@ __global__ void GatherSliceOpKernel(
     out[i] = (out_of_bounds) ? T(0) : ldg(params + offset + loc_offset);
   }
 }
+#endif
 
 namespace functor {
 
@@ -79,6 +86,8 @@ struct GatherNdSlice<GPUDevice, T, Index, IXDIM> {
       batch_indices[i - 1] = Tparams.dimension(i - 1);
       batch_strides[i - 1] = batch_strides[i] * Tparams.dimension(i);
     }
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     CudaLaunchConfig config = GetCudaLaunchConfig(out_size, d);
 
     // clang-format off
@@ -87,6 +96,7 @@ struct GatherNdSlice<GPUDevice, T, Index, IXDIM> {
             Tparams.data(), Tindices.data(), Tout.data(), batch_strides,
             batch_indices, indices_size, s_size, out_size);
     // clang-format on
+#endif
 
     // TODO(ebrevdo): enable indices validation on GPU.
     // Right now checking for indices out of bound in the kernel would
@@ -119,4 +129,4 @@ TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPECS);
 
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

@@ -15,8 +15,12 @@ limitations under the License.
 
 #define EIGEN_USE_THREADS
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define EIGEN_USE_GPU
+#endif
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
 #endif
 
 #include "tensorflow/core/framework/op_kernel.h"
@@ -77,7 +81,7 @@ TF_CALL_ALL_TYPES(REGISTER_KERNELS);
 TF_CALL_QUANTIZED_TYPES(REGISTER_KERNELS);
 #undef REGISTER_KERNELS
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define REGISTER_GPU_KERNELS(type)                             \
   namespace functor {                                          \
@@ -100,7 +104,7 @@ TF_CALL_QUANTIZED_TYPES(REGISTER_KERNELS);
 
 TF_CALL_GPU_ALL_TYPES(REGISTER_GPU_KERNELS);
 #undef REGISTER_GPU_KERNELS
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 class UnsafeReadVariableOp : public OpKernel {
  public:
@@ -118,13 +122,13 @@ class UnsafeReadVariableOp : public OpKernel {
 REGISTER_KERNEL_BUILDER(Name("_UnsafeReadVariable").Device(DEVICE_CPU),
                         UnsafeReadVariableOp);
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 REGISTER_KERNEL_BUILDER(
     Name("_UnsafeReadVariable").Device(DEVICE_GPU).HostMemory("resource"),
     UnsafeReadVariableOp);
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 class DestroyResourceOp : public OpKernel {
  public:
@@ -219,7 +223,7 @@ TF_CALL_ALL_TYPES(REGISTER_KERNELS);
 TF_CALL_QUANTIZED_TYPES(REGISTER_KERNELS);
 #undef REGISTER_KERNELS
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define REGISTER_GPU_KERNELS(type)                             \
   REGISTER_KERNEL_BUILDER(Name("AssignVariableOp")             \
                               .Device(DEVICE_GPU)              \
@@ -229,7 +233,7 @@ TF_CALL_QUANTIZED_TYPES(REGISTER_KERNELS);
 
 TF_CALL_GPU_ALL_TYPES(REGISTER_GPU_KERNELS);
 #undef REGISTER_GPU_KERNELS
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename Device, typename T, DenseUpdateType Op>
 class AssignUpdateVariableOp : public OpKernel {
@@ -270,7 +274,7 @@ class AssignUpdateVariableOp : public OpKernel {
 TF_CALL_NUMBER_TYPES(REGISTER_KERNELS);
 #undef REGISTER_KERNELS
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define REGISTER_GPU_KERNELS(type)                                       \
   REGISTER_KERNEL_BUILDER(Name("AssignAddVariableOp")                    \
                               .Device(DEVICE_GPU)                        \
@@ -285,18 +289,18 @@ TF_CALL_NUMBER_TYPES(REGISTER_KERNELS);
 
 TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU_KERNELS);
 #undef REGISTER_GPU_KERNELS
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 REGISTER_KERNEL_BUILDER(Name("VarIsInitializedOp").Device(DEVICE_CPU),
                         IsResourceInitialized<Var>);
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 REGISTER_KERNEL_BUILDER(Name("VarIsInitializedOp")
                             .Device(DEVICE_GPU)
                             .HostMemory("resource")
                             .HostMemory("is_initialized"),
                         IsResourceInitialized<Var>);
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename Device, typename T, typename Index>
 class ResourceGatherOp : public OpKernel {

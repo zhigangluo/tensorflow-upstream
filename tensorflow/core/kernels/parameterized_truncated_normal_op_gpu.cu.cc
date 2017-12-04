@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/kernels/parameterized_truncated_normal_op.h"
 
@@ -46,6 +50,8 @@ namespace functor {
 
 typedef Eigen::GpuDevice GPUDevice;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T>
 __global__ void __launch_bounds__(1024)
     TruncatedNormalKernel(random::PhiloxRandom gen, T* data, int64 num_batches,
@@ -186,6 +192,7 @@ __global__ void __launch_bounds__(1024)
     gen.Skip(remaining_samples);
   }
 }
+#endif // GOOGLE_CUDA
 
 // Partial specialization for GPU
 template <typename T>
@@ -200,6 +207,8 @@ struct TruncatedNormalFunctor<GPUDevice, T> {
                   typename TTypes<T>::ConstFlat maxvals,
                   const random::PhiloxRandom& gen,
                   typename TTypes<T>::Flat output) {
+    // FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     const auto config = GetCudaLaunchConfig(num_elements, d);
 
     TruncatedNormalKernel<
@@ -208,6 +217,7 @@ struct TruncatedNormalFunctor<GPUDevice, T> {
         means.data(), means.dimension(0) == 1, stddevs.data(),
         stddevs.dimension(0) == 1, minvals.data(), minvals.dimension(0) == 1,
         maxvals.data(), maxvals.dimension(0) == 1, kMaxIterations);
+#endif
   };
 };
 
@@ -219,4 +229,4 @@ template struct TruncatedNormalFunctor<GPUDevice, double>;
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

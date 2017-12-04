@@ -15,9 +15,13 @@ limitations under the License.
 
 // See docs in ../ops/linalg_ops.cc.
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define EIGEN_USE_GPU
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "third_party/eigen3/Eigen/Cholesky"
 #include "third_party/eigen3/Eigen/Core"
@@ -30,6 +34,8 @@ limitations under the License.
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/types.h"
 
+// FIXME ROCm doesn't have functional equivalent of cuSOLVER yet
+//#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #if GOOGLE_CUDA
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/kernels/cuda_solvers.h"
@@ -72,6 +78,8 @@ class CholeskyOp : public LinearAlgebraOp<Scalar> {
   }
 };
 
+// FIXME ROCm doesn't have functional equivalent of cuSOLVER yet
+//#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #if GOOGLE_CUDA
 typedef Eigen::GpuDevice GPUDevice;
 
@@ -175,7 +183,7 @@ REGISTER_LINALG_OP_GPU("Cholesky", (CholeskyOpGpu<double>), double);
 REGISTER_LINALG_OP_GPU("Cholesky", (CholeskyOpGpu<complex64>), complex64);
 REGISTER_LINALG_OP_GPU("Cholesky", (CholeskyOpGpu<complex128>), complex128);
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 REGISTER_LINALG_OP("Cholesky", (CholeskyOp<float>), float);
 REGISTER_LINALG_OP("Cholesky", (CholeskyOp<double>), double);

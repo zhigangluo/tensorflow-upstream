@@ -393,7 +393,7 @@ REGISTER_COMPLEX_CPU_UNSORTED_KERNELS_ALL(complex128);
 #undef REGISTER_COMPLEX_CPU_UNSORTED_KERNELS_ALL
 #undef REGISTER_REAL_CPU_UNSORTED_KERNELS_ALL
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define REGISTER_GPU_UNSORTED_KERNELS(type, index_type)                \
   REGISTER_KERNEL_BUILDER(Name("UnsortedSegmentSum")                   \
                               .Device(DEVICE_GPU)                      \
@@ -411,7 +411,7 @@ TF_CALL_complex64(REGISTER_GPU_UNSORTED_KERNELS_ALL);
 TF_CALL_complex128(REGISTER_GPU_UNSORTED_KERNELS_ALL);
 #undef REGISTER_GPU_UNSORTED_KERNELS
 #undef REGISTER_GPU_UNSORTED_KERNELS_ALL
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 // Same as SegmentReductionOp but takes as input a "sparse" tensor, represented
 // by two dense tensors, one containing the data, and the other containing

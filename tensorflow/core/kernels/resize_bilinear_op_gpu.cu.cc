@@ -15,9 +15,13 @@ limitations under the License.
 
 // See docs in ../ops/image_ops.cc.
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/kernels/resize_bilinear_op.h"
 
@@ -32,6 +36,8 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace {
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T>
 __global__ void ResizeBilinearKernel(const int32 nthreads, const T* images,
                                      float height_scale, float width_scale,
@@ -141,6 +147,7 @@ __global__ void ResizeBilinearGradKernel(
                   static_cast<T>(x_lerp * dbottom));
   }
 }
+#endif // GOOGLE_CUDA
 
 }  // namespace
 
@@ -163,12 +170,15 @@ struct ResizeBilinear<GPUDevice, T> {
     const int total_count = batch * out_height * out_width * channels;
     if (total_count == 0) return;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     CudaLaunchConfig config = GetCudaLaunchConfig(total_count, d);
     ResizeBilinearKernel<
         T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
         config.virtual_thread_count, images.data(), height_scale, width_scale,
         batch, in_height, in_width, channels, out_height, out_width,
         output.data());
+#endif
   }
 };
 
@@ -188,6 +198,8 @@ struct ResizeBilinearGrad<GPUDevice, T> {
     const int resized_width = input_grad.dimension(2);
 
     int total_count;
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     CudaLaunchConfig config;
 
     // Initialize output_grad with all zeros.
@@ -205,6 +217,7 @@ struct ResizeBilinearGrad<GPUDevice, T> {
         config.virtual_thread_count, input_grad.data(), height_scale,
         width_scale, batch, original_height, original_width, channels,
         resized_height, resized_width, output_grad.data());
+#endif
   }
 };
 
@@ -219,4 +232,4 @@ TF_CALL_GPU_NUMBER_TYPES_NO_HALF(DEFINE_GPU_SPECS);
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

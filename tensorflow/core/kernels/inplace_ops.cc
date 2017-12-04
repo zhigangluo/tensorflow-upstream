@@ -208,7 +208,7 @@ REGISTER_KERNEL_BUILDER(Name("_ParallelConcatUpdate")
                         ParallelConcatUpdate<CPUDevice>);
 #endif // TENSORFLOW_USE_SYCL
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 typedef Eigen::GpuDevice GPUDevice;
 

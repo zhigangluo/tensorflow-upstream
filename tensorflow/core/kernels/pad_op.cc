@@ -172,7 +172,7 @@ class PadOp : public OpKernel {
 TF_CALL_POD_TYPES(REGISTER_KERNEL);
 #undef REGISTER_KERNEL
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 // Forward declarations of the functor specializations for GPU.
 namespace functor {
 #define DECLARE_GPU_SPEC(T, Dims)                                         \

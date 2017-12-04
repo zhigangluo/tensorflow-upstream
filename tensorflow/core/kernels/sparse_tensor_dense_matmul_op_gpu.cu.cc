@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/kernels/sparse_tensor_dense_matmul_op.h"
 
@@ -27,6 +31,8 @@ namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
+// FIXME implement ROCM functional equivalent
+#if GOOGLE_CUDA
 template <typename T, typename Tindices, bool ADJ_A, bool ADJ_B>
 __global__ void SparseTensorDenseMatMulKernel(int nnz, int m, int b_rows,
                                               int b_cols, int p,
@@ -59,6 +65,7 @@ __global__ void SparseTensorDenseMatMulKernel(int nnz, int m, int b_rows,
     CudaAtomicAdd(out_location, a_value * b_value);
   }
 }
+#endif
 
 namespace functor {
 
@@ -77,6 +84,8 @@ struct SparseTensorDenseMatMulFunctor<GPUDevice, T, Tindices, ADJ_A, ADJ_B> {
     int b_rows = b.dimension(0);
     int b_cols = b.dimension(1);
 
+    // FIXME implement ROCM functional equivalent
+#if GOOGLE_CUDA
     // TODO(ebrevdo): Should this be alpha * nnz instead of
     // out.size()?  Perhaps p * nnz ?
     CudaLaunchConfig config = GetCudaLaunchConfig(p * nnz, d);
@@ -85,6 +94,7 @@ struct SparseTensorDenseMatMulFunctor<GPUDevice, T, Tindices, ADJ_A, ADJ_B> {
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             nnz, m, b_rows, b_cols, p, a_indices.data(), a_values.data(),
             b.data(), out.data());
+#endif
 
     return Status::OK();
   }
@@ -108,4 +118,4 @@ DEFINE(float, int64);
 
 }  // end namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

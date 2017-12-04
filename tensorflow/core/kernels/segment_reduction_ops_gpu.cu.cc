@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/kernels/segment_reduction_ops.h"
 
@@ -26,6 +30,8 @@ namespace tensorflow {
 
 using GPUDevice = Eigen::GpuDevice;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 // Helper for UnusortedSegmentSumCustomKernel that adds value into dest
 // atomically.
 template <typename T>
@@ -77,6 +83,7 @@ __global__ void UnsortedSegmentSumCustomKernel(
     AccumulateInto<T>(output + output_index, ldg(input + input_index));
   }
 }
+#endif
 
 namespace functor {
 
@@ -91,10 +98,14 @@ struct UnsortedSegmentSumFunctor<GPUDevice, T, Index>: UnsortedSegmentBaseFuncto
     if (output.size() == 0) {
       return;
     }
+
+    // FIXME implement ROCM functional equivalent
+#if GOOGLE_CUDA
     // Set 'output' to zeros.
     CudaLaunchConfig config = GetCudaLaunchConfig(output.size(), d);
     SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
         output.size(), output.data());
+#endif
     if (data_size == 0 || segment_ids_shape.num_elements() == 0) {
       return;
     }
@@ -108,12 +119,15 @@ struct UnsortedSegmentSumFunctor<GPUDevice, T, Index>: UnsortedSegmentBaseFuncto
     const Index input_outer_dim_size = segment_ids.dimension(0);
     const Index input_inner_dim_size = input_total_size / input_outer_dim_size;
 
+    // FIXME implement ROCM functional equivalent
+#if GOOGLE_CUDA
     config = GetCudaLaunchConfig(input_total_size, d);
     UnsortedSegmentSumCustomKernel<
         T,
         Index><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
         input_outer_dim_size, input_inner_dim_size, output_rows,
         segment_ids.data(), data, output.data());
+#endif
   }
 };
 
@@ -134,4 +148,4 @@ TF_CALL_complex128(DEFINE_GPU_SPECS);
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

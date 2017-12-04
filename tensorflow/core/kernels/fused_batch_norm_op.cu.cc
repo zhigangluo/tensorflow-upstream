@@ -13,8 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
+
 #include "cuda/include/cuda.h"
 #include "tensorflow/core/kernels/fused_batch_norm_op.h"
 #include "tensorflow/core/util/cuda_kernel_helper.h"
@@ -22,6 +27,8 @@ limitations under the License.
 namespace tensorflow {
 namespace functor {
 
+// FIXME implement ROCm funtional equivalent
+#if GOOGLE_CUDA
 template <class T>
 __global__ void VarianceToInvVarianceKernel(int nthreads, const T* input,
                                             double epsilon, T* output) {
@@ -29,17 +36,23 @@ __global__ void VarianceToInvVarianceKernel(int nthreads, const T* input,
     output[index] = rsqrt(input[index] + T(epsilon));
   }
 }
+#endif
 
 template <class T>
 void VarianceToInvVariance<T>::operator()(const Eigen::GpuDevice& d,
                                           const T* variance, double epsilon,
                                           int channels, T* inv_variance) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   CudaLaunchConfig config = GetCudaLaunchConfig(channels, d);
   VarianceToInvVarianceKernel<<<config.block_count, config.thread_per_block, 0,
                                 d.stream()>>>(config.virtual_thread_count,
                                               variance, epsilon, inv_variance);
+#endif
 }
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <class T>
 __global__ void InvVarianceToVarianceKernel(int nthreads, double epsilon,
                                             int sample_size, T* variance) {
@@ -51,15 +64,19 @@ __global__ void InvVarianceToVarianceKernel(int nthreads, double epsilon,
     variance[index] = (var > 0) ? var : 0;
   }
 }
+#endif
 
 template <class T>
 void InvVarianceToVariance<T>::operator()(const Eigen::GpuDevice& d,
                                           double epsilon, int sample_size,
                                           int channels, T* variance) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   CudaLaunchConfig config = GetCudaLaunchConfig(channels, d);
   InvVarianceToVarianceKernel<<<config.block_count, config.thread_per_block, 0,
                                 d.stream()>>>(config.virtual_thread_count,
                                               epsilon, sample_size, variance);
+#endif
 }
 
 template class VarianceToInvVariance<float>;
@@ -71,4 +88,4 @@ template class InvVarianceToVariance<float>;
 
 #include "tensorflow/core/kernels/fused_batch_norm_op.h"
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

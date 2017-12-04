@@ -19,7 +19,7 @@ namespace tensorflow {
 REGISTER5(BinaryOp, CPU, "Add", functor::add, float, Eigen::half, double, int32,
           int64);
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 REGISTER3(BinaryOp, GPU, "Add", functor::add, float, Eigen::half, double);
 
 // A special GPU kernel for int32.

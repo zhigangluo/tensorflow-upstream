@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include <stdio.h>
 
@@ -68,6 +72,8 @@ DEFINE_GPU_KERNELS(bfloat16);
 
 namespace {
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T>
 __global__ void SplitOpKernel(const T* input, int32 prefix_dim_size,
                               int32 split_dim_size, int32 suffix_dim_size,
@@ -100,9 +106,12 @@ __global__ void SplitOpKernel(const T* input, int32 prefix_dim_size,
     *(output_ptr + output_offset) = ldg(input + offset);
   }
 }
+#endif
 
 }  // namespace
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 // cannot be in anonymous namespace due to extern shared memory
 // very similar to the concat kernel except the input/output logic
 // is reversed
@@ -187,12 +196,16 @@ __global__ void SplitVOpKernel_fixed(
     output_ptr[output_offset] = input[offset];
   }
 }
+#endif
 
 template <typename T>
 struct SplitOpGPULaunch {
   void Run(const Eigen::GpuDevice& d, const T* input, int32 prefix_dim_size,
            int32 split_dim_size, int32 suffix_dim_size,
            const GpuDeviceArrayStruct<T*>& output_ptr_data) {
+
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     CudaLaunchConfig config = GetCudaLaunchConfig(
         prefix_dim_size * split_dim_size * suffix_dim_size, d);
 
@@ -200,6 +213,7 @@ struct SplitOpGPULaunch {
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             input, prefix_dim_size, split_dim_size, suffix_dim_size,
             output_ptr_data);
+#endif
   }
 };
 
@@ -210,13 +224,18 @@ struct SplitVOpGPULaunch {
            const GpuDeviceArrayStruct<IntType>& output_scan,
            const GpuDeviceArrayStruct<T*>& output_ptr_data) {
     if (fixed_size) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
       CudaLaunchConfig config =
           GetCudaLaunchConfig(total_rows * total_cols, gpu_device);
 
       SplitVOpKernel_fixed<T><<<config.block_count, config.thread_per_block, 0,
                                 gpu_device.stream()>>>(
           input_ptr, total_rows, total_cols, output_ptr_data);
+#endif
     } else {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
       auto config = GetCuda2DLaunchConfig(total_cols, total_rows, gpu_device);
       IntType smem_max = gpu_device.sharedMemPerBlock();
       IntType smem_usage = output_scan.size * sizeof(IntType);
@@ -234,6 +253,7 @@ struct SplitVOpGPULaunch {
             <<<config.block_count, config.thread_per_block, 0,
                gpu_device.stream()>>>(input_ptr, output_scan, total_rows,
                                       total_cols, output_ptr_data);
+#endif
     }
   }
 };
@@ -256,4 +276,4 @@ REGISTER_GPU_KERNEL(bfloat16);
 
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

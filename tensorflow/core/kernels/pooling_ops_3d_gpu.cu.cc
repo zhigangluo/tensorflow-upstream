@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/kernels/pooling_ops_3d_gpu.h"
@@ -26,6 +30,8 @@ namespace tensorflow {
 
 namespace {
 
+// FIXME implement ROCM functional equivalent
+#if GOOGLE_CUDA
 template <typename dtype>
 __global__ void MaxPoolGradBackwardNoMaskNCDHW(
     const int nthreads, const dtype* bottom_data, const dtype* output_data,
@@ -126,6 +132,7 @@ __global__ void MaxPoolGradBackwardNoMaskNDHWC(
     }
   }
 }
+#endif
 
 }  // namespace
 
@@ -140,6 +147,8 @@ bool MaxPool3dGradBackward<T>::operator()(
     const int kernel_w, const int stride_p, const int stride_h,
     const int stride_w, const int pad_p, const int pad_t, const int pad_l,
     const T* top_diff, T* bottom_diff, const Eigen::GpuDevice& d) {
+  // FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   int num_kernels =
       batch * channels * pooled_plane * pooled_height * pooled_width;
   CudaLaunchConfig config = GetCudaLaunchConfig(num_kernels, d);
@@ -158,6 +167,7 @@ bool MaxPool3dGradBackward<T>::operator()(
         kernel_w, stride_p, stride_h, stride_w, pad_p, pad_t, pad_l, top_diff,
         bottom_diff);
   }
+#endif
   return d.ok();
 }
 
@@ -169,4 +179,4 @@ TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPECS);
 
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

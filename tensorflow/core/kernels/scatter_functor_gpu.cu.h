@@ -16,9 +16,13 @@ limitations under the License.
 #ifndef TENSORFLOW_KERNELS_SCATTER_FUNCTOR_GPU_CU_H_
 #define TENSORFLOW_KERNELS_SCATTER_FUNCTOR_GPU_CU_H_
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/framework/tensor_types.h"
 #include "tensorflow/core/kernels/scatter_functor.h"
@@ -29,6 +33,8 @@ namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T, typename Index, scatter_op::UpdateOp op>
 __global__ void ScatterOpCustomKernel(
     T* params, const T* updates, const Index* indices,
@@ -67,6 +73,7 @@ __global__ void ScatterOpCustomKernel(
     }
   }
 }
+#endif
 
 namespace functor {
 // Specialization for a GPU device.
@@ -82,11 +89,15 @@ struct ScatterFunctor<GPUDevice, T, Index, op> {
     const Index first_dim_size = params.dimension(0);
     const Index indices_size = indices.size();
     const Index updates_size = updates.size();
+
+    // FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     CudaLaunchConfig config = GetCudaLaunchConfig(updates_size, d);
     ScatterOpCustomKernel<T, Index, op>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             params.data(), updates.data(), indices.data(),
             first_dim_size, updates_size, indices_size);
+#endif
     return -1;
   }
 };
@@ -94,6 +105,6 @@ struct ScatterFunctor<GPUDevice, T, Index, op> {
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #endif  // TENSORFLOW_KERNELS_SCATTER_FUNCTOR_GPU_CU_H_

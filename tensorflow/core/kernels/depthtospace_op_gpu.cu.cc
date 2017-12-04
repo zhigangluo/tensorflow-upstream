@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/kernels/depthtospace_op.h"
 
@@ -27,6 +31,8 @@ namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename dtype>
 __global__ void D2S(const int32 nthreads, const dtype* input_ptr,
                     const int block_size, const int batch_size,
@@ -54,6 +60,7 @@ __global__ void D2S(const int32 nthreads, const dtype* input_ptr,
     *(output_ptr + out_idx) = ldg(input_ptr + inp_idx);
   }
 }
+#endif
 
 // Specialization of DepthToSpaceOpFunctor for a GPUDevice.
 namespace functor {
@@ -61,6 +68,8 @@ template <typename T>
 struct DepthToSpaceOpFunctor<GPUDevice, T> {
   void operator()(const GPUDevice& d, typename TTypes<T, 4>::ConstTensor input,
                   int block_size, typename TTypes<T, 4>::Tensor output) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     const int batch_size = output.dimension(0);
     const int input_height = input.dimension(1);
     const int input_width = input.dimension(2);
@@ -76,6 +85,7 @@ struct DepthToSpaceOpFunctor<GPUDevice, T> {
         config.virtual_thread_count, input.data(), block_size, batch_size,
         input_height, input_width, input_depth, output_height, output_width,
         output_depth, output.data());
+#endif
   }
 };
 }  // end namespace functor
@@ -85,4 +95,4 @@ template struct functor::DepthToSpaceOpFunctor<GPUDevice, float>;
 
 }  // end namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

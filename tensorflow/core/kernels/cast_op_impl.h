@@ -110,7 +110,7 @@ GetCpuCastFromComplex128(DataType dst_dtype);
 std::function<void(OpKernelContext*, const Tensor&, Tensor*)>
 GetCpuCastFromBfloat(DataType dst_dtype);
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 // Same, for GPU.
 std::function<void(OpKernelContext*, const Tensor&, Tensor*)>
 GetGpuCastFromBool(DataType dst_dtype);
@@ -151,7 +151,7 @@ GetGpuCastFromComplex128(DataType dst_dtype);
 std::function<void(OpKernelContext*, const Tensor&, Tensor*)>
 GetGpuCastFromBfloat(DataType dst_dtype);
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #ifdef TENSORFLOW_USE_SYCL
 std::function<void(OpKernelContext*, const Tensor&, Tensor*)>

@@ -13,8 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/kernels/depthwise_conv_op.h"
@@ -63,6 +67,8 @@ EIGEN_DEVICE_FUNC bool CanLaunchDepthwiseConv2dBackpropFilterGPUSmall(
 // convolution depending on a template argument of this enum.
 enum DepthwiseConv2dDirection { DIRECTION_FORWARD, DIRECTION_BACKWARD };
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 // A Cuda kernel to compute the depthwise convolution forward pass
 // in NHWC format.
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
@@ -558,6 +564,7 @@ __global__ __launch_bounds__(1024, 2) void DepthwiseConv2dGPUKernelNCHWSmall(
     __syncthreads();
   }
 }
+#endif // GOOGLE_CUDA
 
 template <typename T, DepthwiseConv2dDirection kDirection,
           int kKnownFilterWidth, int kKnownFilterHeight, int kBlockSlices,
@@ -565,6 +572,8 @@ template <typename T, DepthwiseConv2dDirection kDirection,
 void LaunchDepthwiseConv2dGPUSmall(const GpuDevice& d, const DepthwiseArgs args,
                                    const T* input, const T* filter, T* output,
                                    TensorFormat data_format) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   const int block_rows = (args.in_rows + 1) / 2;
   dim3 block_dim;
   void (*kernel)(const DepthwiseArgs, const T*, const T*, T*);
@@ -595,6 +604,7 @@ void LaunchDepthwiseConv2dGPUSmall(const GpuDevice& d, const DepthwiseArgs args,
                           block_dim.x * block_dim.y * block_dim.z);
   kernel<<<config.block_count, block_dim, shared_memory_size, d.stream()>>>(
       args, input, filter, output);
+#endif
 }
 
 template <typename T, DepthwiseConv2dDirection kDirection,
@@ -642,6 +652,8 @@ void LaunchDepthwiseConv2dGPU(const GpuDevice& d, const DepthwiseArgs args,
                               const T* input, const T* filter, T* output,
                               TensorFormat data_format) {
   void (*kernel)(const DepthwiseArgs, const T*, const T*, T*, int);
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   if (data_format == FORMAT_NHWC) {
     kernel =
         DepthwiseConv2dGPUKernelNHWC<T, kKnownFilterWidth, kKnownFilterHeight,
@@ -665,6 +677,7 @@ void LaunchDepthwiseConv2dGPU(const GpuDevice& d, const DepthwiseArgs args,
   kernel<<<std::min(max_block_count, config.block_count),
            config.thread_per_block, 0, d.stream()>>>(args, input, filter,
                                                      output, num_outputs);
+#endif
 }
 
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight>
@@ -702,6 +715,8 @@ struct DepthwiseConv2dGPULaunch {
   }
 };
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template struct DepthwiseConv2dGPULaunch<float>;
 template struct DepthwiseConv2dGPULaunch<double>;
 
@@ -840,6 +855,7 @@ __global__ void __launch_bounds__(640, 2)
     in_backprop[in_backprop_offset] = sum;
   }
 }
+#endif // GOOGLE_CUDA
 
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
           int kKnownDepthMultiplier>
@@ -848,6 +864,8 @@ void LaunchDepthwiseConv2dBackpropInputGPU(const GpuDevice& d,
                                            const T* out_backprop,
                                            const T* filter, T* in_backprop,
                                            TensorFormat data_format) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   void (*kernel)(const DepthwiseArgs, const T*, const T*, T*, int);
   if (data_format == FORMAT_NHWC) {
     kernel = DepthwiseConv2dBackpropInputGPUKernelNHWC<
@@ -865,6 +883,7 @@ void LaunchDepthwiseConv2dBackpropInputGPU(const GpuDevice& d,
       GetCudaLaunchConfig(num_in_backprop, d, kernel, 0, 0);
   kernel<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
       args, out_backprop, filter, in_backprop, num_in_backprop);
+#endif
 }
 
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight>
@@ -907,6 +926,8 @@ struct DepthwiseConv2dBackpropInputGPULaunch {
   }
 };
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template struct DepthwiseConv2dBackpropInputGPULaunch<float>;
 template struct DepthwiseConv2dBackpropInputGPULaunch<double>;
 
@@ -1418,6 +1439,7 @@ __launch_bounds__(1024, 2) void DepthwiseConv2dBackpropFilterGPUKernelNCHWSmall(
     }
   }
 }
+#endif // GOOGLE_CUDA
 
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
           int kBlockSlices, int kAccumPixels>
@@ -1435,6 +1457,9 @@ bool TryLaunchDepthwiseConv2dBackpropFilterGPUSmall(
     return false;
   }
 
+
+// FIXME implement ROCM functional equivalent
+#if GOOGLE_CUDA
   dim3 block_dim;
   void (*kernel)(const DepthwiseArgs, const T*, const T*, T*);
   if (data_format == FORMAT_NHWC) {
@@ -1456,6 +1481,7 @@ bool TryLaunchDepthwiseConv2dBackpropFilterGPUSmall(
                           block_dim.x * block_dim.y * block_dim.z);
   kernel<<<config.block_count, block_dim, shared_memory_size, d.stream()>>>(
       args, out_backprop, input, filter_backprop);
+#endif
   return true;
 }
 
@@ -1536,6 +1562,8 @@ void LaunchDepthwiseConv2dBackpropFilterGPU(const GpuDevice& d,
                                             const T* out_backprop,
                                             const T* input, T* filter_backprop,
                                             TensorFormat data_format) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   void (*kernel)(const DepthwiseArgs, const T*, const T*, T*, int);
   if (data_format == FORMAT_NHWC) {
     kernel = DepthwiseConv2dBackpropFilterGPUKernelNHWC<
@@ -1553,6 +1581,7 @@ void LaunchDepthwiseConv2dBackpropFilterGPU(const GpuDevice& d,
       GetCudaLaunchConfig(num_out_backprop, d, kernel, 0, 0);
   kernel<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
       args, out_backprop, input, filter_backprop, num_out_backprop);
+#endif
 }
 
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight>
@@ -1597,4 +1626,4 @@ struct DepthwiseConv2dBackpropFilterGPULaunch {
 template struct DepthwiseConv2dBackpropFilterGPULaunch<float>;
 template struct DepthwiseConv2dBackpropFilterGPULaunch<double>;
 }  // namespace tensorflow
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

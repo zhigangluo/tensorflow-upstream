@@ -30,11 +30,11 @@ limitations under the License.
 #include "tensorflow/core/util/work_sharder.h"
 #endif
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "cuda/include/cuda.h"
 #include "tensorflow/core/platform/stream_executor.h"
 #include "tensorflow/core/util/stream_executor_util.h"
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace tensorflow {
 
@@ -160,7 +160,7 @@ struct LaunchLRN<CPUDevice, T> {
   T beta_;
 };
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename T>
 struct LaunchLRN<GPUDevice, T> {
@@ -221,7 +221,7 @@ struct LaunchLRN<GPUDevice, T> {
   T beta_;
 };
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename Device, typename T>
 class LRNOp : public OpKernel {
@@ -286,7 +286,7 @@ TF_CALL_half(REGISTER_CPU);
 
 #undef REGISTER_CPU
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define REGISTER_GPU(T)                                      \
   REGISTER_KERNEL_BUILDER(                                   \
@@ -296,7 +296,7 @@ TF_CALL_float(REGISTER_GPU);
 
 #undef REGISTER_GPU
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #if !defined(IS_MOBILE_PLATFORM)
 
@@ -375,7 +375,7 @@ struct LaunchLRNGrad<CPUDevice, T> {
   T beta_;
 };
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename T>
 struct LaunchLRNGrad<GPUDevice, T> {
@@ -440,7 +440,7 @@ struct LaunchLRNGrad<GPUDevice, T> {
   T beta_;
 };
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename Device, typename T>
 class LRNGradOp : public OpKernel {
@@ -508,7 +508,7 @@ TF_CALL_half(REGISTER_CPU);
 
 #undef REGISTER_CPU
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define REGISTER_GPU(T)                                          \
   REGISTER_KERNEL_BUILDER(                                       \
@@ -518,7 +518,7 @@ TF_CALL_float(REGISTER_GPU);
 
 #undef REGISTER_GPU
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #endif  // !defined(IS_MOBILE_PLATFORM)
 

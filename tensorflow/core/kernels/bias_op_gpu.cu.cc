@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include <algorithm>
 
@@ -44,6 +48,8 @@ struct AccumulatorType<Eigen::half> {
 
 // Definition of the GPU implementations declared in bias_op.cc.
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T>
 __global__ void BiasNHWCKernel(int32 nthreads, const T* input, const T* bias,
                                T* output, int32 bias_size) {
@@ -62,6 +68,7 @@ __global__ void BiasNCHWKernel(int32 nthreads, const T* input, const T* bias,
     output[index] = ldg(input + index) + ldg(bias + bias_offset);
   }
 }
+#endif
 
 // Add "bias" to "input", broadcasting it on all dimensions but the bias
 // dimension.
@@ -75,6 +82,8 @@ void BiasGPU<T>::compute(const GPUDevice& d, const T* input, const T* bias,
   if (total_count == 0) {
     return;
   }
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   CudaLaunchConfig config = GetCudaLaunchConfig(total_count, d);
   if (data_format == FORMAT_NHWC) {
     BiasNHWCKernel<
@@ -86,8 +95,11 @@ void BiasGPU<T>::compute(const GPUDevice& d, const T* input, const T* bias,
         config.virtual_thread_count, input, bias, output, bias_size,
         image_size);
   }
+#endif
 }
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 // A naive implementation that is functional on all cases.
 template <typename T>
 __global__ void BiasGradNHWC_Naive(int32 nthreads, const T* output_backprop,
@@ -184,6 +196,7 @@ __global__ void BiasGradNCHW_SharedAtomics(const T* output_backprop,
     CudaAtomicAdd(bias_backprop + bias_index, T(s_data[0]));
   }
 }
+#endif
 
 template <typename T>
 void BiasGradGPU<T>::compute(const GPUDevice& d, const T* output_backprop,
@@ -196,6 +209,8 @@ void BiasGradGPU<T>::compute(const GPUDevice& d, const T* output_backprop,
   if (total_count == 0) {
     return;
   }
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   static constexpr int32 kWarpSize = 32;
   CudaLaunchConfig config = GetCudaLaunchConfig(total_count, d);
 
@@ -237,6 +252,7 @@ void BiasGradGPU<T>::compute(const GPUDevice& d, const T* output_backprop,
           total_count, output_backprop, bias_backprop, bias_size, image_size);
     }
   }
+#endif
 }
 
 #define DEFINE_GPU_SPECS(T)   \
@@ -247,4 +263,4 @@ TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPECS);
 
 }  // end namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

@@ -14,8 +14,12 @@ limitations under the License.
 #ifndef _TENSORFLOW_CORE_KERNELS_ADJUST_HUE_OP_H
 #define _TENSORFLOW_CORE_KERNELS_ADJUST_HUE_OP_H
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 
@@ -36,5 +40,5 @@ struct AdjustHueGPU {
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #endif  // _TENSORFLOW_CORE_KERNELS_ADJUST_HUE_OP_H

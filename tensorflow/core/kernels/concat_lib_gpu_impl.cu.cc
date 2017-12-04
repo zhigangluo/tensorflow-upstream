@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include <memory>
 #include <vector>
@@ -32,6 +36,8 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace {
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T, typename IntType>
 __global__ void concat_fixed_kernel(
     GpuDeviceArrayStruct<const T*> input_ptr_data, int split_size,
@@ -52,9 +58,12 @@ __global__ void concat_fixed_kernel(
     }
   }
 }
+#endif
 
 }  // end namespace
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 // cannot be in anonymous namespace due to extern shared memory
 template <typename T, typename IntType, bool useSmem>
 __global__ void concat_variable_kernel(
@@ -110,6 +119,7 @@ __global__ void concat_variable_kernel(
           input_ptr[gidy * segment_width + local_col];
   }
 }
+#endif
 
 template <typename T, typename IntType>
 void ConcatGPUSlice(
@@ -139,6 +149,8 @@ void ConcatGPUImpl(const Eigen::GpuDevice& gpu_device,
                    const GpuDeviceArrayStruct<IntType>& output_scan,
                    bool fixed_size, int split_size,
                    typename TTypes<T, 2>::Matrix* output) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   auto config = GetCuda2DLaunchConfig(output->dimension(1),
                                       output->dimension(0), gpu_device);
 
@@ -168,6 +180,7 @@ void ConcatGPUImpl(const Eigen::GpuDevice& gpu_device,
                                     output->dimension(0), output->dimension(1),
                                     output->data());
   }
+#endif
 }
 
 #define REGISTER_GPUCONCAT32(T)                                               \
@@ -229,4 +242,4 @@ REGISTER_GPU64(bfloat16);
 
 }  // end namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

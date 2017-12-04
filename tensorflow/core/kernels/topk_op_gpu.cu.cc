@@ -13,15 +13,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include <cmath>
 #include <vector>
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
+
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 #include "external/cub_archive/cub/device/device_segmented_radix_sort.cuh"
 #include "external/cub_archive/cub/iterator/counting_input_iterator.cuh"
+#endif
+
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -32,6 +41,8 @@ limitations under the License.
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/util/cuda_kernel_helper.h"
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 // Required for sorting Eigen::half
 namespace cub {
 template <>
@@ -39,11 +50,14 @@ struct NumericTraits<Eigen::half>
     : BaseTraits<FLOATING_POINT, true, false, unsigned short int, Eigen::half> {
 };
 }  // namespace cub
+#endif
 
 namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 namespace impl {
 
 enum class HeapType { kMinHeap, kMaxHeap };
@@ -90,7 +104,6 @@ struct IndirectLinearData {
   Entry* const backing_data;
 };
 
-#if GOOGLE_CUDA
 template <typename T>
 struct StridedData {
   typedef impl::Entry<T> Entry;
@@ -104,7 +117,6 @@ struct StridedData {
 
   Entry* const data;
 };
-#endif
 
 // A heap of Entry<T> that can either work as a min-heap or as a max-heap.
 template <HeapType heapType, PreferIndices preferIndices,
@@ -528,6 +540,7 @@ Status LaunchSortKernel(OpKernelContext* ctx, const T* input, int num_rows,
 }
 
 }  // end namespace impl
+#endif // GOOGLE_CUDA
 
 namespace functor {
 
@@ -538,6 +551,9 @@ struct TopKFunctor<GPUDevice, T> {
           const typename TTypes<T, 2>::ConstTensor& input, const int64 num_rows,
           const int64 num_cols, typename TTypes<T, 2>::Tensor values,
           typename TTypes<int, 2>::Tensor indices) {
+
+    // FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     // For small k, use the heap implementation.  For larger k, use
     // the in-place cub sort.  For k == num_cols, always use the
     // in-place cub sort.  The thresholds for n and k were determined
@@ -557,6 +573,8 @@ struct TopKFunctor<GPUDevice, T> {
         return Status::OK();
       }
     }
+#endif // GOOGLE_CUDA
+
   }
 };
 
@@ -571,4 +589,4 @@ TF_CALL_INTEGRAL_TYPES(INSTANTIATE_TEMPLATE);
 
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

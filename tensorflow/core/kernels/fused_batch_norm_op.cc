@@ -15,8 +15,13 @@ limitations under the License.
 
 #define EIGEN_USE_THREADS
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
+
 #include "tensorflow/core/kernels/fused_batch_norm_op.h"
 #include "tensorflow/core/kernels/conv_2d.h"
 #include "tensorflow/core/kernels/conv_ops_gpu.h"
@@ -213,7 +218,7 @@ struct FusedBatchNormGrad<CPUDevice, T> {
   }
 };
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 template <typename T>
 struct FusedBatchNorm<GPUDevice, T> {
   void operator()(OpKernelContext* context, const Tensor& x,
@@ -469,7 +474,7 @@ struct FusedBatchNormGrad<GPUDevice, T> {
     }
   }
 };
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 }  // namespace functor
 
 template <typename Device, typename T>
@@ -623,7 +628,7 @@ REGISTER_KERNEL_BUILDER(Name("FusedBatchNorm").Device(DEVICE_CPU),
 
 REGISTER_KERNEL_BUILDER(Name("FusedBatchNormGrad").Device(DEVICE_CPU),
                         FusedBatchNormGradOp<CPUDevice, float>);
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 REGISTER_KERNEL_BUILDER(Name("FusedBatchNorm").Device(DEVICE_GPU),
                         FusedBatchNormOp<GPUDevice, float>);
 

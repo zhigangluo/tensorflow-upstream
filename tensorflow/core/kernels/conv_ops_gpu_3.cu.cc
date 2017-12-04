@@ -13,17 +13,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include <algorithm>
 #include <array>
 
+#if GOOGLE_CUDA
 #include "cuda/include/cuda.h"
+#include "tensorflow/core/util/cuda_kernel_helper.h"
+#endif
+
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/kernels/conv_2d.h"
-#include "tensorflow/core/util/cuda_kernel_helper.h"
 #include "tensorflow/core/util/tensor_format.h"
 
 namespace tensorflow {
@@ -124,6 +131,8 @@ EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Index<IndexCount> FlatToTensorIndex(
   return tensor_index;
 }
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 // A Cuda custom kernel that swaps dimension-0 and dimension-2 of a 3D tensor.
 template <typename T>
 __global__ void SwapDimension0And2InTensor3Simple(int nthreads, const T* input,
@@ -331,6 +340,7 @@ __global__ void PadInputCustomKernelNCHW(int nthreads, const T* input,
     }
   }
 }
+#endif // GOOGLE_CUDA
 
 // A GPU helper function that converts TensorFlow filter format to Cudnn filter
 // format.
@@ -340,6 +350,8 @@ struct TransformFilter<GPUDevice, T, int, NDIMS> {
   void operator()(const Device& d,
                   typename TTypes<T, NDIMS, int>::ConstTensor in,
                   typename TTypes<T, NDIMS, int>::Tensor out) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     Dimension<3> combined_dims;
     combined_dims[0] = in.dimension(0);  // spatial dimensions
     for (int i = 1; i < NDIMS - 2; i++) {
@@ -351,6 +363,7 @@ struct TransformFilter<GPUDevice, T, int, NDIMS> {
     SwapDimension0And2InTensor3Simple<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             config.virtual_thread_count, in.data(), combined_dims, out.data());
+#endif
   }
 };
 
@@ -360,6 +373,8 @@ struct ReverseTransformFilter<GPUDevice, T, NDIMS> {
   typedef GPUDevice Device;
   void operator()(const Device& d, typename TTypes<T, NDIMS>::ConstTensor in,
                   typename TTypes<T, NDIMS>::Tensor out) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     Dimension<3> combined_dims;
     combined_dims[0] = in.dimension(0);  // output filters
     combined_dims[1] = in.dimension(1);  // input filters
@@ -371,6 +386,7 @@ struct ReverseTransformFilter<GPUDevice, T, NDIMS> {
     SwapDimension0And2InTensor3Simple<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             config.virtual_thread_count, in.data(), combined_dims, out.data());
+#endif
   }
 };
 
@@ -385,6 +401,8 @@ struct PadInput<GPUDevice, T, int, NDIMS> {
                   const std::array<int, NDIMS - 2>& padding_right,
                   typename TTypes<T, NDIMS, int>::Tensor out,
                   TensorFormat format) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     CudaLaunchConfig config = GetCudaLaunchConfig(out.size(), d);
     Dimension<NDIMS> input_dims;
     for (int i = 0; i < NDIMS; ++i) {
@@ -410,6 +428,7 @@ struct PadInput<GPUDevice, T, int, NDIMS> {
     } else {
       LOG(FATAL) << "Invalid data format: " << format;
     }
+#endif
   }
 };
 
@@ -419,6 +438,8 @@ struct PadInput<GPUDevice, T, int, NDIMS> {
 template <typename T>
 void RunSwapDimension1And2InTensor3(const GPUDevice& d, const T* input,
                                     const Dimension<3>& input_dims, T* output) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   // If both dimensions are not trivial, use tiles for the actual swapping.
   // Otherwise, the trivial swapping relying on the ldg cache is more efficient.
   static const int kMinDimensionToUseTiles = 16;
@@ -446,6 +467,7 @@ void RunSwapDimension1And2InTensor3(const GPUDevice& d, const T* input,
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             config.virtual_thread_count, input, input_dims, output);
   }
+#endif
 }
 
 // A GPU helper functor that does general dimension 1 and 2 switch for 3D
@@ -469,6 +491,8 @@ struct SwapDimension0And2InTensor3<GPUDevice, T> {
   typedef GPUDevice Device;
   void operator()(const Device& d, const T* in,
                   const gtl::ArraySlice<int64>& combined_dims, T* out) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     Dimension<3> input_dims = {static_cast<int>(combined_dims[0]),
                                static_cast<int>(combined_dims[1]),
                                static_cast<int>(combined_dims[2])};
@@ -477,6 +501,7 @@ struct SwapDimension0And2InTensor3<GPUDevice, T> {
     SwapDimension0And2InTensor3Simple<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             config.virtual_thread_count, in, input_dims, out);
+#endif
   }
 };
 
@@ -577,4 +602,4 @@ template struct functor::PadInput<GPUDevice, Eigen::half, int, 5>;
 
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

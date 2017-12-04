@@ -32,7 +32,7 @@ limitations under the License.
 
 namespace tensorflow {
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 TEST(ConvParameters, WinogradNonfusedAlgoSize) {
   ConvParameters conv_params_small = {
@@ -70,7 +70,7 @@ TEST(ConvParameters, WinogradNonfusedAlgoSize) {
   EXPECT_FALSE(conv_params_large.ShouldIncludeWinogradNonfusedAlgo<float>());
 }
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 class FusedResizePadConvOpTest : public OpsTestBase {
  protected:

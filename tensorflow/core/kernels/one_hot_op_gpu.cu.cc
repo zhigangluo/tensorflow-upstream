@@ -15,9 +15,13 @@ limitations under the License.
 
 // See docs in ../ops/array_ops.cc
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/kernels/one_hot_op.h"
 #include "tensorflow/core/framework/register_types.h"
@@ -43,4 +47,4 @@ TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPEC);
 
 }  // end namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

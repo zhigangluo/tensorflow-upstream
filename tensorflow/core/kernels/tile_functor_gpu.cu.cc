@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/kernels/tile_functor.h"
@@ -26,6 +30,8 @@ limitations under the License.
 namespace tensorflow {
 namespace internal {
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T>
 __global__ void TileKernel(int nthreads, const T* src, const int32* buf,
                            const int32 ndims, T* dst) {
@@ -42,6 +48,7 @@ __global__ void TileKernel(int nthreads, const T* src, const int32* buf,
     dst[o_idx] = ldg(src + i_idx);
   }
 }
+#endif
 
 template <typename Device, typename T>
 void TileSimple(const Device& d, Tensor* out, const Tensor& in) {
@@ -69,10 +76,14 @@ void TileSimple(const Device& d, Tensor* out, const Tensor& in) {
   // Launch kernel to q[...] = p[...].
   const T* p = in.flat<T>().data();
   T* q = out->flat<T>().data();
+
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   CudaLaunchConfig cfg = GetCudaLaunchConfig(out_nelem, d);
   TileKernel<<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(
       cfg.virtual_thread_count, p, reinterpret_cast<const int32*>(dev_buf),
       ndims, q);
+#endif
   // Safe to deallocate immediately after the kernel launch.
   d.deallocate(dev_buf);
 }
@@ -99,4 +110,4 @@ TF_CALL_complex128(DEFINE_TYPE);
 
 }  // end namespace functor
 }  // namespace tensorflow
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

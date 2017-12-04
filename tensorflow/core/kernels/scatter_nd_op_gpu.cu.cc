@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/kernels/scatter_nd_op.h"
@@ -26,6 +30,8 @@ namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T, typename Index, scatter_nd_op::UpdateOp op, int IXDIM>
 __global__ void ScatterNdOpKernel(
     const Index* indices, const T* updates, T* out,
@@ -76,6 +82,7 @@ __global__ void ScatterNdOpKernel(
 #undef OP_OVER_SLICE
 #undef ASSIGN
 }
+#endif
 
 namespace functor {
 
@@ -102,6 +109,8 @@ struct ScatterNdFunctor<GPUDevice, T, Index, op, IXDIM> {
       }
     }
 
+    // FIXME implement ROCm functional equivalent
+# if GOOGLE_CUDA
     CudaLaunchConfig config = GetCudaLaunchConfig(Toutput.size(), d);
     // clang-format off
     ScatterNdOpKernel<T, Index, op, IXDIM>
@@ -109,6 +118,7 @@ struct ScatterNdFunctor<GPUDevice, T, Index, op, IXDIM> {
       Tindices.data(), Tupdates.data(), Toutput.data(), output_shape_prefix,
       batch_strides, batch_size, slice_size);
     // clang-format on
+#endif
 
     return -1;
   }
@@ -143,4 +153,4 @@ TF_CALL_GPU_NUMBER_TYPES_NO_HALF(DECLARE_GPU_SPECS);
 
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

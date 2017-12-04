@@ -34,9 +34,9 @@ REGISTER_SYCL_KERNEL(uint16);
 
 #endif  // TENSORFLOW_USE_SYCL
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 REGISTER6(BinaryOp, GPU, "BitwiseXor", functor::bitwise_xor, int8, int16, int32,
           int64, uint8, uint16);
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow

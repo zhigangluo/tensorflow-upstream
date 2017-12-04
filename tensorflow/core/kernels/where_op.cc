@@ -17,9 +17,13 @@ limitations under the License.
 
 #define EIGEN_USE_THREADS
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define EIGEN_USE_GPU
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/kernels/where_op.h"
 
@@ -37,13 +41,17 @@ limitations under the License.
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/platform/types.h"
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/common_runtime/gpu/gpu_event_mgr.h"
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 #include "tensorflow/core/kernels/cuda_solvers.h"
 #include "tensorflow/core/platform/cuda.h"
 
 using ::perftools::gputools::cuda::ScopedActivateExecutorContext;
-#endif  // GOOGLE_CUDA
+#endif // GOOGLE_CUDA
 
 namespace tensorflow {
 
@@ -171,7 +179,7 @@ class WhereCPUOp : public OpKernel {
 
 REGISTER_KERNEL_BUILDER(Name("Where").Device(DEVICE_CPU), WhereCPUOp);
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace functor {
 
@@ -225,6 +233,9 @@ class WhereGPUOp : public AsyncOpKernel {
   template <typename Tindex>
   void ComputeAsyncType(const Tensor& input, const int input_dims,
                         OpKernelContext* context, DoneCallback done) {
+
+    // FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     // Step 0: alloc nnz
     // Step 1: call nnz kernel
     // Step 2: copy nnz to host
@@ -318,6 +329,8 @@ class WhereGPUOp : public AsyncOpKernel {
     };
     context->device()->tensorflow_gpu_device_info()->event_mgr->ThenExecute(
         stream, create_and_check_output);
+
+#endif // GOOGLE_CUDA
   }
 
  private:
@@ -326,6 +339,6 @@ class WhereGPUOp : public AsyncOpKernel {
 
 REGISTER_KERNEL_BUILDER(Name("Where").Device(DEVICE_GPU), WhereGPUOp);
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow

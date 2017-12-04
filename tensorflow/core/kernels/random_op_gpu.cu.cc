@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/kernels/random_op.h"
 
@@ -36,6 +40,8 @@ namespace functor {
 
 typedef Eigen::GpuDevice GPUDevice;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <class Distribution, bool VariableSamplesPerOutput>
 struct FillPhiloxRandomKernel;
 
@@ -210,6 +216,7 @@ __global__ void __launch_bounds__(1024)
                          Distribution::kVariableSamplesPerOutput>()
       .Run(base_gen, data, size, dist);
 }
+#endif // GOOGLE_CUDA
 
 // Partial specialization for GPU
 template <class Distribution>
@@ -217,6 +224,8 @@ void FillPhiloxRandom<GPUDevice, Distribution>::operator()(
     OpKernelContext*, const GPUDevice& d, random::PhiloxRandom gen,
     typename Distribution::ResultElementType* data, int64 size,
     Distribution dist) {
+  // FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   const int32 block_size = d.maxCudaThreadsPerBlock();
   const int32 num_blocks =
       (d.getNumCudaMultiProcessors() * d.maxCudaThreadsPerMultiProcessor()) /
@@ -225,6 +234,7 @@ void FillPhiloxRandom<GPUDevice, Distribution>::operator()(
   FillPhiloxRandomKernelLaunch<
       Distribution><<<num_blocks, block_size, 0, d.stream()>>>(gen, data, size,
                                                                dist);
+#endif
 };
 
 // Explicit instantiation of the GPU distributions functors
@@ -260,4 +270,4 @@ template struct FillPhiloxRandom<
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

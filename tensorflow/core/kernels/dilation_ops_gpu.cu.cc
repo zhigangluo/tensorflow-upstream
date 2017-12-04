@@ -15,9 +15,13 @@ limitations under the License.
 
 // See docs in ../ops/nn_ops.cc.
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include <cfloat>
 #include <vector>
@@ -35,6 +39,8 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace {
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T>
 __global__ void DilationKernel(const int32 nthreads, const T* input_ptr,
                                const T* filter_ptr, int batch, int input_rows,
@@ -174,6 +180,7 @@ __global__ void DilationBackpropFilterKernel(
         out_backprop_ptr[out_idx]);
   }
 }
+#endif // GOOGLE_CUDA
 
 }  // namespace
 
@@ -185,6 +192,8 @@ struct Dilation<GPUDevice, T> {
                   typename TTypes<T, 3>::ConstTensor filter, int stride_rows,
                   int stride_cols, int rate_rows, int rate_cols, int pad_top,
                   int pad_left, typename TTypes<T, 4>::Tensor output) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     const int batch = input.dimension(0);
     const int input_rows = input.dimension(1);
     const int input_cols = input.dimension(2);
@@ -205,6 +214,7 @@ struct Dilation<GPUDevice, T> {
         input_rows, input_cols, depth, filter_rows, filter_cols, output_rows,
         output_cols, stride_rows, stride_cols, rate_rows, rate_cols, pad_top,
         pad_left, output.data());
+#endif
   }
 };
 
@@ -216,6 +226,8 @@ struct DilationBackpropInput<GPUDevice, T> {
                   int stride_rows, int stride_cols, int rate_rows,
                   int rate_cols, int pad_top, int pad_left,
                   typename TTypes<T, 4>::Tensor in_backprop) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     const int batch = input.dimension(0);
     const int input_rows = input.dimension(1);
     const int input_cols = input.dimension(2);
@@ -245,6 +257,7 @@ struct DilationBackpropInput<GPUDevice, T> {
         out_backprop.data(), batch, input_rows, input_cols, depth, filter_rows,
         filter_cols, output_rows, output_cols, stride_rows, stride_cols,
         rate_rows, rate_cols, pad_top, pad_left, in_backprop.data());
+#endif
   }
 };
 
@@ -256,6 +269,8 @@ struct DilationBackpropFilter<GPUDevice, T> {
                   int stride_rows, int stride_cols, int rate_rows,
                   int rate_cols, int pad_top, int pad_left,
                   typename TTypes<T, 3>::Tensor filter_backprop) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     const int batch = input.dimension(0);
     const int input_rows = input.dimension(1);
     const int input_cols = input.dimension(2);
@@ -285,6 +300,7 @@ struct DilationBackpropFilter<GPUDevice, T> {
         out_backprop.data(), batch, input_rows, input_cols, depth, filter_rows,
         filter_cols, output_rows, output_cols, stride_rows, stride_cols,
         rate_rows, rate_cols, pad_top, pad_left, filter_backprop.data());
+#endif
   }
 };
 
@@ -301,4 +317,4 @@ TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_SPECS);
 
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

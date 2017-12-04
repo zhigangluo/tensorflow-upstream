@@ -160,7 +160,7 @@ class AddNOp : public OpKernel {
 TF_CALL_NUMBER_TYPES(REGISTER_ADDN_CPU);
 #undef REGISTER_ADDN_CPU
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define REGISTER_ADDN_GPU(type) REGISTER_ADDN(type, GPU)
 TF_CALL_GPU_NUMBER_TYPES(REGISTER_ADDN_GPU);
 TF_CALL_complex64(REGISTER_ADDN_GPU);
@@ -176,7 +176,7 @@ REGISTER_KERNEL_BUILDER(Name("AddN")
                             .HostMemory("inputs")
                             .HostMemory("sum"),
                         AddNOp<CPUDevice, int32>);
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #ifdef TENSORFLOW_USE_SYCL
 REGISTER_ADDN(float, SYCL);

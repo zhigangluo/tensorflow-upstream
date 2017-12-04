@@ -135,10 +135,10 @@ struct DepthToSpaceOpFunctor<CPUDevice, T> {
 TF_CALL_ALL_TYPES(REGISTER);
 #undef REGISTER
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 REGISTER_KERNEL_BUILDER(
     Name("DepthToSpace").Device(DEVICE_GPU).TypeConstraint<float>("T"),
     DepthToSpaceOp<GPUDevice, float>);
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // end namespace tensorflow

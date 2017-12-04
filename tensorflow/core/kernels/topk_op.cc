@@ -223,7 +223,7 @@ TF_CALL_REAL_NUMBER_TYPES(REGISTER_KERNELS);
 #undef REGISTER_KERNELS_NAME
 #undef REGISTER_KERNELS
 
-#ifdef GOOGLE_CUDA
+#ifdef GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace functor {
 #define DECLARE_GPU_SPEC(T)                                                  \
@@ -257,6 +257,6 @@ TF_CALL_INTEGRAL_TYPES(REGISTER_KERNELS);
 
 #undef REGISTER_KERNELS
 
-#endif  // end GOOGLE_CUDA
+#endif  // end GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // end namespace tensorflow

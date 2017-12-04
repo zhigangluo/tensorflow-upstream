@@ -15,8 +15,12 @@ limitations under the License.
 
 // See docs in ../ops/linalg_ops.cc.
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define EIGEN_USE_GPU
+#endif
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
 #endif
 
 #include "third_party/eigen3/Eigen/Core"
@@ -30,6 +34,8 @@ limitations under the License.
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/platform/types.h"
 
+// FIXME implement ROCm functional equivalent
+//#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #if GOOGLE_CUDA
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/kernels/cuda_solvers.h"
@@ -82,6 +88,8 @@ class MatrixInverseOp : public LinearAlgebraOp<Scalar> {
   TF_DISALLOW_COPY_AND_ASSIGN(MatrixInverseOp);
 };
 
+// FIXME implement ROCm functional equivalent
+//#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #if GOOGLE_CUDA
 
 typedef Eigen::GpuDevice GPUDevice;
@@ -220,7 +228,7 @@ REGISTER_LINALG_OP_GPU("MatrixInverse", (MatrixInverseOpGpu<complex64>),
 REGISTER_LINALG_OP_GPU("MatrixInverse", (MatrixInverseOpGpu<complex128>),
                        complex128);
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 REGISTER_LINALG_OP("MatrixInverse", (MatrixInverseOp<float>), float);
 REGISTER_LINALG_OP("MatrixInverse", (MatrixInverseOp<double>), double);

@@ -14,8 +14,12 @@ limitations under the License.
 ==============================================================================*/
 
 #define EIGEN_USE_THREADS
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define EIGEN_USE_GPU
+#endif
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
 #endif
 
 #define STRIDED_SLICE_INSTANTIATE_DIM 6

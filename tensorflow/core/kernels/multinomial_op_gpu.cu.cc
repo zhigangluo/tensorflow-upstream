@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/kernels/multinomial_op.h"
 
@@ -35,6 +39,8 @@ namespace functor {
 
 using GPUDevice = Eigen::GpuDevice;
 
+// FIXME implement ROCM functional equivalent
+#if GOOGLE_CUDA
 // Kernel for Multinomial op.  Data is interpreted to have the following shapes:
 //   scores: [B, S, C];  maxima: [B, S];  output: [B, S].
 __global__ void MultinomialKernel(int32 nthreads, const int32 num_classes,
@@ -48,6 +54,7 @@ __global__ void MultinomialKernel(int32 nthreads, const int32 num_classes,
     }
   }
 }
+#endif
 
 template <typename T>
 struct MultinomialFunctor<GPUDevice, T> {
@@ -101,12 +108,15 @@ struct MultinomialFunctor<GPUDevice, T> {
     // Necessary for atomicMax() inside the kernel.
     output.device(d) = output.constant(0LL);
 
+    // FIXME imeplement ROCm functional equivalent
+#if GOOGLE_CUDA
     const int32 work_items = batch_size * num_samples * num_classes;
     CudaLaunchConfig config = GetCudaLaunchConfig(work_items, d);
     MultinomialKernel<<<config.block_count, config.thread_per_block, 0,
                         d.stream()>>>(config.virtual_thread_count, num_classes,
                                       num_samples, scores.data(), maxima.data(),
                                       output.data());
+#endif
   }
 };
 
@@ -120,4 +130,4 @@ template struct MultinomialFunctor<GPUDevice, int64>;
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

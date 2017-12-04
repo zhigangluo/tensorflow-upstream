@@ -33,7 +33,7 @@ limitations under the License.
 #include "tensorflow/core/util/tensor_format.h"
 #include "tensorflow/core/util/use_cudnn.h"
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/platform/stream_executor.h"
 using perftools::gputools::dnn::DimIndex;
 #endif
@@ -388,7 +388,7 @@ TF_CALL_double(REGISTER_CPU_KERNEL);
 #undef REGISTER_CPU_KERNEL
 
 // GPU definitions of both ops.
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 // Forward declarations of the functor specializations for GPU.
 // This ensures that the custom implementation is used instead of the default
 // Eigen one (which is used for CPU).
@@ -1118,6 +1118,6 @@ REGISTER_KERNEL_BUILDER(Name("Conv3DBackpropFilterV2")
                             .TypeConstraint<float>("T")
                             .HostMemory("filter_sizes"),
                         Conv3DBackpropFilterOp<GPUDevice, float>);
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow

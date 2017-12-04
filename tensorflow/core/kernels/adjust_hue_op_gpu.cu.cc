@@ -12,9 +12,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/kernels/adjust_hue_op.h"
@@ -37,6 +41,8 @@ typedef struct HsvTuple {
 } HsvTuple;
 }  // namespace
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 __device__ HsvTuple rgb2hsv_cuda(const float r, const float g, const float b) {
   HsvTuple tuple;
   const float M = fmaxf(r, fmaxf(g, b));
@@ -113,6 +119,7 @@ __global__ void adjust_hue_nhwc(const int64 number_elements,
   output[idx + 1] = rgb.g;
   output[idx + 2] = rgb.b;
 }
+#endif // GOOGLE_CUDA
 }  // namespace internal
 
 namespace functor {
@@ -121,6 +128,8 @@ void AdjustHueGPU::operator()(GPUDevice* device, const int64 number_of_elements,
                               const float* const input,
                               const float* const delta, float* const output) {
   const auto stream = device->stream();
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   const CudaLaunchConfig config =
       GetCudaLaunchConfig(number_of_elements, *device);
   const int threads_per_block = config.thread_per_block;
@@ -128,7 +137,8 @@ void AdjustHueGPU::operator()(GPUDevice* device, const int64 number_of_elements,
       (number_of_elements + threads_per_block - 1) / threads_per_block;
   internal::adjust_hue_nhwc<<<block_count, threads_per_block, 0, stream>>>(
       number_of_elements, input, output, delta);
+#endif
 }
 }  // namespace functor
 }  // namespace tensorflow
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

@@ -57,7 +57,7 @@ REGISTER_KERNEL(double);
 REGISTER_KERNEL(Eigen::half);
 #undef REGISTER_KERNEL
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 // Forward declarations of the functor specializations for GPU.
 namespace functor {
 #define DECLARE_GPU_SPEC(T)                                                    \
@@ -84,6 +84,6 @@ REGISTER_GPU_KERNEL(double);
 REGISTER_GPU_KERNEL(Eigen::half);
 #undef REGISTER_GPU_KERNEL
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow

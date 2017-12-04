@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/kernels/spacetodepth_op.h"
 
@@ -27,6 +31,8 @@ namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename dtype>
 __global__ void S2D(const int32 nthreads, const dtype* input_ptr,
                     const int block_size, const int batch_size,
@@ -55,6 +61,7 @@ __global__ void S2D(const int32 nthreads, const dtype* input_ptr,
     *(output_ptr + out_idx) = ldg(input_ptr + inp_idx);
   }
 }
+#endif
 
 // Specialization of SpaceToDepthOpFunctor for a CPUDevice.
 namespace functor {
@@ -72,11 +79,15 @@ struct SpaceToDepthOpFunctor<GPUDevice, T> {
 
     const int total_count =
         batch_size * input_height * input_width * input_depth;
+
+    // FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     CudaLaunchConfig config = GetCudaLaunchConfig(total_count, d);
     S2D<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
         config.virtual_thread_count, input.data(), block_size, batch_size,
         input_height, input_width, input_depth, output_height, output_width,
         output_depth, output.data());
+#endif
   }
 };
 }  // end namespace functor
@@ -86,4 +97,4 @@ template struct functor::SpaceToDepthOpFunctor<GPUDevice, float>;
 
 }  // end namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

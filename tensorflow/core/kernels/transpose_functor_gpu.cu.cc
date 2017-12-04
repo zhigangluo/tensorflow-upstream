@@ -13,9 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/kernels/transpose_functor.h"
@@ -29,6 +33,8 @@ limitations under the License.
 namespace tensorflow {
 namespace internal {
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T>
 __global__ void TransposeKernel(int nthreads, const T* src, const int32* buf,
                                 const int32 ndims, T* dst) {
@@ -45,6 +51,7 @@ __global__ void TransposeKernel(int nthreads, const T* src, const int32* buf,
     dst[o_idx] = ldg(src + i_idx);
   }
 }
+#endif
 
 template <typename Device, typename T>
 void TransposeSimple(const Device& d, const Tensor& in,
@@ -72,10 +79,13 @@ void TransposeSimple(const Device& d, const Tensor& in,
   // Launch kernel to q[...] = p[...].
   const T* p = reinterpret_cast<const T*>(in.tensor_data().data());
   T* q = reinterpret_cast<T*>(const_cast<char*>((out->tensor_data().data())));
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
   CudaLaunchConfig cfg = GetCudaLaunchConfig(nelem, d);
   TransposeKernel<<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(
       cfg.virtual_thread_count, p, reinterpret_cast<const int32*>(dev_buf),
       ndims, q);
+#endif
   // Safe to deallocate immediately after the kernel launch.
   d.deallocate(dev_buf);
 }
@@ -213,4 +223,4 @@ Status DoTranspose<GPUDevice>(const GPUDevice& d, const Tensor& in,
 }
 
 }  // namespace tensorflow
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

@@ -16,9 +16,13 @@ limitations under the License.
 #ifndef THIRD_PARTY_TENSORFLOW_CORE_KERNELS_GATHER_FUNCTOR_GPU_CU_H_
 #define THIRD_PARTY_TENSORFLOW_CORE_KERNELS_GATHER_FUNCTOR_GPU_CU_H_
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/kernels/gather_functor.h"
@@ -29,6 +33,8 @@ namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T, typename Index, bool is_axis_zero>
 __global__ void GatherOpKernel(const T* params, const Index* indices, T* out,
                                int64 gather_dim_size, int64 indices_size,
@@ -68,6 +74,7 @@ __global__ void GatherOpKernel(const T* params, const Index* indices, T* out,
     }
   }
 }
+#endif // GOOGLE_CUDA
 
 namespace functor {
 template <typename T, typename Index>
@@ -89,6 +96,8 @@ struct GatherFunctor<GPUDevice, T, Index> {
     const int64 indices_size = indices.size();
     const int64 slice_size = params.dimension(2);
 
+    // FIXME implement ROCm equivalent
+#if GOOGLE_CUDA
     CudaLaunchConfig config = GetCudaLaunchConfig(out_size, d);
     if (is_axis_zero) {
       // clang-format off
@@ -105,6 +114,7 @@ struct GatherFunctor<GPUDevice, T, Index> {
               indices_size, slice_size, out_size);
       // clang-format on
     }
+#endif // GOOGLE_CUDA
     // TODO(fpmc): enable indices validation on GPU.
     // Right now checking for indicies out of bound in the kernel would
     // require copying code between GPU/CPU, and thus slow.
@@ -115,6 +125,6 @@ struct GatherFunctor<GPUDevice, T, Index> {
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #endif  // THIRD_PARTY_TENSORFLOW_CORE_KERNELS_GATHER_FUNCTOR_GPU_CU_H_

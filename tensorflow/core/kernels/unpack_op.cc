@@ -131,7 +131,7 @@ TF_CALL_ALL_TYPES(REGISTER_UNPACK);
 
 #undef REGISTER_UNPACK
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define REGISTER_GPU(type)                                         \
   REGISTER_KERNEL_BUILDER(                                         \
@@ -151,7 +151,7 @@ REGISTER_KERNEL_BUILDER(Name("Unpack")
                             .TypeConstraint<int32>("T"),
                         UnpackOp<CPUDevice, int32>);
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #ifdef TENSORFLOW_USE_SYCL
 #define REGISTER_SYCL(type)                                         \

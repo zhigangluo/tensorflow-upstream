@@ -13,14 +13,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
 
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
+
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
+
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 #include "external/cub_archive/cub/device/device_reduce.cuh"
 #include "external/cub_archive/cub/device/device_select.cuh"
 #include "external/cub_archive/cub/iterator/counting_input_iterator.cuh"
+#endif // GOOGLE_CUDA
+
 #include "tensorflow/core/framework/tensor_types.h"
 #include "tensorflow/core/kernels/bounds_check.h"
 #include "tensorflow/core/kernels/where_op.h"
@@ -34,6 +43,8 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace functor {
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <int NDIM, typename TIndex>
 __global__ void PropagateWhereIndicesKernel(
     const TIndex output_rows, const typename Eigen::array<TIndex, NDIM> strides,
@@ -50,12 +61,15 @@ __global__ void PropagateWhereIndicesKernel(
     }
   }
 }
+#endif // GOOGLE_CUDA
 
 template <typename TIndex>
 struct NumTrue<GPUDevice, TIndex> {
   EIGEN_ALWAYS_INLINE static Status Compute(
       OpKernelContext* ctx, const GPUDevice& d, TTypes<bool>::ConstFlat input,
       typename TTypes<TIndex>::Scalar num_true) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     const cudaStream_t& cu_stream = GetCudaStream(ctx);
 
     std::size_t temp_storage_bytes = 0;
@@ -94,6 +108,7 @@ struct NumTrue<GPUDevice, TIndex> {
           "number of true indices.  temp_storage_bytes: ",
           temp_storage_bytes, ", status: ", cudaGetErrorString(second_success));
     }
+#endif // GOOGLE_CUDA
 
     return Status::OK();
   }
@@ -102,6 +117,8 @@ struct NumTrue<GPUDevice, TIndex> {
 template struct NumTrue<GPUDevice, int32>;
 template struct NumTrue<GPUDevice, int64>;
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <int NDIM>
 class WhereOutputIterator {
  public:
@@ -157,6 +174,7 @@ Eigen::array<TIndex, NDIM> CalculateStrides(
   }
   return strides;
 }
+#endif // GOOGLE_CUDA
 
 template <int NDIM, typename Tindex>
 struct Where<GPUDevice, NDIM, Tindex> {
@@ -169,6 +187,8 @@ struct Where<GPUDevice, NDIM, Tindex> {
       return Status::OK();
     }
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     const cudaStream_t& cu_stream = GetCudaStream(ctx);
 
     std::size_t temp_storage_bytes = 0;
@@ -230,6 +250,7 @@ struct Where<GPUDevice, NDIM, Tindex> {
     PropagateWhereIndicesKernel<NDIM, Tindex>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             output_rows, strides, output.data());
+#endif // GOOGLE_CUDA
 
     return Status::OK();
   }
@@ -253,4 +274,4 @@ DECLARE_GPU_SPEC(5);
 }  // namespace functor
 
 }  // namespace tensorflow
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

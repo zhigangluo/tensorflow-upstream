@@ -15,9 +15,13 @@ limitations under the License.
 
 // See docs in ../ops/image_ops.cc.
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
+
+#if TENSORFLOW_USE_ROCM
+#define EIGEN_USE_HIP
+#endif
 
 #include "tensorflow/core/kernels/crop_and_resize_op.h"
 
@@ -32,6 +36,8 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace {
 
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
 template <typename T>
 __global__ void CropAndResizeKernel(
     const int32 nthreads, const T* image_ptr, const float* boxes_ptr,
@@ -313,6 +319,7 @@ __global__ void CropAndResizeBackpropBoxesKernel(
     CudaAtomicAdd(grads_boxes_ptr + b * 4 + 3, dx2);
   }
 }
+#endif // GOOGLE_CUDA
 
 }  // namespace
 
@@ -325,6 +332,8 @@ struct CropAndResize<GPUDevice, T> {
                   typename TTypes<int32, 1>::ConstTensor box_ind,
                   float extrapolation_value,
                   typename TTypes<float, 4>::Tensor crops) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     const int batch = image.dimension(0);
     const int image_height = image.dimension(1);
     const int image_width = image.dimension(2);
@@ -344,6 +353,7 @@ struct CropAndResize<GPUDevice, T> {
           box_ind.data(), num_boxes, batch, image_height, image_width,
           crop_height, crop_width, depth, extrapolation_value, crops.data());
     }
+#endif
     return d.ok();
   }
 };
@@ -355,6 +365,8 @@ struct CropAndResizeBackpropImage<GPUDevice, T> {
                   typename TTypes<float, 2>::ConstTensor boxes,
                   typename TTypes<int32, 1>::ConstTensor box_ind,
                   typename TTypes<T, 4>::Tensor grads_image) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     const int batch = grads_image.dimension(0);
     const int image_height = grads_image.dimension(1);
     const int image_width = grads_image.dimension(2);
@@ -385,6 +397,7 @@ struct CropAndResizeBackpropImage<GPUDevice, T> {
           box_ind.data(), num_boxes, batch, image_height, image_width,
           crop_height, crop_width, depth, grads_image.data());
     }
+#endif
     return d.ok();
   }
 };
@@ -397,6 +410,8 @@ struct CropAndResizeBackpropBoxes<GPUDevice, T> {
                   typename TTypes<float, 2>::ConstTensor boxes,
                   typename TTypes<int32, 1>::ConstTensor box_ind,
                   typename TTypes<float, 2>::Tensor grads_boxes) {
+// FIXME implement ROCm functional equivalent
+#if GOOGLE_CUDA
     const int batch = image.dimension(0);
     const int image_height = image.dimension(1);
     const int image_width = image.dimension(2);
@@ -427,6 +442,7 @@ struct CropAndResizeBackpropBoxes<GPUDevice, T> {
           box_ind.data(), num_boxes, batch, image_height, image_width,
           crop_height, crop_width, depth, grads_boxes.data());
     }
+#endif
     return d.ok();
   }
 };
@@ -445,4 +461,4 @@ template struct CheckValidBoxIndHelper<GPUDevice>;
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
