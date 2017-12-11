@@ -46,7 +46,11 @@ struct functor_traits<scalar_fmod2_op<T>> {
 template<typename T> struct scalar_asinh_op {
   EIGEN_EMPTY_STRUCT_CTOR(scalar_asinh_op)
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const T operator()(const T& a) const {
+#if defined(__HIP_DEVICE_COMPILE__)
+    return asinh(a);
+#else
     return std::asinh(a);
+#endif
   }
 };
 template<typename T>
@@ -57,7 +61,11 @@ struct functor_traits<scalar_asinh_op<T>> {
 template<typename T> struct scalar_acosh_op {
   EIGEN_EMPTY_STRUCT_CTOR(scalar_acosh_op)
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const T operator()(const T& a) const {
+#if defined(__HIP_DEVICE_COMPILE__)
+    return acosh(a);
+#else
     return std::acosh(a);
+#endif
   }
 };
 template<typename T>
@@ -68,7 +76,11 @@ struct functor_traits<scalar_acosh_op<T>> {
 template<typename T> struct scalar_atanh_op {
   EIGEN_EMPTY_STRUCT_CTOR(scalar_atanh_op)
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const T operator()(const T& a) const {
+#if defined(__HIP_DEVICE_COMPILE__)
+    return atanh(a);
+#else
     return std::atanh(a);
+#endif
   }
 };
 template<typename T>
@@ -275,8 +287,13 @@ struct google_floor_div {
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const T operator()(const T& x,
                                                            const T& y) const {
     if ((x < T(0)) != (y < T(0))) {
+#if defined(__HIP_DEVICE_COMPILE__)
+      T abs_x = (x < T(0)) ? -x : x;
+      T abs_y = (y < T(0)) ? -y : y;
+#else
       T abs_x = std::abs(x);
       T abs_y = std::abs(y);
+#endif
       return -(abs_x + abs_y - 1) / abs_y;
     } else {
       return x / y;
@@ -611,7 +628,7 @@ struct scalar_rint_op {
   EIGEN_EMPTY_STRUCT_CTOR(scalar_rint_op)
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Scalar
   operator()(const Scalar& a) const {
-#if defined(__CUDACC__)
+#if defined(__CUDACC__) || defined(__HIP_DEVICE_COMPILE__)
     return ::rint(a);
 #elif defined(__ANDROID__)
     return rint(a);
