@@ -18,6 +18,7 @@ limitations under the License.
 
 #include <array>
 
+#include "tensorflow/core/common_runtime/gpu/gpu_util.h"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/kernels/conv_2d.h"
 #include "tensorflow/core/kernels/conv_3d.h"
@@ -97,9 +98,15 @@ void DnnPooling3dOp<T>::Compute(
   auto* stream = context->op_device_context()->stream();
   OP_REQUIRES(context, stream, errors::Internal("No GPU stream available."));
 
+  static int64 PoolingScratchSize = GetCudnnWorkspaceLimit(
+      // default value is in bytes despite the name of the environment variable
+      "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32  // 4GB
+      );
+  CudnnScratchAllocator scratch_allocator(PoolingScratchSize, context);
   bool status = stream
                     ->ThenPoolForward(pooling_desc, input_desc, input_data,
-                                      output_desc, &output_data)
+                                      output_desc, &output_data,
+                                      &scratch_allocator)
                     .ok();
   OP_REQUIRES(context, status,
               errors::Internal("cudnn PoolForward launch failed"));
@@ -225,11 +232,18 @@ void DnnPooling3dGradOp<T>::Compute(
   auto* stream = context->op_device_context()->stream();
   OP_REQUIRES(context, stream, errors::Internal("No GPU stream available."));
 
+  static int64 PoolingScratchSize = GetCudnnWorkspaceLimit(
+      // default value is in bytes despite the name of the environment variable
+      "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32  // 4GB
+      );
+
+  CudnnScratchAllocator scratch_allocator(PoolingScratchSize, context);
   bool status =
       stream
           ->ThenPoolBackward(pooling_desc, orig_input_desc, orig_input_data,
                              orig_output_desc, orig_output_data,
-                             output_backprop_data, &input_backprop_data)
+                             output_backprop_data, &input_backprop_data,
+                             &scratch_allocator)
           .ok();
   OP_REQUIRES(context, status,
               errors::Internal("cudnn PoolBackward launch failed"));
