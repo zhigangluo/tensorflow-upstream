@@ -730,7 +730,7 @@ class AlgorithmConfig {
   size_t algorithm_scratch_size() const {
     return algorithm_scratch_size_;
   }
-  void set_algorithm_sratch_size(size_t val) {
+  void set_algorithm_scratch_size(size_t val) {
     algorithm_scratch_size_ = val;
   }
 

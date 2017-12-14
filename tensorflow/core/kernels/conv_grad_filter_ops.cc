@@ -775,6 +775,8 @@ class Conv2DSlowBackpropFilterOp : public OpKernel {
     AlgorithmConfig algorithm_config;
     if (cudnn_use_autotune_ && !AutoTuneConvBwdFilter::GetInstance()->Find(
                                    conv_parameters, &algorithm_config)) {
+      LOG(INFO) << "running auto-tune for Backward-Filter";
+#if 0
       std::vector<AlgorithmType> algorithms;
       CHECK(stream->parent()->GetConvolveBackwardFilterAlgorithms(
           conv_parameters.ShouldIncludeWinogradNonfusedAlgo<T>(), &algorithms));
@@ -819,6 +821,26 @@ class Conv2DSlowBackpropFilterOp : public OpKernel {
       algorithm_config.set_algorithm(best_result.algorithm());
       algorithm_config.set_algorithm_no_scratch(
           best_result_no_scratch.algorithm());
+#else
+      ProfileResult profile_result;
+      CudnnScratchAllocator scratch_allocator(
+          ConvolveBackwardFilterScratchSize, context);
+      bool miopen_find_status =
+          stream
+              ->ThenConvolveBackwardFilterWithAlgorithm(
+                  input_desc, input_ptr, output_desc, out_backprop_ptr,
+                  conv_desc, filter_desc, &filter_backprop_ptr,
+                  &scratch_allocator, AlgorithmConfig(kDefaultAlgorithm),
+                  &profile_result)
+              .ok();
+      OP_REQUIRES(context, miopen_find_status && profile_result.is_valid() &&
+                               profile_result.algorithm() != kDefaultAlgorithm,
+                  errors::NotFound("Failed to find backward filter algorithm!"));
+      algorithm_config.set_algorithm(profile_result.algorithm());
+      algorithm_config.set_algorithm_scratch_size(profile_result.scratch_size());
+      algorithm_config.set_algorithm_no_scratch(profile_result.algorithm());
+#endif
+
       AutoTuneConvBwdFilter::GetInstance()->Insert(conv_parameters,
                                                    algorithm_config);
     }
