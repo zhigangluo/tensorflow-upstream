@@ -182,9 +182,7 @@ def InvokeHipcc(argv, log=False):
            host_compiler_options +
            ' ' + GCC_HOST_COMPILER_PATH +
            ' -I .' + includes + ' ' + srcs + ' -M -o ' + depfile)
-    #if log: Log(cmd)
-    Log('Tool: %s' % HIPCC_PATH)
-    Log(cmd)
+    if log: Log(cmd)
     exit_status = os.system(cmd)
     if exit_status != 0:
       return exit_status
@@ -197,9 +195,7 @@ def InvokeHipcc(argv, log=False):
   # TODO(zhengxq): for some reason, 'gcc' needs this help to find 'as'.
   # Need to investigate and fix.
   cmd = 'PATH=' + PREFIX_DIR + ':$PATH ' + cmd
-  #if log: Log(cmd)
-  Log('Tool: %s' % HIPCC_PATH)
-  Log(cmd)
+  if log: Log(cmd)
   return os.system(cmd)
 
 
@@ -218,11 +214,9 @@ def main():
 
   # XXX use hipcc to link
   if args.pass_exit_codes:
-    Log('crosstool_wrapper_driver_rocm: Linking')
     gpu_compiler_flags = [flag for flag in sys.argv[1:]
                                if not flag.startswith(('-pass-exit-codes'))]
-    Log('Tool: %s' % HIPCC_PATH)
-    Log('Command: %s' % (' '.join([HIPCC_PATH] + gpu_compiler_flags)))
+    if args.rocm_log: Log('Link with hipcc: %s' % (' '.join([HIPCC_PATH] + gpu_compiler_flags)))
     return subprocess.call([HIPCC_PATH] + gpu_compiler_flags)
 
   # Strip our flags before passing through to the CPU compiler for files which
@@ -236,8 +230,6 @@ def main():
   # XXX: SE codes need to be built with gcc, but need this macro defined
   cpu_compiler_flags.append("-D__HIP_PLATFORM_HCC__")
 
-  Log('Tool: %s' % CPU_COMPILER)
-  Log('Command: %s' % (' '.join([CPU_COMPILER] + cpu_compiler_flags)))
   return subprocess.call([CPU_COMPILER] + cpu_compiler_flags)
 
 if __name__ == '__main__':
