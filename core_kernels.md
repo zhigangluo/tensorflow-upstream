@@ -232,7 +232,7 @@ O depthwise_conv_grad_op.cc
 O depthwise_conv_op.cc
 T depthwise_conv_op_gpu.cu.cc
 O dilation_ops.cc
-T dilation_ops_gpu.cu.cc
+O dilation_ops_gpu.cu.cc
 O dynamic_stitch_op.cc
 O extract_image_patches_op.cc
 O extract_image_patches_op_gpu.cu.cc

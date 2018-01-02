@@ -39,8 +39,6 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace {
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template <typename T>
 __global__ void DilationKernel(const int32 nthreads, const T* input_ptr,
                                const T* filter_ptr, int batch, int input_rows,
@@ -180,7 +178,6 @@ __global__ void DilationBackpropFilterKernel(
         out_backprop_ptr[out_idx]);
   }
 }
-#endif // GOOGLE_CUDA
 
 }  // namespace
 
@@ -192,8 +189,6 @@ struct Dilation<GPUDevice, T> {
                   typename TTypes<T, 3>::ConstTensor filter, int stride_rows,
                   int stride_cols, int rate_rows, int rate_cols, int pad_top,
                   int pad_left, typename TTypes<T, 4>::Tensor output) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
     const int batch = input.dimension(0);
     const int input_rows = input.dimension(1);
     const int input_cols = input.dimension(2);
@@ -206,10 +201,18 @@ struct Dilation<GPUDevice, T> {
     const int output_cols = output.dimension(2);
 
     const int total_count = batch * output_rows * output_cols * depth;
-    CudaLaunchConfig config = GetCudaLaunchConfig(total_count, d);
+    GpuLaunchConfig config = GetGpuLaunchConfig(total_count, d);
 
+#if GOOGLE_CUDA
     DilationKernel<<<config.block_count, config.thread_per_block, 0,
                      d.stream()>>>(
+        config.virtual_thread_count, input.data(), filter.data(), batch,
+        input_rows, input_cols, depth, filter_rows, filter_cols, output_rows,
+        output_cols, stride_rows, stride_cols, rate_rows, rate_cols, pad_top,
+        pad_left, output.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(HIP_KERNEL_NAME(DilationKernel<T>),
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input.data(), filter.data(), batch,
         input_rows, input_cols, depth, filter_rows, filter_cols, output_rows,
         output_cols, stride_rows, stride_cols, rate_rows, rate_cols, pad_top,
@@ -226,8 +229,6 @@ struct DilationBackpropInput<GPUDevice, T> {
                   int stride_rows, int stride_cols, int rate_rows,
                   int rate_cols, int pad_top, int pad_left,
                   typename TTypes<T, 4>::Tensor in_backprop) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
     const int batch = input.dimension(0);
     const int input_rows = input.dimension(1);
     const int input_cols = input.dimension(2);
@@ -240,19 +241,33 @@ struct DilationBackpropInput<GPUDevice, T> {
     const int output_cols = out_backprop.dimension(2);
 
     int total_count;
-    CudaLaunchConfig config;
+    GpuLaunchConfig config;
 
     // Initialize in_backprop with all zeros.
     total_count = batch * input_rows * input_cols * depth;
-    config = GetCudaLaunchConfig(total_count, d);
+    config = GetGpuLaunchConfig(total_count, d);
+#if GOOGLE_CUDA
     SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
         total_count, in_backprop.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(HIP_KERNEL_NAME(SetZero<T>),
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        total_count, in_backprop.data());
+#endif
 
     // Accumulate.
     total_count = batch * output_rows * output_cols * depth;
-    config = GetCudaLaunchConfig(total_count, d);
+    config = GetGpuLaunchConfig(total_count, d);
+#if GOOGLE_CUDA
     DilationBackpropInputKernel<<<config.block_count, config.thread_per_block,
                                   0, d.stream()>>>(
+        config.virtual_thread_count, input.data(), filter.data(),
+        out_backprop.data(), batch, input_rows, input_cols, depth, filter_rows,
+        filter_cols, output_rows, output_cols, stride_rows, stride_cols,
+        rate_rows, rate_cols, pad_top, pad_left, in_backprop.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(HIP_KERNEL_NAME(DilationBackpropInputKernel<T>),
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input.data(), filter.data(),
         out_backprop.data(), batch, input_rows, input_cols, depth, filter_rows,
         filter_cols, output_rows, output_cols, stride_rows, stride_cols,
@@ -269,8 +284,6 @@ struct DilationBackpropFilter<GPUDevice, T> {
                   int stride_rows, int stride_cols, int rate_rows,
                   int rate_cols, int pad_top, int pad_left,
                   typename TTypes<T, 3>::Tensor filter_backprop) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
     const int batch = input.dimension(0);
     const int input_rows = input.dimension(1);
     const int input_cols = input.dimension(2);
@@ -283,19 +296,33 @@ struct DilationBackpropFilter<GPUDevice, T> {
     const int output_cols = out_backprop.dimension(2);
 
     int total_count;
-    CudaLaunchConfig config;
+    GpuLaunchConfig config;
 
     // Initialize filter_backprop with all zeros.
     total_count = filter_rows * filter_cols * depth;
-    config = GetCudaLaunchConfig(total_count, d);
+    config = GetGpuLaunchConfig(total_count, d);
+#if GOOGLE_CUDA
     SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
         total_count, filter_backprop.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(SetZero<T>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        total_count, filter_backprop.data());
+#endif
 
     // Accumulate.
     total_count = batch * output_rows * output_cols * depth;
-    config = GetCudaLaunchConfig(total_count, d);
+    config = GetGpuLaunchConfig(total_count, d);
+#if GOOGLE_CUDA
     DilationBackpropFilterKernel<<<config.block_count, config.thread_per_block,
                                    0, d.stream()>>>(
+        config.virtual_thread_count, input.data(), filter.data(),
+        out_backprop.data(), batch, input_rows, input_cols, depth, filter_rows,
+        filter_cols, output_rows, output_cols, stride_rows, stride_cols,
+        rate_rows, rate_cols, pad_top, pad_left, filter_backprop.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(DilationBackpropFilterKernel<T>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input.data(), filter.data(),
         out_backprop.data(), batch, input_rows, input_cols, depth, filter_rows,
         filter_cols, output_rows, output_cols, stride_rows, stride_cols,
