@@ -88,7 +88,7 @@ __global__ void SplitOpKernel(const T* input, int32 prefix_dim_size,
   int32 size = prefix_dim_size * split_dim_size * suffix_dim_size;
   int32 piece_size = split_dim_size / num_split;
 
-  CUDA_1D_KERNEL_LOOP(offset, size) {
+  GPU_1D_KERNEL_LOOP(offset, size) {
     // Calculate the index into input from offset.
     int32 i = offset / (split_dim_size * suffix_dim_size);
     int32 j = (offset % (split_dim_size * suffix_dim_size)) / suffix_dim_size;
@@ -185,7 +185,7 @@ __global__ void SplitVOpKernel_fixed(
   int32 size = prefix_dim_size * suffix_dim_size;
   int32 piece_size = suffix_dim_size / num_split;
 
-  CUDA_1D_KERNEL_LOOP(offset, size) {
+  GPU_1D_KERNEL_LOOP(offset, size) {
     // Calculate the index into input from offset.
     int32 i = offset / suffix_dim_size;
     int32 j = offset % suffix_dim_size;

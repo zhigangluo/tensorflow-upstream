@@ -32,7 +32,7 @@ namespace functor {
 template <class T>
 __global__ void VarianceToInvVarianceKernel(int nthreads, const T* input,
                                             double epsilon, T* output) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     output[index] = rsqrt(input[index] + T(epsilon));
   }
 }
@@ -56,7 +56,7 @@ void VarianceToInvVariance<T>::operator()(const Eigen::GpuDevice& d,
 template <class T>
 __global__ void InvVarianceToVarianceKernel(int nthreads, double epsilon,
                                             int sample_size, T* variance) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     T inv_var = variance[index];
     T var = __fdividef(1, inv_var * inv_var) - T(epsilon);
     // This is for Bessel's correction

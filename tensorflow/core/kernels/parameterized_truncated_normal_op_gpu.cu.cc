@@ -61,7 +61,7 @@ __global__ void __launch_bounds__(1024)
                           bool single_minval, const T* maxvals,
                           bool single_maxval, int64 kMaxIterations) {
   const int32 max_samples_per_item = 2 * kMaxIterations;
-  // Initial offset as given by CUDA_1D_KERNEL_LOOP.
+  // Initial offset as given by GPU_1D_KERNEL_LOOP.
   const int32 initial_offset = blockIdx.x * blockDim.x + threadIdx.x;
   gen.Skip(max_samples_per_item * initial_offset);
   typedef random::UniformDistribution<random::PhiloxRandom, T> Uniform;
@@ -77,7 +77,7 @@ __global__ void __launch_bounds__(1024)
   const int32 samples_between_processed_elements =
       max_samples_per_item * (gridDim.x * blockDim.x);
 
-  CUDA_1D_KERNEL_LOOP(offset, num_elements) {
+  GPU_1D_KERNEL_LOOP(offset, num_elements) {
     // Track how many more samples we need to skip before we process the next
     // element.
     int32 remaining_samples = samples_between_processed_elements;

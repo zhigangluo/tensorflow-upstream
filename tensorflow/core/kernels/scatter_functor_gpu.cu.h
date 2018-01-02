@@ -40,7 +40,7 @@ __global__ void ScatterOpCustomKernel(
     T* params, const T* updates, const Index* indices,
     Index first_dim_size, Index updates_size, Index indices_size) {
   Index update_block = updates_size / indices_size;
-  CUDA_1D_KERNEL_LOOP(i, updates_size) {
+  GPU_1D_KERNEL_LOOP(i, updates_size) {
     int indices_i = i / update_block;
     int updates_i = i;
     int param_first_index = indices[indices_i];
@@ -55,19 +55,19 @@ __global__ void ScatterOpCustomKernel(
         break;
       }
       case scatter_op::UpdateOp::ADD: {
-        CudaAtomicAdd(params + params_i, ldg(updates + updates_i));
+        GpuAtomicAdd(params + params_i, ldg(updates + updates_i));
         break;
       }
       case scatter_op::UpdateOp::SUB: {
-        CudaAtomicSub(params + params_i, ldg(updates + updates_i));
+        GpuAtomicSub(params + params_i, ldg(updates + updates_i));
         break;
       }
       case scatter_op::UpdateOp::MUL: {
-        CudaAtomicMul(params + params_i, ldg(updates + updates_i));
+        GpuAtomicMul(params + params_i, ldg(updates + updates_i));
         break;
       }
       case scatter_op::UpdateOp::DIV: {
-        CudaAtomicDiv(params + params_i, ldg(updates + updates_i));
+        GpuAtomicDiv(params + params_i, ldg(updates + updates_i));
         break;
       }
     }

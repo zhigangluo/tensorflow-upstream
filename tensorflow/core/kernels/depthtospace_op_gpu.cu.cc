@@ -40,7 +40,7 @@ __global__ void D2S(const int32 nthreads, const dtype* input_ptr,
                     const int input_depth, const int output_height,
                     const int output_width, const int output_depth,
                     dtype* output_ptr) {
-  CUDA_1D_KERNEL_LOOP(out_idx, nthreads) {
+  GPU_1D_KERNEL_LOOP(out_idx, nthreads) {
     // out_idx = d + output_depth * (w + output_width * (h + output_height * b))
     const int d = out_idx % output_depth;
     const int out_idx2 = out_idx / output_depth;

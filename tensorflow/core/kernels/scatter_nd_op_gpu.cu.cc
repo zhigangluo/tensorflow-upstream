@@ -44,7 +44,7 @@ __global__ void ScatterNdOpKernel(
   for (int si = 0; si < slice_size; si++) {                     \
     op(out + i + si, ldg(updates + (index * slice_size + si))); \
   }
-  CUDA_1D_KERNEL_LOOP(index, num_indices) {
+  GPU_1D_KERNEL_LOOP(index, num_indices) {
     Index i = 0;
     bool out_of_bounds = false;
 #pragma unroll
@@ -62,19 +62,19 @@ __global__ void ScatterNdOpKernel(
           break;
         case scatter_nd_op::UpdateOp::ADD:
 #pragma unroll
-          OP_OVER_SLICE(CudaAtomicAdd);
+          OP_OVER_SLICE(GpuAtomicAdd);
           break;
         case scatter_nd_op::UpdateOp::SUB:
 #pragma unroll
-          OP_OVER_SLICE(CudaAtomicSub);
+          OP_OVER_SLICE(GpuAtomicSub);
           break;
         case scatter_nd_op::UpdateOp::MUL:
 #pragma unroll
-          OP_OVER_SLICE(CudaAtomicMul);
+          OP_OVER_SLICE(GpuAtomicMul);
           break;
         case scatter_nd_op::UpdateOp::DIV:
 #pragma unroll
-          OP_OVER_SLICE(CudaAtomicDiv);
+          OP_OVER_SLICE(GpuAtomicDiv);
           break;
       }
     }

@@ -41,7 +41,7 @@ __global__ void TransposeKernel(int nthreads, const T* src, const int32* buf,
   const int32* in_strides = buf;
   const int32* out_strides = buf + ndims;
   const int32* perm = buf + ndims * 2;
-  CUDA_1D_KERNEL_LOOP(o_idx, nthreads) {
+  GPU_1D_KERNEL_LOOP(o_idx, nthreads) {
     int32 i_idx = 0;
     int32 t = o_idx;
     for (int i = 0; i < ndims; ++i) {

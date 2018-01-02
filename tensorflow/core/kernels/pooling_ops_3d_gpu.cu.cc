@@ -41,7 +41,7 @@ __global__ void MaxPoolGradBackwardNoMaskNCDHW(
     const int stride_p, const int stride_h, const int stride_w, const int pad_p,
     const int pad_t, const int pad_l, const dtype* top_diff,
     dtype* bottom_diff) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     // First find out the index to the maximum, since we have no mask.
     int pw = index % pooled_width;
     int ph = (index / pooled_width) % pooled_height;
@@ -91,7 +91,7 @@ __global__ void MaxPoolGradBackwardNoMaskNDHWC(
     const int stride_p, const int stride_h, const int stride_w, const int pad_p,
     const int pad_t, const int pad_l, const dtype* top_diff,
     dtype* bottom_diff) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     // First find out the index to the maximum, since we have no mask.
     int n = index;
     int c = n % channels;

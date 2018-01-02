@@ -41,8 +41,6 @@ typedef struct HsvTuple {
 } HsvTuple;
 }  // namespace
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 __device__ HsvTuple rgb2hsv_cuda(const float r, const float g, const float b) {
   HsvTuple tuple;
   const float M = fmaxf(r, fmaxf(g, b));
@@ -119,7 +117,6 @@ __global__ void adjust_hue_nhwc(const int64 number_elements,
   output[idx + 1] = rgb.g;
   output[idx + 2] = rgb.b;
 }
-#endif // GOOGLE_CUDA
 }  // namespace internal
 
 namespace functor {
@@ -128,14 +125,17 @@ void AdjustHueGPU::operator()(GPUDevice* device, const int64 number_of_elements,
                               const float* const input,
                               const float* const delta, float* const output) {
   const auto stream = device->stream();
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
-  const CudaLaunchConfig config =
-      GetCudaLaunchConfig(number_of_elements, *device);
+  const GpuLaunchConfig config =
+      GetGpuLaunchConfig(number_of_elements, *device);
   const int threads_per_block = config.thread_per_block;
   const int block_count =
       (number_of_elements + threads_per_block - 1) / threads_per_block;
+#if GOOGLE_CUDA
   internal::adjust_hue_nhwc<<<block_count, threads_per_block, 0, stream>>>(
+      number_of_elements, input, output, delta);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(HIP_KERNEL_NAME(internal::adjust_hue_nhwc),
+      dim3(block_count), dim3(threads_per_block), 0, stream,
       number_of_elements, input, output, delta);
 #endif
 }

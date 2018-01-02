@@ -49,7 +49,7 @@ __global__ void DilationKernel(const int32 nthreads, const T* input_ptr,
                                int output_cols, int stride_rows,
                                int stride_cols, int rate_rows, int rate_cols,
                                int pad_top, int pad_left, T* output_ptr) {
-  CUDA_1D_KERNEL_LOOP(out_idx, nthreads) {
+  GPU_1D_KERNEL_LOOP(out_idx, nthreads) {
     // out_idx = d + depth * (w_out + output_cols * (h_out + output_rows * b))
     const int d = out_idx % depth;
     const int out_idx2 = out_idx / depth;
@@ -89,7 +89,7 @@ __global__ void DilationBackpropInputKernel(
     int depth, int filter_rows, int filter_cols, int output_rows,
     int output_cols, int stride_rows, int stride_cols, int rate_rows,
     int rate_cols, int pad_top, int pad_left, T* in_backprop_ptr) {
-  CUDA_1D_KERNEL_LOOP(out_idx, nthreads) {
+  GPU_1D_KERNEL_LOOP(out_idx, nthreads) {
     // out_idx = d + depth * (w_out + output_cols * (h_out + output_rows * b))
     const int d = out_idx % depth;
     const int out_idx2 = out_idx / depth;
@@ -125,7 +125,7 @@ __global__ void DilationBackpropInputKernel(
         }
       }
     }
-    CudaAtomicAdd(
+    GpuAtomicAdd(
         in_backprop_ptr + d +
             depth * (w_in_max + input_cols * (h_in_max + input_rows * b)),
         out_backprop_ptr[out_idx]);
@@ -139,7 +139,7 @@ __global__ void DilationBackpropFilterKernel(
     int depth, int filter_rows, int filter_cols, int output_rows,
     int output_cols, int stride_rows, int stride_cols, int rate_rows,
     int rate_cols, int pad_top, int pad_left, T* filter_backprop_ptr) {
-  CUDA_1D_KERNEL_LOOP(out_idx, nthreads) {
+  GPU_1D_KERNEL_LOOP(out_idx, nthreads) {
     // out_idx = d + depth * (w_out + output_cols * (h_out + output_rows * b))
     const int d = out_idx % depth;
     const int out_idx2 = out_idx / depth;
@@ -175,7 +175,7 @@ __global__ void DilationBackpropFilterKernel(
         }
       }
     }
-    CudaAtomicAdd(
+    GpuAtomicAdd(
         filter_backprop_ptr + d + depth * (w_max + filter_cols * h_max),
         out_backprop_ptr[out_idx]);
   }

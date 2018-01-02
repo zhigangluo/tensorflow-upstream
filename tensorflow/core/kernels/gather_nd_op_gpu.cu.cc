@@ -40,7 +40,7 @@ __global__ void GatherSliceOpKernel(
     const int64 slice_size, const int64 out_size) {
   // TODO(ebrevdo): reduce inner loop into two loops:
   // one over the number of locs, and one over the offsets inside the locs.
-  CUDA_1D_KERNEL_LOOP(i, out_size) {
+  GPU_1D_KERNEL_LOOP(i, out_size) {
     const Index loc = i / slice_size;
     const auto indices_i = indices + IXDIM * loc;
     bool out_of_bounds = false;

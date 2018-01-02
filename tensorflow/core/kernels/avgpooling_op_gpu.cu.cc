@@ -42,8 +42,7 @@ DEFINE_GPU_KERNELS(float)
 
 #undef DEFINE_GPU_KERNELS
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 template <typename dtype>
 __global__ void AvePoolBackwardNHWC(const int nthreads,
                                     const dtype* const top_diff, const int num,
@@ -53,7 +52,7 @@ __global__ void AvePoolBackwardNHWC(const int nthreads,
                                     const int kernel_w, const int stride_h,
                                     const int stride_w, const int pad_t,
                                     const int pad_l, dtype* const bottom_diff) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     // find out the local index
     // find out the local offset
     const int c = index % channels;
@@ -96,11 +95,16 @@ bool RunAvePoolBackwardNHWC(const T* const top_diff, const int num,
                             const int pad_l, T* const bottom_diff,
                             const GPUDevice& d) {
   int x_size = num * height * width * channels;
-// FIXME implement ROCm functional equivalent
+  GpuLaunchConfig config = GetGpuLaunchConfig(x_size, d);
 #if GOOGLE_CUDA
-  CudaLaunchConfig config = GetCudaLaunchConfig(x_size, d);
   AvePoolBackwardNHWC<
       T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+      config.virtual_thread_count, top_diff, num, height, width, channels,
+      pooled_height, pooled_width, kernel_h, kernel_w, stride_h, stride_w,
+      pad_t, pad_t, bottom_diff);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(HIP_KERNEL_NAME(AvePoolBackwardNHWC<T>),
+      dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
       config.virtual_thread_count, top_diff, num, height, width, channels,
       pooled_height, pooled_width, kernel_h, kernel_w, stride_h, stride_w,
       pad_t, pad_t, bottom_diff);

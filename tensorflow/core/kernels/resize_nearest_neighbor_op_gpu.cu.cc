@@ -44,7 +44,7 @@ __global__ void ResizeNearestNeighborNHWC(
     const int in_width, const int channels, const int out_height,
     const int out_width, const float height_scale, const float width_scale,
     T* top_data) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     int n = index;
     int c = n % channels;
     n /= channels;
@@ -73,7 +73,7 @@ __global__ void ResizeNearestNeighborBackwardNHWC(
     const int in_width, const int channels, const int out_height,
     const int out_width, const float height_scale, const float width_scale,
     T* bottom_diff) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     int n = index;
     int c = n % channels;
     n /= channels;
@@ -92,7 +92,7 @@ __global__ void ResizeNearestNeighborBackwardNHWC(
                             : static_cast<int>(floorf(in_x * width_scale)),
             out_width - 1);
     const int idx = (out_y * out_width + out_x) * channels + c;
-    CudaAtomicAdd(bottom_diff_n + idx, ldg(top_diff + index));
+    GpuAtomicAdd(bottom_diff_n + idx, ldg(top_diff + index));
   }
 }
 #endif

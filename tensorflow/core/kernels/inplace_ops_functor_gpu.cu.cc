@@ -36,7 +36,7 @@ template <typename T>
 __global__ void DoParallelConcatOpKernel(int nthreads, const int64 rows,
                                          const int64 cols, int32 loc,
                                          const T* src, T* dst) {
-  CUDA_1D_KERNEL_LOOP(idx, nthreads) {
+  GPU_1D_KERNEL_LOOP(idx, nthreads) {
     int64 c = idx % cols;
     int64 r = (loc % rows + rows) % rows;  // Guard index range.
     T* p = dst + r * cols + c;

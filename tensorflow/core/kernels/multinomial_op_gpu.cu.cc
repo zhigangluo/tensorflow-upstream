@@ -46,7 +46,7 @@ using GPUDevice = Eigen::GpuDevice;
 __global__ void MultinomialKernel(int32 nthreads, const int32 num_classes,
                                   const int32 num_samples, const float* scores,
                                   const float* maxima, int64* output) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     const int maxima_idx = index / num_classes;
     if (ldg(maxima + maxima_idx) == ldg(scores + index)) {
       CudaAtomicMax(reinterpret_cast<uint64*>(output + maxima_idx),

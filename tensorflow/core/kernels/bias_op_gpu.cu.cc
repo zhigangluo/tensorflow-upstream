@@ -53,7 +53,7 @@ struct AccumulatorType<Eigen::half> {
 template <typename T>
 __global__ void BiasNHWCKernel(int32 nthreads, const T* input, const T* bias,
                                T* output, int32 bias_size) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     int32 bias_offset = index % bias_size;
     output[index] = ldg(input + index) + ldg(bias + bias_offset);
   }
@@ -62,7 +62,7 @@ __global__ void BiasNHWCKernel(int32 nthreads, const T* input, const T* bias,
 template <typename T>
 __global__ void BiasNCHWKernel(int32 nthreads, const T* input, const T* bias,
                                T* output, int32 bias_size, int32 image_size) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     int32 index2 = index / image_size;
     int32 bias_offset = index2 % bias_size;
     output[index] = ldg(input + index) + ldg(bias + bias_offset);
@@ -104,9 +104,9 @@ void BiasGPU<T>::compute(const GPUDevice& d, const T* input, const T* bias,
 template <typename T>
 __global__ void BiasGradNHWC_Naive(int32 nthreads, const T* output_backprop,
                                    T* bias_backprop, int32 bias_size) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     int32 bias_offset = index % bias_size;
-    CudaAtomicAdd(bias_backprop + bias_offset, ldg(output_backprop + index));
+    GpuAtomicAdd(bias_backprop + bias_offset, ldg(output_backprop + index));
   }
 }
 
@@ -115,10 +115,10 @@ template <typename T>
 __global__ void BiasGradNCHW_Naive(int32 nthreads, const T* output_backprop,
                                    T* bias_backprop, int32 bias_size,
                                    int32 image_size) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     int32 index2 = index / image_size;
     int32 bias_offset = index2 % bias_size;
-    CudaAtomicAdd(bias_backprop + bias_offset, ldg(output_backprop + index));
+    GpuAtomicAdd(bias_backprop + bias_offset, ldg(output_backprop + index));
   }
 }
 
@@ -138,12 +138,12 @@ __global__ void BiasGradNHWC_SharedAtomics(int32 nthreads,
   for (int32 index = blockIdx.x * blockDim.x + threadIdx.x; index < nthreads;
        index += blockDim.x * gridDim.x) {
     int32 bias_offset = index % bias_size;
-    CudaAtomicAdd(s_data + bias_offset, AccT(ldg(output_backprop + index)));
+    GpuAtomicAdd(s_data + bias_offset, AccT(ldg(output_backprop + index)));
   }
   __syncthreads();
 
   for (int32 index = threadIdx.x; index < bias_size; index += blockDim.x) {
-    CudaAtomicAdd(bias_backprop + index, T(s_data[index]));
+    GpuAtomicAdd(bias_backprop + index, T(s_data[index]));
   }
 }
 
@@ -179,7 +179,7 @@ __global__ void BiasGradNCHW_SharedAtomics(const T* output_backprop,
   // Write the accumulated sum in this thread to the shared memory. Each thread
   // shifts their write location to avoid bank conflict.
   int bias_offset = threadIdx.x % 32;
-  CudaAtomicAdd(s_data + bias_offset, sum);
+  GpuAtomicAdd(s_data + bias_offset, sum);
   __syncthreads();
 
   // Accumulate the results in the shared memory into the first element.
@@ -193,7 +193,7 @@ __global__ void BiasGradNCHW_SharedAtomics(const T* output_backprop,
 
   // The first thread writes out the accumulated result to the global location.
   if (thread_index == 0) {
-    CudaAtomicAdd(bias_backprop + bias_index, T(s_data[0]));
+    GpuAtomicAdd(bias_backprop + bias_index, T(s_data[0]));
   }
 }
 #endif

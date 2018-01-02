@@ -66,7 +66,7 @@ __global__ void MaxPoolForwardNCHW(const int nthreads, const dtype* bottom_data,
                                    const int stride_w, const int pad_t,
                                    const int pad_l, dtype* top_data,
                                    int64* mask) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     int pw = index % pooled_width;
     int ph = (index / pooled_width) % pooled_height;
     int c = (index / pooled_width / pooled_height) % channels;
@@ -105,7 +105,7 @@ __global__ void MaxPoolForwardNHWC(const int nthreads, const dtype* bottom_data,
                                    const int stride_w, const int pad_t,
                                    const int pad_l, dtype* top_data,
                                    int64* mask) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     int n = index;
     int c = n % channels;
     n /= channels;
@@ -143,7 +143,7 @@ __global__ void MaxPoolBackwardNoMaskNHWC(
     const int pooled_width, const int kernel_h, const int kernel_w,
     const int stride_h, const int stride_w, const int pad_t, const int pad_l,
     const dtype* top_diff, dtype* bottom_diff) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     // First find out the index to the maximum, since we have no mask.
     int n = index;
     int c = n % channels;
@@ -172,7 +172,7 @@ __global__ void MaxPoolBackwardNoMaskNHWC(
     // Atomically accumulate the bottom diff. The index could still be
     // uninitialized, if all the bottom_data are NaN.
     if (maxidx != -1) {
-      CudaAtomicAdd(bottom_diff + n * height * width * channels + maxidx,
+      GpuAtomicAdd(bottom_diff + n * height * width * channels + maxidx,
                     top_diff[index]);
     }
   }
@@ -192,16 +192,16 @@ __global__ void MaxPoolBackwardNoMaskNHWC(
 //     bottom_offset: the pre-computed per-image offset of the maxpool input.
 //         This is equal to H*W*C.
 //     bottom_diff: the gradient with respect to the input.
-// This function relies on CudaAtomicAdd to avoid race conditions. Also, before
+// This function relies on GpuAtomicAdd to avoid race conditions. Also, before
 // the kernel is run, you will need to make sure that bottom_diff is filled with
 // zero first.
 template <typename dtype>
 __global__ void MaxPoolBackward(const int nthreads, const dtype* top_diff,
                                 const int64* mask, const int top_offset,
                                 const int bottom_offset, dtype* bottom_diff) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     int image_id = (index / top_offset);
-    CudaAtomicAdd(bottom_diff + image_id * bottom_offset + mask[index],
+    GpuAtomicAdd(bottom_diff + image_id * bottom_offset + mask[index],
                   top_diff[index]);
   }
 }
@@ -227,7 +227,7 @@ __global__ void MaxPoolGradBackwardNoMaskNCHW(
     const int height, const int width, const int kernel_h, const int kernel_w,
     const int stride_h, const int stride_w, const int pad_t, const int pad_l,
     const dtype* top_diff, dtype* bottom_diff) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     // First find out the index to the maximum, since we have no mask.
     int pw = index % pooled_width;
     int ph = (index / pooled_width) % pooled_height;
@@ -267,7 +267,7 @@ __global__ void MaxPoolGradBackwardNoMaskNHWC(
     const int height, const int width, const int kernel_h, const int kernel_w,
     const int stride_h, const int stride_w, const int pad_t, const int pad_l,
     const dtype* top_diff, dtype* bottom_diff) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     // First find out the index to the maximum, since we have no mask.
     int n = index;
     int c = n % channels;
@@ -324,13 +324,13 @@ __global__ void MaxPoolGradBackward(const int nthreads, const dtype* top_diff,
                                     const int64* mask, const int top_offset,
                                     const int bottom_offset,
                                     dtype* bottom_diff) {
-  CUDA_1D_KERNEL_LOOP(index, nthreads) {
+  GPU_1D_KERNEL_LOOP(index, nthreads) {
     int image_id = (index / bottom_offset);
     bottom_diff[index] = top_diff[image_id * top_offset + mask[index]];
   }
 }
 
-#undef CUDA_1D_KERNEL_LOOP
+#undef GPU_1D_KERNEL_LOOP
 
 #endif // GOOGLE_CUDA
 }  // namespace

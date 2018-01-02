@@ -44,7 +44,7 @@ __global__ void CropAndResizeKernel(
     const int32* box_ind_ptr, int num_boxes, int batch, int image_height,
     int image_width, int crop_height, int crop_width, int depth,
     float extrapolation_value, float* crops_ptr) {
-  CUDA_1D_KERNEL_LOOP(out_idx, nthreads) {
+  GPU_1D_KERNEL_LOOP(out_idx, nthreads) {
     // out_idx = d + depth * (w + crop_width * (h + crop_height * b))
     int idx = out_idx;
     const int d = idx % depth;
@@ -126,7 +126,7 @@ __global__ void CropAndResizeBackpropImageKernel(
     const int32* box_ind_ptr, int num_boxes, int batch, int image_height,
     int image_width, int crop_height, int crop_width, int depth,
     T* grads_image_ptr) {
-  CUDA_1D_KERNEL_LOOP(out_idx, nthreads) {
+  GPU_1D_KERNEL_LOOP(out_idx, nthreads) {
     // out_idx = d + depth * (w + crop_width * (h + crop_height * b))
     int idx = out_idx;
     const int d = idx % depth;
@@ -175,13 +175,13 @@ __global__ void CropAndResizeBackpropImageKernel(
     const float x_lerp = in_x - left_x_index;
 
     const float dtop = (1 - y_lerp) * grads_ptr[out_idx];
-    CudaAtomicAdd(
+    GpuAtomicAdd(
         grads_image_ptr +
             ((b_in * image_height + top_y_index) * image_width + left_x_index) *
                 depth +
             d,
         static_cast<T>((1 - x_lerp) * dtop));
-    CudaAtomicAdd(grads_image_ptr +
+    GpuAtomicAdd(grads_image_ptr +
                       ((b_in * image_height + top_y_index) * image_width +
                        right_x_index) *
                           depth +
@@ -189,13 +189,13 @@ __global__ void CropAndResizeBackpropImageKernel(
                   static_cast<T>(x_lerp * dtop));
 
     const float dbottom = y_lerp * grads_ptr[out_idx];
-    CudaAtomicAdd(grads_image_ptr +
+    GpuAtomicAdd(grads_image_ptr +
                       ((b_in * image_height + bottom_y_index) * image_width +
                        left_x_index) *
                           depth +
                       d,
                   static_cast<T>((1 - x_lerp) * dbottom));
-    CudaAtomicAdd(grads_image_ptr +
+    GpuAtomicAdd(grads_image_ptr +
                       ((b_in * image_height + bottom_y_index) * image_width +
                        right_x_index) *
                           depth +
@@ -210,7 +210,7 @@ __global__ void CropAndResizeBackpropBoxesKernel(
     const float* boxes_ptr, const int32* box_ind_ptr, int num_boxes, int batch,
     int image_height, int image_width, int crop_height, int crop_width,
     int depth, float* grads_boxes_ptr) {
-  CUDA_1D_KERNEL_LOOP(out_idx, nthreads) {
+  GPU_1D_KERNEL_LOOP(out_idx, nthreads) {
     // out_idx = d + depth * (w + crop_width * (h + crop_height * b))
     int idx = out_idx;
     const int d = idx % depth;
@@ -313,10 +313,10 @@ __global__ void CropAndResizeBackpropBoxesKernel(
       dx2 = image_grad_x * 0.5 * (image_width - 1);
     }
 
-    CudaAtomicAdd(grads_boxes_ptr + b * 4 + 0, dy1);
-    CudaAtomicAdd(grads_boxes_ptr + b * 4 + 1, dx1);
-    CudaAtomicAdd(grads_boxes_ptr + b * 4 + 2, dy2);
-    CudaAtomicAdd(grads_boxes_ptr + b * 4 + 3, dx2);
+    GpuAtomicAdd(grads_boxes_ptr + b * 4 + 0, dy1);
+    GpuAtomicAdd(grads_boxes_ptr + b * 4 + 1, dx1);
+    GpuAtomicAdd(grads_boxes_ptr + b * 4 + 2, dy2);
+    GpuAtomicAdd(grads_boxes_ptr + b * 4 + 3, dx2);
   }
 }
 #endif // GOOGLE_CUDA

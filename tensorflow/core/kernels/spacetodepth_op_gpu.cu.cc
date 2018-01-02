@@ -40,7 +40,7 @@ __global__ void S2D(const int32 nthreads, const dtype* input_ptr,
                     const int input_depth, const int output_height,
                     const int output_width, const int output_depth,
                     dtype* output_ptr) {
-  CUDA_1D_KERNEL_LOOP(inp_idx, nthreads) {
+  GPU_1D_KERNEL_LOOP(inp_idx, nthreads) {
     // inp_idx = d + input_depth * (w + input_width * (h + input_height * b))
     const int d = inp_idx % input_depth;
     const int inp_idx2 = inp_idx / input_depth;

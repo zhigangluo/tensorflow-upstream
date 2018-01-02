@@ -36,10 +36,10 @@ using GPUDevice = Eigen::GpuDevice;
 // atomically.
 template <typename T>
 static __device__ __forceinline__ void AccumulateInto(T* dest, const T& value) {
-  CudaAtomicAdd(dest, value);
+  GpuAtomicAdd(dest, value);
 }
 
-// Specializations of AccumulateInto for complex types, which CudaAtomicAdd does
+// Specializations of AccumulateInto for complex types, which GpuAtomicAdd does
 // not support. We treat a std::complex<T>* as a T* (the C++ standard section
 // 26.4.4 allows this explicitly) and atomic add the real and imaginary
 // components individually. The operation as a whole is not atomic, but we can
@@ -48,16 +48,16 @@ template <>
 __device__ __forceinline__ void AccumulateInto(
     std::complex<float>* dest, const std::complex<float>& value) {
   auto dest_scalar = reinterpret_cast<float*>(dest);
-  CudaAtomicAdd(dest_scalar, value.real());
-  CudaAtomicAdd(dest_scalar + 1, value.imag());
+  GpuAtomicAdd(dest_scalar, value.real());
+  GpuAtomicAdd(dest_scalar + 1, value.imag());
 }
 
 template <>
 __device__ __forceinline__ void AccumulateInto(
     std::complex<double>* dest, const std::complex<double>& value) {
   auto dest_scalar = reinterpret_cast<double*>(dest);
-  CudaAtomicAdd(dest_scalar, value.real());
-  CudaAtomicAdd(dest_scalar + 1, value.imag());
+  GpuAtomicAdd(dest_scalar, value.real());
+  GpuAtomicAdd(dest_scalar + 1, value.imag());
 }
 
 // UnsortedSegmentSumFunctor kernel processes 'input_total_size' elements.
@@ -70,7 +70,7 @@ __global__ void UnsortedSegmentSumCustomKernel(
     T* output) {
   const Index input_total_size = input_outer_dim_size * inner_dim_size;
   const Index output_total_size = output_outer_dim_size * inner_dim_size;
-  CUDA_1D_KERNEL_LOOP(input_index, input_total_size) {
+  GPU_1D_KERNEL_LOOP(input_index, input_total_size) {
     const Index input_segment_index = input_index / inner_dim_size;
     const Index segment_offset = input_index % inner_dim_size;
     const Index output_segment_index = segment_ids[input_segment_index];

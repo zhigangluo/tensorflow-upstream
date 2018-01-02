@@ -52,7 +52,7 @@ __global__ void PropagateWhereIndicesKernel(
   // TODO(ebrevdo): Use a multi-dimensional loop, increasing the
   // dimensions of individual indices manually, instead of relying on
   // a scalar loop variable and using integer division.
-  CUDA_1D_KERNEL_LOOP(i, output_rows) {
+  GPU_1D_KERNEL_LOOP(i, output_rows) {
     TIndex index_value = ldg(output + NDIM * i);
 #pragma unroll
     for (int c = 0; c < NDIM; ++c) {
@@ -70,7 +70,7 @@ struct NumTrue<GPUDevice, TIndex> {
       typename TTypes<TIndex>::Scalar num_true) {
 // FIXME implement ROCm functional equivalent
 #if GOOGLE_CUDA
-    const cudaStream_t& cu_stream = GetCudaStream(ctx);
+    const cudaStream_t& cu_stream = GetGpuStream(ctx);
 
     std::size_t temp_storage_bytes = 0;
     const bool* input_data = input.data();
@@ -189,7 +189,7 @@ struct Where<GPUDevice, NDIM, Tindex> {
 
 // FIXME implement ROCm functional equivalent
 #if GOOGLE_CUDA
-    const cudaStream_t& cu_stream = GetCudaStream(ctx);
+    const cudaStream_t& cu_stream = GetGpuStream(ctx);
 
     std::size_t temp_storage_bytes = 0;
 

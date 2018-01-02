@@ -92,7 +92,7 @@ __global__ void __launch_bounds__(1024, 2)
   const int out_cols = args.out_cols;
   const int out_depth = args.out_depth;
 
-  CUDA_1D_KERNEL_LOOP(thread_id, num_outputs) {
+  GPU_1D_KERNEL_LOOP(thread_id, num_outputs) {
     // Compute the indexes of this thread in the output.
     const int OD = thread_id % out_depth;
     const int OC = (thread_id / out_depth) % out_cols;
@@ -317,7 +317,7 @@ __global__ void __launch_bounds__(1024, 2)
   const int out_cols = args.out_cols;
   const int out_depth = args.out_depth;
 
-  CUDA_1D_KERNEL_LOOP(thread_id, num_outputs) {
+  GPU_1D_KERNEL_LOOP(thread_id, num_outputs) {
     // Compute the indexes of this thread in the output.
     //
     // We want coalesced reads so we make sure that each warp reads
@@ -744,7 +744,7 @@ __global__ void __launch_bounds__(640, 2)
   const int out_cols = args.out_cols;
   const int out_depth = args.out_depth;
 
-  CUDA_1D_KERNEL_LOOP(thread_id, num_in_backprop) {
+  GPU_1D_KERNEL_LOOP(thread_id, num_in_backprop) {
     // Compute the indexes of this thread in the output.
     const int in_d = thread_id % in_depth;
     const int in_c = (thread_id / in_depth) % in_cols;
@@ -810,7 +810,7 @@ __global__ void __launch_bounds__(640, 2)
 
   // TODO(vrv): Consider assigning threads to output and using
   // atomics for accumulation, similar to the filter case.
-  CUDA_1D_KERNEL_LOOP(thread_id, num_in_backprop) {
+  GPU_1D_KERNEL_LOOP(thread_id, num_in_backprop) {
     // Compute the indexes of this thread in the input.
     const int in_c = thread_id % in_cols;
     const int in_r = (thread_id / in_cols) % in_rows;
@@ -956,7 +956,7 @@ __global__ void __launch_bounds__(640, 2)
   const int out_cols = args.out_cols;
   const int out_depth = args.out_depth;
 
-  CUDA_1D_KERNEL_LOOP(thread_id, num_out_backprop) {
+  GPU_1D_KERNEL_LOOP(thread_id, num_out_backprop) {
     // Compute the indexes of this thread in the output.
     const int out_d = thread_id % out_depth;
     const int out_c = (thread_id / out_depth) % out_cols;
@@ -990,7 +990,7 @@ __global__ void __launch_bounds__(640, 2)
           T* addr = filter_backprop +
                     (dm + depth_multiplier *
                               (in_d + in_depth * (f_c + filter_cols * f_r)));
-          CudaAtomicAdd(addr, partial_sum);
+          GpuAtomicAdd(addr, partial_sum);
         }
       }
     } else {
@@ -1017,7 +1017,7 @@ __global__ void __launch_bounds__(640, 2)
             // contention on the destination; 2. Have each thread compute one
             // gradient for an element in the filters. This should work well
             // when the input depth is big and filter size is not too small.
-            CudaAtomicAdd(addr, partial_sum);
+            GpuAtomicAdd(addr, partial_sum);
           }
         }
       }
@@ -1178,7 +1178,7 @@ __launch_bounds__(1024, 2) void DepthwiseConv2dBackpropFilterGPUKernelNHWCSmall(
           val += CudaShuffleDown(val, delta);
         }
         if (!(thread_idx & kAccumPixels - 1)) {
-          CudaAtomicAdd(filter_offset + filter, val);
+          GpuAtomicAdd(filter_offset + filter, val);
         }
       }
     }
@@ -1210,7 +1210,7 @@ __global__ void __launch_bounds__(640, 2)
   const int out_cols = args.out_cols;
   const int out_depth = args.out_depth;
 
-  CUDA_1D_KERNEL_LOOP(thread_id, num_out_backprop) {
+  GPU_1D_KERNEL_LOOP(thread_id, num_out_backprop) {
     // Compute the indexes of this thread in the output.
     const int out_c = thread_id % out_cols;
     const int out_r = (thread_id / out_cols) % out_rows;
@@ -1249,7 +1249,7 @@ __global__ void __launch_bounds__(640, 2)
           T* addr = filter_backprop +
                     (dm + depth_multiplier *
                               (in_d + in_depth * (f_c + filter_cols * f_r)));
-          CudaAtomicAdd(addr, partial_sum);
+          GpuAtomicAdd(addr, partial_sum);
         }
       }
     } else {
@@ -1277,7 +1277,7 @@ __global__ void __launch_bounds__(640, 2)
             // contention on the destination; 2. Have each thread compute one
             // gradient for an element in the filters. This should work well
             // when the input depth is big and filter size is not too small.
-            CudaAtomicAdd(addr, partial_sum);
+            GpuAtomicAdd(addr, partial_sum);
           }
         }
       }
@@ -1433,7 +1433,7 @@ __launch_bounds__(1024, 2) void DepthwiseConv2dBackpropFilterGPUKernelNCHWSmall(
           val += CudaShuffleDown(val, delta);
         }
         if (!(thread_idx & kAccumPixels - 1)) {
-          CudaAtomicAdd(filter_offset + filter, val);
+          GpuAtomicAdd(filter_offset + filter, val);
         }
       }
     }
