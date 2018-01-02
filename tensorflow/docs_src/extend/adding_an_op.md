@@ -163,6 +163,8 @@ intra_op_parallelism_threads in
 
 ### GPU kernels
 
+TBD FIXME add documentation for ROCm.
+
 A GPU kernel is implemented in two parts: the OpKernel and the CUDA kernel and
 its launch code.
 
@@ -263,38 +265,38 @@ REGISTER_GPU(int32);
 ```
 
 ```c++
-#ifdef GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define EIGEN_USE_GPU
 #define EIGEN_USE_THREADS
 
 #include "example.h"
-#include "tensorflow/core/util/cuda_kernel_helper.h"
+#include "tensorflow/core/util/gpu_kernel_helper.h"
 
 using namespace tensorflow;
 
 #define EIGEN_USE_GPU
 
-// Define the CUDA kernel.
+// Define the GPU kernel.
 template <typename T>
-__global__ void ExampleCudaKernel(const int size, const T* in, T* out) {
+__global__ void ExampleGPUKernel(const int size, const T* in, T* out) {
   for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < size;
        i += blockDim.x * gridDim.x) {
     out[i] = 2 * ldg(in + i);
   }
 }
 
-// Define the GPU implementation that launches the CUDA kernel.
+// Define the GPU implementation that launches the GPU kernel.
 template <typename T>
 struct ExampleFunctor<GPUDevice, T> {
   void operator()(const GPUDevice& d, int size, const T* in, T* out) {
-    // Launch the cuda kernel.
+    // Launch the GPU kernel.
     //
-    // See core/util/cuda_kernel_helper.h for example of computing
+    // See core/util/gpu_kernel_helper.h for example of computing
     // block count and thread_per_block count.
     int block_count = 1024;
     int thread_per_block = 20;
-    ExampleCudaKernel<T>
+    ExampleGPUKernel<T>
         <<<block_count, thread_per_block, 0, d.stream()>>>(size, in, out);
   }
 };
@@ -304,7 +306,7 @@ typedef Eigen::GpuDevice GPUDevice;
 template struct ExampleFunctor<GPUDevice, float>;
 template struct ExampleFunctor<GPUDevice, int32>;
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 ```
 
 <!--endzippy-->

@@ -22,7 +22,7 @@ limitations under the License.
 
 #include "cuda/include/cuda.h"
 #include "tensorflow/core/kernels/fused_batch_norm_op.h"
-#include "tensorflow/core/util/cuda_kernel_helper.h"
+#include "tensorflow/core/util/gpu_kernel_helper.h"
 
 namespace tensorflow {
 namespace functor {
