@@ -36,8 +36,6 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace {
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template <typename T, typename IntType>
 __global__ void concat_fixed_kernel(
     GpuDeviceArrayStruct<const T*> input_ptr_data, int split_size,
@@ -58,12 +56,9 @@ __global__ void concat_fixed_kernel(
     }
   }
 }
-#endif
 
 }  // end namespace
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 // cannot be in anonymous namespace due to extern shared memory
 template <typename T, typename IntType, bool useSmem>
 __global__ void concat_variable_kernel(
@@ -78,7 +73,11 @@ __global__ void concat_variable_kernel(
   IntType num_inputs = input_ptr_data.size;
 
   // verbose declaration needed due to template
+#if GOOGLE_CUDA
   extern __shared__ __align__(sizeof(T)) unsigned char smem[];
+#elif TENSORFLOW_USE_ROCM
+  HIP_DYNAMIC_SHARED(unsigned char, smem);
+#endif
   IntType* smem_col_scan = reinterpret_cast<IntType*>(smem);
 
   if (useSmem) {
@@ -98,7 +97,7 @@ __global__ void concat_variable_kernel(
   // works well when there are many small segments and when the
   // segments are much longer
   IntType segment =
-      cuda_helper::upper_bound<IntType>(col_scan, num_inputs, gidx) - 1;
+      gpu_helper::upper_bound<IntType>(col_scan, num_inputs, gidx) - 1;
 
   IntType curr_offset = col_scan[segment];
   IntType curr_segment = segment;
@@ -119,7 +118,6 @@ __global__ void concat_variable_kernel(
           input_ptr[gidy * segment_width + local_col];
   }
 }
-#endif
 
 template <typename T, typename IntType>
 void ConcatGPUSlice(
@@ -149,16 +147,22 @@ void ConcatGPUImpl(const Eigen::GpuDevice& gpu_device,
                    const GpuDeviceArrayStruct<IntType>& output_scan,
                    bool fixed_size, int split_size,
                    typename TTypes<T, 2>::Matrix* output) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
-  auto config = GetCuda2DLaunchConfig(output->dimension(1),
+  auto config = GetGpu2DLaunchConfig(output->dimension(1),
                                       output->dimension(0), gpu_device);
 
   if (fixed_size) {
+#if GOOGLE_CUDA
     concat_fixed_kernel<T, IntType>
         <<<config.block_count, config.thread_per_block, 0,
            gpu_device.stream()>>>(input_ptrs, split_size, output->dimension(0),
                                   output->dimension(1), output->data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(HIP_KERNEL_NAME(concat_fixed_kernel<T, IntType>),
+        dim3(config.block_count), dim3(config.thread_per_block), 0,
+        gpu_device.stream(),
+        input_ptrs, split_size, output->dimension(0), output->dimension(1),
+        output->data());
+#endif
   } else {
     IntType smem_max = gpu_device.sharedMemPerBlock();
     IntType smem_usage = output_scan.size * sizeof(IntType);
@@ -168,6 +172,7 @@ void ConcatGPUImpl(const Eigen::GpuDevice& gpu_device,
     // 4096 inputs is a lot, most code will take the smem path
     const int32 kMaxSmemBytesPerformance = 16384;
     if (smem_usage < smem_max && smem_usage < kMaxSmemBytesPerformance)
+#if GOOGLE_CUDA
       concat_variable_kernel<T, IntType, true>
           <<<config.block_count, config.thread_per_block, smem_usage,
              gpu_device.stream()>>>(input_ptrs, output_scan,
@@ -179,8 +184,20 @@ void ConcatGPUImpl(const Eigen::GpuDevice& gpu_device,
              gpu_device.stream()>>>(input_ptrs, output_scan,
                                     output->dimension(0), output->dimension(1),
                                     output->data());
-  }
+#elif TENSORFLOW_USE_ROCM
+      hipLaunchKernel(HIP_KERNEL_NAME(concat_variable_kernel<T, IntType, true>),
+          dim3(config.block_count), dim3(config.thread_per_block), smem_usage,
+          gpu_device.stream(),
+          input_ptrs, output_scan, output->dimension(0), output->dimension(1),
+          output->data());
+    else
+      hipLaunchKernel(HIP_KERNEL_NAME(concat_variable_kernel<T, IntType, false>),
+          dim3(config.block_count), dim3(config.thread_per_block), 0,
+          gpu_device.stream(),
+          input_ptrs, output_scan, output->dimension(0), output->dimension(1),
+          output->data());
 #endif
+  }
 }
 
 #define REGISTER_GPUCONCAT32(T)                                               \

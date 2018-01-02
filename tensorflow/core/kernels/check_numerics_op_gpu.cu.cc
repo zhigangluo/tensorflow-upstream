@@ -35,9 +35,7 @@ namespace {
 
 typedef Eigen::GpuDevice GPUDevice;
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
-// A Cuda kernel to check if each element is Inf or Nan. If any exists, the
+// A GPU kernel to check if each element is Inf or Nan. If any exists, the
 // relevant elements in abnormal_detected will be set
 template <typename T>
 __global__ void CheckNumericsKernel(const T *data, int size,
@@ -57,7 +55,6 @@ __global__ void CheckNumericsKernel(const T *data, int size,
     offset += total_thread_count;
   }
 }
-#endif
 
 }  // namespace
 
@@ -67,7 +64,6 @@ template <typename T>
 struct CheckNumericsLaunch {
   void Run(const GPUDevice &d, const T *data, int size,
            int abnormal_detected[2]) {
-// FIXME implement ROCm functional equivalent
 #if GOOGLE_CUDA
     const int32 block_size = d.maxCudaThreadsPerBlock();
     const int32 num_blocks =
@@ -75,6 +71,15 @@ struct CheckNumericsLaunch {
         block_size;
 
     CheckNumericsKernel<T><<<num_blocks, block_size, 0, d.stream()>>>(
+        data, size, abnormal_detected);
+#elif TENSORFLOW_USE_ROCM
+    const int32 block_size = d.maxHipThreadsPerBlock();
+    const int32 num_blocks =
+        (d.getNumHipMultiProcessors() * d.maxHipThreadsPerMultiProcessor()) /
+        block_size;
+
+    hipLaunchKernel(HIP_KERNEL_NAME(CheckNumericsKernel<T>),
+        dim3(num_blocks), dim3(block_size), 0, d.stream(),
         data, size, abnormal_detected);
 #endif
   }
