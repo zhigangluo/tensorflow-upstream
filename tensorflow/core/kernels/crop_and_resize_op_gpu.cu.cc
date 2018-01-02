@@ -36,8 +36,6 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace {
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template <typename T>
 __global__ void CropAndResizeKernel(
     const int32 nthreads, const T* image_ptr, const float* boxes_ptr,
@@ -319,7 +317,6 @@ __global__ void CropAndResizeBackpropBoxesKernel(
     GpuAtomicAdd(grads_boxes_ptr + b * 4 + 3, dx2);
   }
 }
-#endif // GOOGLE_CUDA
 
 }  // namespace
 
@@ -332,8 +329,6 @@ struct CropAndResize<GPUDevice, T> {
                   typename TTypes<int32, 1>::ConstTensor box_ind,
                   float extrapolation_value,
                   typename TTypes<float, 4>::Tensor crops) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
     const int batch = image.dimension(0);
     const int image_height = image.dimension(1);
     const int image_width = image.dimension(2);
@@ -346,14 +341,22 @@ struct CropAndResize<GPUDevice, T> {
     const int total_count = num_boxes * crop_height * crop_width * depth;
 
     if (total_count > 0) {
-      CudaLaunchConfig config = GetCudaLaunchConfig(total_count, d);
+      GpuLaunchConfig config = GetGpuLaunchConfig(total_count, d);
+#if GOOGLE_CUDA
       CropAndResizeKernel<<<config.block_count, config.thread_per_block, 0,
                             d.stream()>>>(
           config.virtual_thread_count, image.data(), boxes.data(),
           box_ind.data(), num_boxes, batch, image_height, image_width,
           crop_height, crop_width, depth, extrapolation_value, crops.data());
-    }
+#elif TENSORFLOW_USE_ROCM
+      hipLaunchKernel(HIP_KERNEL_NAME(CropAndResizeKernel<T>),
+          dim3(config.block_count), dim3(config.thread_per_block), 0,
+          d.stream(),
+          config.virtual_thread_count, image.data(), boxes.data(),
+          box_ind.data(), num_boxes, batch, image_height, image_width,
+          crop_height, crop_width, depth, extrapolation_value, crops.data());
 #endif
+    }
     return d.ok();
   }
 };
@@ -365,8 +368,6 @@ struct CropAndResizeBackpropImage<GPUDevice, T> {
                   typename TTypes<float, 2>::ConstTensor boxes,
                   typename TTypes<int32, 1>::ConstTensor box_ind,
                   typename TTypes<T, 4>::Tensor grads_image) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
     const int batch = grads_image.dimension(0);
     const int image_height = grads_image.dimension(1);
     const int image_width = grads_image.dimension(2);
@@ -377,27 +378,42 @@ struct CropAndResizeBackpropImage<GPUDevice, T> {
     const int depth = grads.dimension(3);
 
     int total_count;
-    CudaLaunchConfig config;
+    GpuLaunchConfig config;
 
     // Initialize grads_image with all zeros.
     total_count = batch * image_height * image_width * depth;
     if (total_count > 0) {
-      config = GetCudaLaunchConfig(total_count, d);
+      config = GetGpuLaunchConfig(total_count, d);
+#if GOOGLE_CUDA
       SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
           config.virtual_thread_count, grads_image.data());
+#elif TENSORFLOW_USE_ROCM
+      hipLaunchKernel(HIP_KERNEL_NAME(SetZero<T>),
+          dim3(config.block_count), dim3(config.thread_per_block), 0,
+          d.stream(),
+          config.virtual_thread_count, grads_image.data());
+#endif
     }
 
     // Accumulate.
     total_count = num_boxes * crop_height * crop_width * depth;
     if (total_count > 0) {
-      config = GetCudaLaunchConfig(total_count, d);
+      config = GetGpuLaunchConfig(total_count, d);
+#if GOOGLE_CUDA
       CropAndResizeBackpropImageKernel<<<
           config.block_count, config.thread_per_block, 0, d.stream()>>>(
           config.virtual_thread_count, grads.data(), boxes.data(),
           box_ind.data(), num_boxes, batch, image_height, image_width,
           crop_height, crop_width, depth, grads_image.data());
-    }
+#elif TENSORFLOW_USE_ROCM
+      hipLaunchKernel(HIP_KERNEL_NAME(CropAndResizeBackpropImageKernel<T>),
+          dim3(config.block_count), dim3(config.thread_per_block), 0,
+          d.stream(),
+          config.virtual_thread_count, grads.data(), boxes.data(),
+          box_ind.data(), num_boxes, batch, image_height, image_width,
+          crop_height, crop_width, depth, grads_image.data());
 #endif
+    }
     return d.ok();
   }
 };
@@ -410,8 +426,6 @@ struct CropAndResizeBackpropBoxes<GPUDevice, T> {
                   typename TTypes<float, 2>::ConstTensor boxes,
                   typename TTypes<int32, 1>::ConstTensor box_ind,
                   typename TTypes<float, 2>::Tensor grads_boxes) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
     const int batch = image.dimension(0);
     const int image_height = image.dimension(1);
     const int image_width = image.dimension(2);
@@ -422,27 +436,42 @@ struct CropAndResizeBackpropBoxes<GPUDevice, T> {
     const int depth = grads.dimension(3);
 
     int total_count;
-    CudaLaunchConfig config;
+    GpuLaunchConfig config;
 
     // Initialize grads_boxes with all zeros.
     total_count = num_boxes * 4;
     if (total_count > 0) {
-      config = GetCudaLaunchConfig(total_count, d);
+      config = GetGpuLaunchConfig(total_count, d);
+#if GOOGLE_CUDA
       SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
           config.virtual_thread_count, grads_boxes.data());
+#elif TENSORFLOW_USE_ROCM
+      hipLaunchKernel(HIP_KERNEL_NAME(SetZero<T>),
+          dim3(config.block_count), dim3(config.thread_per_block), 0,
+          d.stream(),
+          config.virtual_thread_count, grads_boxes.data());
+#endif
     }
 
     // Accumulate.
     total_count = num_boxes * crop_height * crop_width * depth;
     if (total_count > 0) {
-      config = GetCudaLaunchConfig(total_count, d);
+      config = GetGpuLaunchConfig(total_count, d);
+#if GOOGLE_CUDA
       CropAndResizeBackpropBoxesKernel<<<
           config.block_count, config.thread_per_block, 0, d.stream()>>>(
           config.virtual_thread_count, grads.data(), image.data(), boxes.data(),
           box_ind.data(), num_boxes, batch, image_height, image_width,
           crop_height, crop_width, depth, grads_boxes.data());
-    }
+#elif TENSORFLOW_USE_ROCM
+      hipLaunchKernel(HIP_KERNEL_NAME(CropAndResizeBackpropBoxesKernel<T>),
+          dim3(config.block_count), dim3(config.thread_per_block), 0,
+          d.stream(),
+          config.virtual_thread_count, grads.data(), image.data(), boxes.data(),
+          box_ind.data(), num_boxes, batch, image_height, image_width,
+          crop_height, crop_width, depth, grads_boxes.data());
 #endif
+    }
     return d.ok();
   }
 };

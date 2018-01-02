@@ -74,7 +74,7 @@ O conv_ops_gpu_2.cu.cc
 T conv_ops_gpu_3.cu.cc
 O conv_ops_test.cc
 O crop_and_resize_op.cc
-T crop_and_resize_op_gpu.cu.cc
+O crop_and_resize_op_gpu.cu.cc
 O cross_op.cc
 O cross_op_gpu.cu.cc
 X cuda_solvers.cc
