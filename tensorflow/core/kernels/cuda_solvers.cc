@@ -128,7 +128,7 @@ CudaSolver::CudaSolver(OpKernelContext* context) : context_(context) {
       reinterpret_cast<const cudaStream_t*>(context->op_device_context()
                                                 ->stream()
                                                 ->implementation()
-                                                ->CudaStreamMemberHack()));
+                                                ->GPUStreamMemberHack()));
   cuda_stream_ = *cu_stream_ptr;
   HandleMap* handle_map = CHECK_NOTNULL(GetHandleMapSingleton());
   mutex_lock lock(handle_map_mutex);
