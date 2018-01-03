@@ -240,7 +240,7 @@ O fake_quant_ops.cc
 O fake_quant_ops_gpu.cu.cc
 O fft_ops.cc
 O fused_batch_norm_op.cc
-T fused_batch_norm_op.cu.cc
+O fused_batch_norm_op.cu.cc
 O gather_functor.cc
 O gather_functor_gpu.cu.cc
 T gather_functor_gpu.cu.h
