@@ -187,10 +187,20 @@ inline GpuLaunchConfig GetGpuLaunchConfig(int work_element_count,
       block_size_limit);
   CHECK_EQ(err, cudaSuccess);
 #elif TENSORFLOW_USE_ROCM
-  hipError_t err = hipOccupancyMaxPotentialBlockSize(
-      &block_count, &thread_per_block, func, dynamic_shared_memory_size,
-      block_size_limit);
-  CHECK_EQ(err, hipSuccess);
+  // XXX FIXME re-enable this after hipOccupancyMaxPotentialBlockSize is
+  // implemented
+  //hipError_t err = hipOccupancyMaxPotentialBlockSize(
+  //    &block_count, &thread_per_block, func, dynamic_shared_memory_size,
+  //    block_size_limit);
+  //CHECK_EQ(err, hipSuccess);
+
+  const int physical_thread_count = std::min(
+      d.getNumHipMultiProcessors() * d.maxHipThreadsPerMultiProcessor(),
+      work_element_count);
+  thread_per_block = std::min(1024, d.maxHipThreadsPerBlock());
+  block_count =
+      std::min(DIV_UP(physical_thread_count, thread_per_block),
+               d.getNumHipMultiProcessors());
 #endif
 
   block_count =
@@ -284,10 +294,19 @@ inline Gpu3DLaunchConfig GetGpu3DLaunchConfig(
       block_size_limit);
   CHECK_EQ(err, cudaSuccess);
 #elif TENSORFLOW_USE_ROCM
-  hipError_t err = hipOccupancyMaxPotentialBlockSize(
-      &block_count, &thread_per_block, func, dynamic_shared_memory_size,
-      block_size_limit);
-  CHECK_EQ(err, hipSuccess);
+  // XXX FIXME re-enable this after hipOccupancyMaxPotentialBlockSize is
+  // implemented
+  //hipError_t err = hipOccupancyMaxPotentialBlockSize(
+  //    &block_count, &thread_per_block, func, dynamic_shared_memory_size,
+  //    block_size_limit);
+  //CHECK_EQ(err, hipSuccess);
+
+  const int physical_thread_count =
+      d.getNumHipMultiProcessors() * d.maxHipThreadsPerMultiProcessor();
+  thread_per_block = std::min(1024, d.maxHipThreadsPerBlock());
+  block_count =
+      std::min(DIV_UP(physical_thread_count, thread_per_block),
+               d.getNumHipMultiProcessors());
 #endif
 
 #define MIN3(a, b, c) std::min((a), std::min((b), (c)))
@@ -645,17 +664,36 @@ EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE T tf_max(const T& x, const T& y) {
 }
 
 template <typename T>
-__device__ EIGEN_ALWAYS_INLINE T CudaShuffle(T value, int srcLane,
+__device__ EIGEN_ALWAYS_INLINE T GpuShuffle(T value, int srcLane,
                                              int width = warpSize) {
   return __shfl(value, srcLane, width);
 }
+
+template <typename T>
+__device__ EIGEN_ALWAYS_INLINE T GpuShuffleUp(T value, int delta,
+                                               int width = warpSize) {
+  return __shfl_up(value, delta, width);
+}
+
+template <typename T>
+__device__ EIGEN_ALWAYS_INLINE T GpuShuffleDown(T value, int delta,
+                                                 int width = warpSize) {
+  return __shfl_down(value, delta, width);
+}
+
+template <typename T>
+__device__ EIGEN_ALWAYS_INLINE T GpuShuffleXor(T value, int laneMask,
+                                                int width = warpSize) {
+  return __shfl_xor(value, laneMask, width);
+}
+
 
 #if GOOGLE_CUDA
 // Variant of the (undocumented) version from the CUDA SDK, but using unsigned
 // instead of float for lo and hi (which is incorrect with ftz, for example).
 // A bug has been filed with NVIDIA and will be fixed in the next CUDA release.
 // TODO(csigg): remove when the bug is fixed in the next CUDA release.
-__device__ EIGEN_ALWAYS_INLINE double CudaShuffle(double value, int srcLane,
+__device__ EIGEN_ALWAYS_INLINE double GpuShuffle(double value, int srcLane,
                                                   int width = warpSize) {
   unsigned lo, hi;
   asm volatile("mov.b64 {%0,%1}, %2;" : "=r"(lo), "=r"(hi) : "d"(value));
@@ -665,17 +703,11 @@ __device__ EIGEN_ALWAYS_INLINE double CudaShuffle(double value, int srcLane,
   return value;
 }
 
-template <typename T>
-__device__ EIGEN_ALWAYS_INLINE T CudaShuffleUp(T value, int delta,
-                                               int width = warpSize) {
-  return __shfl_up(value, delta, width);
-}
-
 // Variant of the (undocumented) version from the CUDA SDK, but using unsigned
 // instead of float for lo and hi (which is incorrect with ftz, for example).
 // A bug has been filed with NVIDIA and will be fixed in the next CUDA release.
 // TODO(csigg): remove when the bug is fixed in the next CUDA release.
-__device__ EIGEN_ALWAYS_INLINE double CudaShuffleUp(double value, int delta,
+__device__ EIGEN_ALWAYS_INLINE double GpuShuffleUp(double value, int delta,
                                                     int width = warpSize) {
   unsigned lo, hi;
   asm volatile("mov.b64 {%0,%1}, %2;" : "=r"(lo), "=r"(hi) : "d"(value));
@@ -685,17 +717,11 @@ __device__ EIGEN_ALWAYS_INLINE double CudaShuffleUp(double value, int delta,
   return value;
 }
 
-template <typename T>
-__device__ EIGEN_ALWAYS_INLINE T CudaShuffleDown(T value, int delta,
-                                                 int width = warpSize) {
-  return __shfl_down(value, delta, width);
-}
-
 // Variant of the (undocumented) version from the CUDA SDK, but using unsigned
 // instead of float for lo and hi (which is incorrect with ftz, for example).
 // A bug has been filed with NVIDIA and will be fixed in the next CUDA release.
 // TODO(csigg): remove when the bug is fixed in the next CUDA release.
-__device__ EIGEN_ALWAYS_INLINE double CudaShuffleDown(double value, int delta,
+__device__ EIGEN_ALWAYS_INLINE double GpuShuffleDown(double value, int delta,
                                                       int width = warpSize) {
   unsigned lo, hi;
   asm volatile("mov.b64 {%0,%1}, %2;" : "=r"(lo), "=r"(hi) : "d"(value));
@@ -705,17 +731,11 @@ __device__ EIGEN_ALWAYS_INLINE double CudaShuffleDown(double value, int delta,
   return value;
 }
 
-template <typename T>
-__device__ EIGEN_ALWAYS_INLINE T CudaShuffleXor(T value, int laneMask,
-                                                int width = warpSize) {
-  return __shfl_xor(value, laneMask, width);
-}
-
 // Variant of the (undocumented) version from the CUDA SDK, but using unsigned
 // instead of float for lo and hi (which is incorrect with ftz, for example).
 // A bug has been filed with NVIDIA and will be fixed in the next CUDA release.
 // TODO(csigg): remove when the bug is fixed in the next CUDA release.
-__device__ EIGEN_ALWAYS_INLINE double CudaShuffleXor(double value, int laneMask,
+__device__ EIGEN_ALWAYS_INLINE double GpuShuffleXor(double value, int laneMask,
                                                      int width = warpSize) {
   unsigned lo, hi;
   asm volatile("mov.b64 {%0,%1}, %2;" : "=r"(lo), "=r"(hi) : "d"(value));
@@ -723,6 +743,54 @@ __device__ EIGEN_ALWAYS_INLINE double CudaShuffleXor(double value, int laneMask,
   lo = __shfl_xor(lo, laneMask, width);
   asm volatile("mov.b64 %0, {%1,%2};" : "=d"(value) : "r"(lo), "r"(hi));
   return value;
+}
+#elif TENSORFLOW_USE_ROCM
+// XXX FIXME these are rather inefficient implementation for double
+// need to figure out the proper way to do it in GCN ISA
+
+// XXX: should HIP / HCC introduce unsigned version of shfl operators?
+__device__ EIGEN_ALWAYS_INLINE double GpuShuffle(double value, int srcLane,
+                                                  int width = warpSize) {
+  unsigned lo, hi;
+  uint64_t tmp = static_cast<uint64_t>(value);
+  lo = static_cast<unsigned>(tmp);
+  hi = static_cast<unsigned>(tmp >> 32);
+  hi = __shfl(static_cast<int>(hi), srcLane, width);
+  lo = __shfl(static_cast<int>(lo), srcLane, width);
+  return static_cast<double>(static_cast<uint64_t>(hi) << 32 | static_cast<uint64_t>(lo));
+}
+
+__device__ EIGEN_ALWAYS_INLINE double GpuShuffleUp(double value, int delta,
+                                                    int width = warpSize) {
+  unsigned lo, hi;
+  uint64_t tmp = static_cast<uint64_t>(value);
+  lo = static_cast<unsigned>(tmp);
+  hi = static_cast<unsigned>(tmp >> 32);
+  hi = __shfl_up(static_cast<int>(hi), delta, width);
+  lo = __shfl_up(static_cast<int>(lo), delta, width);
+  return static_cast<double>(static_cast<uint64_t>(hi) << 32 | static_cast<uint64_t>(lo));
+}
+
+__device__ EIGEN_ALWAYS_INLINE double GpuShuffleDown(double value, int delta,
+                                                      int width = warpSize) {
+  unsigned lo, hi;
+  uint64_t tmp = static_cast<uint64_t>(value);
+  lo = static_cast<unsigned>(tmp);
+  hi = static_cast<unsigned>(tmp >> 32);
+  hi = __shfl_down(static_cast<int>(hi), delta, width);
+  lo = __shfl_down(static_cast<int>(lo), delta, width);
+  return static_cast<double>(static_cast<uint64_t>(hi) << 32 | static_cast<uint64_t>(lo));
+}
+
+__device__ EIGEN_ALWAYS_INLINE double GpuShuffleXor(double value, int laneMask,
+                                                     int width = warpSize) {
+  unsigned lo, hi;
+  uint64_t tmp = static_cast<uint64_t>(value);
+  lo = static_cast<unsigned>(tmp);
+  hi = static_cast<unsigned>(tmp >> 32);
+  hi = __shfl_xor(static_cast<int>(hi), laneMask, width);
+  lo = __shfl_xor(static_cast<int>(lo), laneMask, width);
+  return static_cast<double>(static_cast<uint64_t>(hi) << 32 | static_cast<uint64_t>(lo));
 }
 #endif
 

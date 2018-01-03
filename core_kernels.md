@@ -230,7 +230,7 @@ O depthtospace_op.cc
 O depthtospace_op_gpu.cu.cc
 O depthwise_conv_grad_op.cc
 O depthwise_conv_op.cc
-T depthwise_conv_op_gpu.cu.cc
+O depthwise_conv_op_gpu.cu.cc
 O dilation_ops.cc
 O dilation_ops_gpu.cu.cc
 O dynamic_stitch_op.cc

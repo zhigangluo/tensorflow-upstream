@@ -67,9 +67,7 @@ EIGEN_DEVICE_FUNC bool CanLaunchDepthwiseConv2dBackpropFilterGPUSmall(
 // convolution depending on a template argument of this enum.
 enum DepthwiseConv2dDirection { DIRECTION_FORWARD, DIRECTION_BACKWARD };
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
-// A Cuda kernel to compute the depthwise convolution forward pass
+// A GPU kernel to compute the depthwise convolution forward pass
 // in NHWC format.
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
           int kKnownDepthMultiplier>
@@ -151,7 +149,7 @@ __global__ void __launch_bounds__(1024, 2)
   }
 }
 
-// CUDA kernel to compute the depthwise convolution forward pass in NHWC format,
+// GPU kernel to compute the depthwise convolution forward pass in NHWC format,
 // tailored for small images up to 32x32. Stride and depth multiplier must be 1.
 // Padding must be 'SAME', which allows to reuse the index computation. Only
 // use this kernel if CanLaunchDepthwiseConv2dGPUSmall(args) returns true.
@@ -165,9 +163,13 @@ template <typename T, DepthwiseConv2dDirection kDirection,
           bool kKnownEvenRows>
 __global__ __launch_bounds__(1024, 2) void DepthwiseConv2dGPUKernelNHWCSmall(
     const DepthwiseArgs args, const T* input, const T* filter, T* output) {
+#if GOOGLE_CUDA
   assert(CanLaunchDepthwiseConv2dGPUSmall(args));
   // Holds block plus halo and filter data for blockDim.x depths.
   extern __shared__ __align__(sizeof(T)) unsigned char shared_memory[];
+#elif TENSORFLOW_USE_ROCM
+  HIP_DYNAMIC_SHARED(unsigned char, shared_memory);
+#endif
   T* const shared_data = reinterpret_cast<T*>(shared_memory);
 
   const int batches = args.batch;
@@ -294,7 +296,7 @@ __global__ __launch_bounds__(1024, 2) void DepthwiseConv2dGPUKernelNHWCSmall(
   }
 }
 
-// A Cuda kernel to compute the depthwise convolution forward pass
+// A GPU kernel to compute the depthwise convolution forward pass
 // in NCHW format.
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
           int kKnownDepthMultiplier>
@@ -421,7 +423,7 @@ __global__ void __launch_bounds__(1024, 2)
   }
 }
 
-// CUDA kernel to compute the depthwise convolution forward pass in NCHW format,
+// GPU kernel to compute the depthwise convolution forward pass in NCHW format,
 // tailored for small images up to 32x32. Stride and depth multiplier must be 1.
 // Padding must be 'SAME', which allows to reuse the index computation. Only
 // use this kernel if CanLaunchDepthwiseConv2dGPUSmall(args) returns true.
@@ -435,9 +437,13 @@ template <typename T, DepthwiseConv2dDirection kDirection,
           bool kKnownEvenRows>
 __global__ __launch_bounds__(1024, 2) void DepthwiseConv2dGPUKernelNCHWSmall(
     const DepthwiseArgs args, const T* input, const T* filter, T* output) {
+#if GOOGLE_CUDA
   assert(CanLaunchDepthwiseConv2dGPUSmall(args));
   // Holds block plus halo and filter data for blockDim.z depths.
   extern __shared__ __align__(sizeof(T)) unsigned char shared_memory[];
+#elif TENSORFLOW_USE_ROCM
+  HIP_DYNAMIC_SHARED(unsigned char, shared_memory);
+#endif
   T* const shared_data = reinterpret_cast<T*>(shared_memory);
 
   const int batches = args.batch;
@@ -564,7 +570,6 @@ __global__ __launch_bounds__(1024, 2) void DepthwiseConv2dGPUKernelNCHWSmall(
     __syncthreads();
   }
 }
-#endif // GOOGLE_CUDA
 
 template <typename T, DepthwiseConv2dDirection kDirection,
           int kKnownFilterWidth, int kKnownFilterHeight, int kBlockSlices,
@@ -572,8 +577,6 @@ template <typename T, DepthwiseConv2dDirection kDirection,
 void LaunchDepthwiseConv2dGPUSmall(const GpuDevice& d, const DepthwiseArgs args,
                                    const T* input, const T* filter, T* output,
                                    TensorFormat data_format) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
   const int block_rows = (args.in_rows + 1) / 2;
   dim3 block_dim;
   void (*kernel)(const DepthwiseArgs, const T*, const T*, T*);
@@ -599,10 +602,15 @@ void LaunchDepthwiseConv2dGPUSmall(const GpuDevice& d, const DepthwiseArgs args,
       kBlockSlices * (tile_pixels + filter_pixels) * sizeof(T);
   const int num_outputs =
       args.batch * args.out_rows * args.out_cols * args.out_depth;
-  CudaLaunchConfig config =
-      GetCudaLaunchConfig(num_outputs, d, kernel, shared_memory_size,
+  GpuLaunchConfig config =
+      GetGpuLaunchConfig(num_outputs, d, kernel, shared_memory_size,
                           block_dim.x * block_dim.y * block_dim.z);
+#if GOOGLE_CUDA
   kernel<<<config.block_count, block_dim, shared_memory_size, d.stream()>>>(
+      args, input, filter, output);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(kernel,
+      dim3(config.block_count), dim3(block_dim), shared_memory_size, d.stream(),
       args, input, filter, output);
 #endif
 }
@@ -652,8 +660,6 @@ void LaunchDepthwiseConv2dGPU(const GpuDevice& d, const DepthwiseArgs args,
                               const T* input, const T* filter, T* output,
                               TensorFormat data_format) {
   void (*kernel)(const DepthwiseArgs, const T*, const T*, T*, int);
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
   if (data_format == FORMAT_NHWC) {
     kernel =
         DepthwiseConv2dGPUKernelNHWC<T, kKnownFilterWidth, kKnownFilterHeight,
@@ -668,15 +674,26 @@ void LaunchDepthwiseConv2dGPU(const GpuDevice& d, const DepthwiseArgs args,
   }
   const int num_outputs =
       args.batch * args.out_rows * args.out_cols * args.out_depth;
-  CudaLaunchConfig config = GetCudaLaunchConfig(num_outputs, d, kernel, 0, 0);
+  GpuLaunchConfig config = GetGpuLaunchConfig(num_outputs, d, kernel, 0, 0);
   // The compile-time constant version runs faster with a single block.
   const int max_block_count = kKnownFilterWidth < 0 || kKnownFilterHeight < 0 ||
                                       kKnownDepthMultiplier < 0
                                   ? std::numeric_limits<int>::max()
+#if GOOGLE_CUDA
                                   : d.getNumCudaMultiProcessors();
+#elif TENSORFLOW_USE_ROCM
+                                  : d.getNumHipMultiProcessors();
+#endif
+
+#if GOOGLE_CUDA
   kernel<<<std::min(max_block_count, config.block_count),
            config.thread_per_block, 0, d.stream()>>>(args, input, filter,
                                                      output, num_outputs);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(kernel,
+       dim3(std::min(max_block_count, config.block_count)),
+       dim3(config.thread_per_block), 0, d.stream(),
+       args, input, filter, output, num_outputs);
 #endif
 }
 
@@ -700,7 +717,7 @@ void LaunchDepthwiseConv2dGPU(const GpuDevice& d, const DepthwiseArgs args,
   }
 }
 
-// A simple launch pad to launch the Cuda kernel for depthwise convolution.
+// A simple launch pad to launch the GPU kernel for depthwise convolution.
 template <typename T>
 struct DepthwiseConv2dGPULaunch {
   static void Run(const GpuDevice& d, const DepthwiseArgs args, const T* input,
@@ -718,9 +735,7 @@ struct DepthwiseConv2dGPULaunch {
 template struct DepthwiseConv2dGPULaunch<float>;
 template struct DepthwiseConv2dGPULaunch<double>;
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
-// A Cuda kernel to compute the depthwise convolution backprop w.r.t. input.
+// A GPU kernel to compute the depthwise convolution backprop w.r.t. input.
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
           int kKnownDepthMultiplier>
 __global__ void __launch_bounds__(640, 2)
@@ -855,7 +870,6 @@ __global__ void __launch_bounds__(640, 2)
     in_backprop[in_backprop_offset] = sum;
   }
 }
-#endif // GOOGLE_CUDA
 
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
           int kKnownDepthMultiplier>
@@ -864,8 +878,6 @@ void LaunchDepthwiseConv2dBackpropInputGPU(const GpuDevice& d,
                                            const T* out_backprop,
                                            const T* filter, T* in_backprop,
                                            TensorFormat data_format) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
   void (*kernel)(const DepthwiseArgs, const T*, const T*, T*, int);
   if (data_format == FORMAT_NHWC) {
     kernel = DepthwiseConv2dBackpropInputGPUKernelNHWC<
@@ -879,10 +891,16 @@ void LaunchDepthwiseConv2dBackpropInputGPU(const GpuDevice& d,
   }
   const int num_in_backprop =
       args.batch * args.in_rows * args.in_cols * args.in_depth;
-  CudaLaunchConfig config =
-      GetCudaLaunchConfig(num_in_backprop, d, kernel, 0, 0);
+  GpuLaunchConfig config =
+      GetGpuLaunchConfig(num_in_backprop, d, kernel, 0, 0);
+#if GOOGLE_CUDA
   kernel<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
       args, out_backprop, filter, in_backprop, num_in_backprop);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(kernel,
+      dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+      args, out_backprop, filter, in_backprop, num_in_backprop);
+
 #endif
 }
 
@@ -910,7 +928,7 @@ void LaunchDepthwiseConv2dBackpropInputGPU(const GpuDevice& d,
   }
 }
 
-// A simple launch pad to launch the Cuda kernel for depthwise convolution.
+// A simple launch pad to launch the GPU kernel for depthwise convolution.
 template <typename T>
 struct DepthwiseConv2dBackpropInputGPULaunch {
   static void Run(const GpuDevice& d, const DepthwiseArgs args,
@@ -929,9 +947,7 @@ struct DepthwiseConv2dBackpropInputGPULaunch {
 template struct DepthwiseConv2dBackpropInputGPULaunch<float>;
 template struct DepthwiseConv2dBackpropInputGPULaunch<double>;
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
-// A Cuda kernel to compute the depthwise convolution backprop w.r.t. filter.
+// A GPU kernel to compute the depthwise convolution backprop w.r.t. filter.
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
           int kKnownDepthMultiplier>
 __global__ void __launch_bounds__(640, 2)
@@ -1025,7 +1041,7 @@ __global__ void __launch_bounds__(640, 2)
   }
 }
 
-// CUDA kernel to compute the depthwise convolution backward w.r.t. filter in
+// GPU kernel to compute the depthwise convolution backward w.r.t. filter in
 // NHWC format, tailored for small images up to 32x32. Stride and depth
 // multiplier must be 1. Padding must be 'SAME'. Only use this kernel if
 // CanLaunchDepthwiseConv2dGPUSmall(args) returns true.
@@ -1043,9 +1059,13 @@ template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
 __global__
 __launch_bounds__(1024, 2) void DepthwiseConv2dBackpropFilterGPUKernelNHWCSmall(
     const DepthwiseArgs args, const T* output, const T* input, T* filter) {
+#if GOOGLE_CUDA
   assert(CanLaunchDepthwiseConv2dBackpropFilterGPUSmall(args, blockDim.z));
   // Holds block plus halo and filter data for blockDim.x depths.
   extern __shared__ __align__(sizeof(T)) unsigned char shared_memory[];
+#elif TENSORFLOW_USE_ROCM
+  HIP_DYNAMIC_SHARED(unsigned char, shared_memory);
+#endif
   T* const shared_data = reinterpret_cast<T*>(shared_memory);
 
   const int batches = args.batch;
@@ -1150,7 +1170,7 @@ __launch_bounds__(1024, 2) void DepthwiseConv2dBackpropFilterGPUKernelNHWCSmall(
           T val = out1 * tile_ptr[0] + out2 * tile_ptr[tile_offset];
           // Warp-accumulate pixels of the same depth and write to accumulator.
           for (int delta = 16; delta >= kBlockSlices; delta /= 2) {
-            val += CudaShuffleDown(val, delta);
+            val += GpuShuffleDown(val, delta);
           }
           if (!(thread_idx & 32 - kBlockSlices) /* lane_idx < kBlockSlices */) {
             *accum_ptr = val;
@@ -1175,7 +1195,7 @@ __launch_bounds__(1024, 2) void DepthwiseConv2dBackpropFilterGPUKernelNHWCSmall(
         T val = accum_data[i];
         // Warp-accumulate the pixels of the same depth from the accumulator.
         for (int delta = kAccumPixels / 2; delta > 0; delta /= 2) {
-          val += CudaShuffleDown(val, delta);
+          val += GpuShuffleDown(val, delta);
         }
         if (!(thread_idx & kAccumPixels - 1)) {
           GpuAtomicAdd(filter_offset + filter, val);
@@ -1185,7 +1205,7 @@ __launch_bounds__(1024, 2) void DepthwiseConv2dBackpropFilterGPUKernelNHWCSmall(
   }
 }
 
-// A Cuda kernel to compute the depthwise convolution backprop w.r.t. filter.
+// A GPU kernel to compute the depthwise convolution backprop w.r.t. filter.
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
           int kKnownDepthMultiplier>
 __global__ void __launch_bounds__(640, 2)
@@ -1285,7 +1305,7 @@ __global__ void __launch_bounds__(640, 2)
   }
 }
 
-// CUDA kernel to compute the depthwise convolution backward w.r.t. filter in
+// GPU kernel to compute the depthwise convolution backward w.r.t. filter in
 // NCHW format, tailored for small images up to 32x32. Stride and depth
 // multiplier must be 1. Padding must be 'SAME'. Only use this kernel if
 // CanLaunchDepthwiseConv2dGPUSmall(args) returns true.
@@ -1303,9 +1323,13 @@ template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
 __global__
 __launch_bounds__(1024, 2) void DepthwiseConv2dBackpropFilterGPUKernelNCHWSmall(
     const DepthwiseArgs args, const T* output, const T* input, T* filter) {
+#if GOOGLE_CUDA
   assert(CanLaunchDepthwiseConv2dBackpropFilterGPUSmall(args, blockDim.x));
   // Holds block plus halo and filter data for blockDim.z depths.
   extern __shared__ __align__(sizeof(T)) unsigned char shared_memory[];
+#elif TENSORFLOW_USE_ROCM
+  HIP_DYNAMIC_SHARED(unsigned char, shared_memory);
+#endif
   T* const shared_data = reinterpret_cast<T*>(shared_memory);
 
   const int batches = args.batch;
@@ -1405,7 +1429,7 @@ __launch_bounds__(1024, 2) void DepthwiseConv2dBackpropFilterGPUKernelNCHWSmall(
           T val = out1 * tile_ptr[0] + out2 * tile_ptr[tile_offset];
           // Warp-accumulate pixels of the same depth and write to accumulator.
           for (int delta = 16 / kBlockSlices; delta > 0; delta /= 2) {
-            val += CudaShuffleDown(val, delta);
+            val += GpuShuffleDown(val, delta);
           }
           if (!(thread_idx & 32 / kBlockSlices - 1)) {
             *accum_ptr = val;
@@ -1430,7 +1454,7 @@ __launch_bounds__(1024, 2) void DepthwiseConv2dBackpropFilterGPUKernelNCHWSmall(
         T val = accum_data[i];
         // Warp-accumulate pixels of the same depth from the accumulator.
         for (int delta = kAccumPixels / 2; delta > 0; delta /= 2) {
-          val += CudaShuffleDown(val, delta);
+          val += GpuShuffleDown(val, delta);
         }
         if (!(thread_idx & kAccumPixels - 1)) {
           GpuAtomicAdd(filter_offset + filter, val);
@@ -1439,7 +1463,6 @@ __launch_bounds__(1024, 2) void DepthwiseConv2dBackpropFilterGPUKernelNCHWSmall(
     }
   }
 }
-#endif // GOOGLE_CUDA
 
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight,
           int kBlockSlices, int kAccumPixels>
@@ -1458,8 +1481,6 @@ bool TryLaunchDepthwiseConv2dBackpropFilterGPUSmall(
   }
 
 
-// FIXME implement ROCM functional equivalent
-#if GOOGLE_CUDA
   dim3 block_dim;
   void (*kernel)(const DepthwiseArgs, const T*, const T*, T*);
   if (data_format == FORMAT_NHWC) {
@@ -1476,10 +1497,15 @@ bool TryLaunchDepthwiseConv2dBackpropFilterGPUSmall(
   }
   const int num_out_backprop =
       args.batch * args.out_rows * args.out_cols * args.out_depth;
-  CudaLaunchConfig config =
-      GetCudaLaunchConfig(num_out_backprop, d, kernel, shared_memory_size,
+  GpuLaunchConfig config =
+      GetGpuLaunchConfig(num_out_backprop, d, kernel, shared_memory_size,
                           block_dim.x * block_dim.y * block_dim.z);
+#if GOOGLE_CUDA
   kernel<<<config.block_count, block_dim, shared_memory_size, d.stream()>>>(
+      args, out_backprop, input, filter_backprop);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(kernel,
+      dim3(config.block_count), dim3(block_dim), shared_memory_size, d.stream(),
       args, out_backprop, input, filter_backprop);
 #endif
   return true;
@@ -1562,8 +1588,6 @@ void LaunchDepthwiseConv2dBackpropFilterGPU(const GpuDevice& d,
                                             const T* out_backprop,
                                             const T* input, T* filter_backprop,
                                             TensorFormat data_format) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
   void (*kernel)(const DepthwiseArgs, const T*, const T*, T*, int);
   if (data_format == FORMAT_NHWC) {
     kernel = DepthwiseConv2dBackpropFilterGPUKernelNHWC<
@@ -1577,10 +1601,16 @@ void LaunchDepthwiseConv2dBackpropFilterGPU(const GpuDevice& d,
   }
   const int num_out_backprop =
       args.batch * args.out_rows * args.out_cols * args.out_depth;
-  CudaLaunchConfig config =
-      GetCudaLaunchConfig(num_out_backprop, d, kernel, 0, 0);
+  GpuLaunchConfig config =
+      GetGpuLaunchConfig(num_out_backprop, d, kernel, 0, 0);
+#if GOOGLE_CUDA
   kernel<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
       args, out_backprop, input, filter_backprop, num_out_backprop);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(kernel,
+      dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+      args, out_backprop, input, filter_backprop, num_out_backprop);
+
 #endif
 }
 
@@ -1607,7 +1637,7 @@ void LaunchDepthwiseConv2dBackpropFilterGPU(const GpuDevice& d,
   }
 }
 
-// A simple launch pad to launch the Cuda kernel for depthwise convolution.
+// A simple launch pad to launch the GPU kernel for depthwise convolution.
 template <typename T>
 struct DepthwiseConv2dBackpropFilterGPULaunch {
   static void Run(const GpuDevice& d, const DepthwiseArgs args,
