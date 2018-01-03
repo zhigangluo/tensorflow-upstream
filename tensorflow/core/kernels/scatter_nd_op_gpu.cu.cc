@@ -30,8 +30,6 @@ namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template <typename T, typename Index, scatter_nd_op::UpdateOp op, int IXDIM>
 __global__ void ScatterNdOpKernel(
     const Index* indices, const T* updates, T* out,
@@ -82,7 +80,6 @@ __global__ void ScatterNdOpKernel(
 #undef OP_OVER_SLICE
 #undef ASSIGN
 }
-#endif
 
 namespace functor {
 
@@ -109,16 +106,20 @@ struct ScatterNdFunctor<GPUDevice, T, Index, op, IXDIM> {
       }
     }
 
-    // FIXME implement ROCm functional equivalent
-# if GOOGLE_CUDA
-    CudaLaunchConfig config = GetCudaLaunchConfig(Toutput.size(), d);
+    GpuLaunchConfig config = GetGpuLaunchConfig(Toutput.size(), d);
     // clang-format off
+# if GOOGLE_CUDA
     ScatterNdOpKernel<T, Index, op, IXDIM>
     <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
       Tindices.data(), Tupdates.data(), Toutput.data(), output_shape_prefix,
       batch_strides, batch_size, slice_size);
-    // clang-format on
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(ScatterNdOpKernel<T, Index, op, IXDIM>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        Tindices.data(), Tupdates.data(), Toutput.data(), output_shape_prefix,
+        batch_strides, batch_size, slice_size);
 #endif
+    // clang-format on
 
     return -1;
   }

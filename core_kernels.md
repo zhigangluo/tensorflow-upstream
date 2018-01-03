@@ -314,9 +314,9 @@ O scan_ops.cc
 O scan_ops_gpu.cu.cc
 O scatter_functor.cc
 O scatter_functor_gpu.cu.cc
-T scatter_functor_gpu.cu.h
+O scatter_functor_gpu.cu.h
 O scatter_nd_op.cc
-T scatter_nd_op_gpu.cu.cc
+O scatter_nd_op_gpu.cu.cc
 O scatter_op.cc
 O scatter_op_gpu.cu.cc
 O segment_reduction_ops.cc

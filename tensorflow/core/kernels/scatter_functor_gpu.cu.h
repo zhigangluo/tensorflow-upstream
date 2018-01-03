@@ -33,8 +33,6 @@ namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template <typename T, typename Index, scatter_op::UpdateOp op>
 __global__ void ScatterOpCustomKernel(
     T* params, const T* updates, const Index* indices,
@@ -73,7 +71,6 @@ __global__ void ScatterOpCustomKernel(
     }
   }
 }
-#endif
 
 namespace functor {
 // Specialization for a GPU device.
@@ -90,13 +87,17 @@ struct ScatterFunctor<GPUDevice, T, Index, op> {
     const Index indices_size = indices.size();
     const Index updates_size = updates.size();
 
-    // FIXME implement ROCm functional equivalent
+    GpuLaunchConfig config = GetGpuLaunchConfig(updates_size, d);
 #if GOOGLE_CUDA
-    CudaLaunchConfig config = GetCudaLaunchConfig(updates_size, d);
     ScatterOpCustomKernel<T, Index, op>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             params.data(), updates.data(), indices.data(),
             first_dim_size, updates_size, indices_size);
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(ScatterOpCustomKernel<T, Index, op>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        params.data(), updates.data(), indices.data(), first_dim_size,
+        updates_size, indices_size);
 #endif
     return -1;
   }
