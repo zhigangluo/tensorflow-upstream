@@ -71,7 +71,7 @@ O conv_ops.h
 O conv_ops_3d.cc
 O conv_ops_gpu.h
 O conv_ops_gpu_2.cu.cc
-T conv_ops_gpu_3.cu.cc
+O conv_ops_gpu_3.cu.cc
 O conv_ops_test.cc
 O crop_and_resize_op.cc
 O crop_and_resize_op_gpu.cu.cc

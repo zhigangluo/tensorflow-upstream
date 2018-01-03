@@ -131,8 +131,6 @@ EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Index<IndexCount> FlatToTensorIndex(
   return tensor_index;
 }
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 // A Cuda custom kernel that swaps dimension-0 and dimension-2 of a 3D tensor.
 template <typename T>
 __global__ void SwapDimension0And2InTensor3Simple(int nthreads, const T* input,
@@ -340,7 +338,6 @@ __global__ void PadInputCustomKernelNCHW(int nthreads, const T* input,
     }
   }
 }
-#endif // GOOGLE_CUDA
 
 // A GPU helper function that converts TensorFlow filter format to Cudnn filter
 // format.
@@ -350,8 +347,6 @@ struct TransformFilter<GPUDevice, T, int, NDIMS> {
   void operator()(const Device& d,
                   typename TTypes<T, NDIMS, int>::ConstTensor in,
                   typename TTypes<T, NDIMS, int>::Tensor out) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
     Dimension<3> combined_dims;
     combined_dims[0] = in.dimension(0);  // spatial dimensions
     for (int i = 1; i < NDIMS - 2; i++) {
@@ -359,10 +354,15 @@ struct TransformFilter<GPUDevice, T, int, NDIMS> {
     }
     combined_dims[1] = in.dimension(NDIMS - 2);  // input filters
     combined_dims[2] = in.dimension(NDIMS - 1);  // output filters
-    CudaLaunchConfig config = GetCudaLaunchConfig(out.size(), d);
+    GpuLaunchConfig config = GetGpuLaunchConfig(out.size(), d);
+#if GOOGLE_CUDA
     SwapDimension0And2InTensor3Simple<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             config.virtual_thread_count, in.data(), combined_dims, out.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(HIP_KERNEL_NAME(SwapDimension0And2InTensor3Simple<T>),
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        config.virtual_thread_count, in.data(), combined_dims, out.data());
 #endif
   }
 };
@@ -373,8 +373,6 @@ struct ReverseTransformFilter<GPUDevice, T, NDIMS> {
   typedef GPUDevice Device;
   void operator()(const Device& d, typename TTypes<T, NDIMS>::ConstTensor in,
                   typename TTypes<T, NDIMS>::Tensor out) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
     Dimension<3> combined_dims;
     combined_dims[0] = in.dimension(0);  // output filters
     combined_dims[1] = in.dimension(1);  // input filters
@@ -382,10 +380,15 @@ struct ReverseTransformFilter<GPUDevice, T, NDIMS> {
     for (int i = 3; i < NDIMS; ++i) {
       combined_dims[2] *= in.dimension(i);
     }
-    CudaLaunchConfig config = GetCudaLaunchConfig(out.size(), d);
+    GpuLaunchConfig config = GetGpuLaunchConfig(out.size(), d);
+#if GOOGLE_CUDA
     SwapDimension0And2InTensor3Simple<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             config.virtual_thread_count, in.data(), combined_dims, out.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(HIP_KERNEL_NAME(SwapDimension0And2InTensor3Simple<T>),
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        config.virtual_thread_count, in.data(), combined_dims, out.data());
 #endif
   }
 };
@@ -401,9 +404,7 @@ struct PadInput<GPUDevice, T, int, NDIMS> {
                   const std::array<int, NDIMS - 2>& padding_right,
                   typename TTypes<T, NDIMS, int>::Tensor out,
                   TensorFormat format) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
-    CudaLaunchConfig config = GetCudaLaunchConfig(out.size(), d);
+    GpuLaunchConfig config = GetGpuLaunchConfig(out.size(), d);
     Dimension<NDIMS> input_dims;
     for (int i = 0; i < NDIMS; ++i) {
       input_dims[i] = in.dimension(i);
@@ -416,19 +417,32 @@ struct PadInput<GPUDevice, T, int, NDIMS> {
     const Dimension<NDIMS - 2> padding_left_dim(padding_left);
 
     if (format == FORMAT_NHWC) {
+#if GOOGLE_CUDA
       PadInputCustomKernelNHWC<T, NDIMS><<<
           config.block_count, config.thread_per_block, 0, d.stream()>>>(
           config.virtual_thread_count, in.data(), input_dims, out.data(),
           output_dims, padding_left_dim);
+#elif TENSORFLOW_USE_ROCM
+      hipLaunchKernel(HIP_KERNEL_NAME(PadInputCustomKernelNHWC<T, NDIMS>),
+          dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+          config.virtual_thread_count, in.data(), input_dims, out.data(),
+          output_dims, padding_left_dim);
+#endif
     } else if (format == FORMAT_NCHW) {
+#if GOOGLE_CUDA
       PadInputCustomKernelNCHW<T, NDIMS><<<
           config.block_count, config.thread_per_block, 0, d.stream()>>>(
           config.virtual_thread_count, in.data(), input_dims, out.data(),
           output_dims, padding_left_dim);
+#elif TENSORFLOW_USE_ROCM
+      hipLaunchKernel(HIP_KERNEL_NAME(PadInputCustomKernelNCHW<T, NDIMS>),
+          dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+          config.virtual_thread_count, in.data(), input_dims, out.data(),
+          output_dims, padding_left_dim);
+#endif
     } else {
       LOG(FATAL) << "Invalid data format: " << format;
     }
-#endif
   }
 };
 
@@ -438,8 +452,6 @@ struct PadInput<GPUDevice, T, int, NDIMS> {
 template <typename T>
 void RunSwapDimension1And2InTensor3(const GPUDevice& d, const T* input,
                                     const Dimension<3>& input_dims, T* output) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
   // If both dimensions are not trivial, use tiles for the actual swapping.
   // Otherwise, the trivial swapping relying on the ldg cache is more efficient.
   static const int kMinDimensionToUseTiles = 16;
@@ -457,17 +469,28 @@ void RunSwapDimension1And2InTensor3(const GPUDevice& d, const T* input,
     };
     int total_tiles_count = input_dims_in_tiles[0] * input_dims_in_tiles[1] *
                             input_dims_in_tiles[2];
+#if GOOGLE_CUDA
     SwapDimension1And2InTensor3UsingTiles<T, TileSize, NumSubTiles><<<
         total_tiles_count, dim3(TileSize, NumSubTiles), 0, d.stream()>>>(
         input, input_dims, output);
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(HIP_KERNEL_NAME(SwapDimension1And2InTensor3UsingTiles<T, TileSize, NumSubTiles>),
+        dim3(total_tiles_count), dim3(TileSize, NumSubTiles), 0, d.stream(),
+        input, input_dims, output);
+#endif
   } else {
     int total_element_count = input_dims[0] * input_dims[1] * input_dims[2];
-    CudaLaunchConfig config = GetCudaLaunchConfig(total_element_count, d);
+    GpuLaunchConfig config = GetGpuLaunchConfig(total_element_count, d);
+#if GOOGLE_CUDA
     SwapDimension1And2InTensor3Simple<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             config.virtual_thread_count, input, input_dims, output);
-  }
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(HIP_KERNEL_NAME(SwapDimension1And2InTensor3Simple<T>),
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        config.virtual_thread_count, input, input_dims, output);
 #endif
+  }
 }
 
 // A GPU helper functor that does general dimension 1 and 2 switch for 3D
@@ -491,16 +514,19 @@ struct SwapDimension0And2InTensor3<GPUDevice, T> {
   typedef GPUDevice Device;
   void operator()(const Device& d, const T* in,
                   const gtl::ArraySlice<int64>& combined_dims, T* out) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
     Dimension<3> input_dims = {static_cast<int>(combined_dims[0]),
                                static_cast<int>(combined_dims[1]),
                                static_cast<int>(combined_dims[2])};
     size_t total_size = combined_dims[0] * combined_dims[1] * combined_dims[2];
-    CudaLaunchConfig config = GetCudaLaunchConfig(total_size, d);
+    GpuLaunchConfig config = GetGpuLaunchConfig(total_size, d);
+#if GOOGLE_CUDA
     SwapDimension0And2InTensor3Simple<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             config.virtual_thread_count, in, input_dims, out);
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(HIP_KERNEL_NAME(SwapDimension0And2InTensor3Simple<T>),
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        config.virtual_thread_count, in, input_dims, out);
 #endif
   }
 };
