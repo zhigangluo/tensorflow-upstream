@@ -33,8 +33,6 @@ limitations under the License.
 namespace tensorflow {
 namespace {
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 // This is Yangqing's custom kernel for the maxpooling operation. There are
 // three functions: MaxPoolForwardNCHW and MaxPoolForwardNHWC are the two
 // forward functions, dealing with the forward case. MaxPoolBackward is the
@@ -332,7 +330,6 @@ __global__ void MaxPoolGradBackward(const int nthreads, const dtype* top_diff,
 
 #undef GPU_1D_KERNEL_LOOP
 
-#endif // GOOGLE_CUDA
 }  // namespace
 
 namespace functor {
@@ -344,13 +341,19 @@ bool MaxPoolForwardWithOptionalArgmax<T>::operator()(
     const int kernel_h, const int kernel_w, const int stride_h,
     const int stride_w, const int pad_t, const int pad_l, T* top_data,
     int64* mask, const Eigen::GpuDevice& d) {
-  // FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
   const int kThreadsPerBlock = 1024;
   const int output_size = batch * channels * pooled_height * pooled_width;
 
+#if GOOGLE_CUDA
   MaxPoolForwardNHWC<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                        kThreadsPerBlock, 0, d.stream()>>>(
+      output_size, bottom_data, height, width, channels, pooled_height,
+      pooled_width, kernel_h, kernel_w, stride_h, stride_w, pad_t, pad_l,
+      top_data, mask);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(MaxPoolForwardNHWC<T>,
+      dim3((output_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
+      dim3(kThreadsPerBlock), 0, d.stream(),
       output_size, bottom_data, height, width, channels, pooled_height,
       pooled_width, kernel_h, kernel_w, stride_h, stride_w, pad_t, pad_l,
       top_data, mask);
@@ -365,18 +368,31 @@ bool MaxPoolBackwardNoMask<T>::operator()(
     const int kernel_h, const int kernel_w, const int stride_h,
     const int stride_w, const int pad_t, const int pad_l, const T* top_diff,
     T* bottom_diff, const Eigen::GpuDevice& d) {
-  // FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
   const int kThreadsPerBlock = 1024;
 
   const int bottom_size = batch * channels * height * width;
+#if GOOGLE_CUDA
   SetZero<<<(bottom_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
             kThreadsPerBlock, 0, d.stream()>>>(bottom_size, bottom_diff);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(SetZero<T>,
+      dim3((bottom_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
+      dim3(kThreadsPerBlock), 0, d.stream(),
+      bottom_size, bottom_diff);
+#endif
 
   const int top_size = batch * channels * pooled_height * pooled_width;
+#if GOOGLE_CUDA
   MaxPoolBackwardNoMaskNHWC<<<(top_size + kThreadsPerBlock - 1) /
                                   kThreadsPerBlock,
                               kThreadsPerBlock, 0, d.stream()>>>(
+      top_size, bottom_data, height, width, channels, pooled_height,
+      pooled_width, kernel_h, kernel_w, stride_h, stride_w, pad_t, pad_l,
+      top_diff, bottom_diff);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(MaxPoolBackwardNoMaskNHWC<T>,
+      dim3((top_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
+      dim3(kThreadsPerBlock), 0, d.stream(),
       top_size, bottom_data, height, width, channels, pooled_height,
       pooled_width, kernel_h, kernel_w, stride_h, stride_w, pad_t, pad_l,
       top_diff, bottom_diff);
@@ -389,14 +405,22 @@ bool MaxPoolBackwardWithArgmax<T>::operator()(
     const int output_size, const int input_size, const T* top_diff,
     const int64* mask, const int top_offset, const int bottom_offset,
     T* bottom_diff, const Eigen::GpuDevice& d) {
-  // FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
   const int kThreadsPerBlock = 1024;
+#if GOOGLE_CUDA
   SetZero<<<(input_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
     kThreadsPerBlock, 0, d.stream()>>>(input_size, bottom_diff);
   MaxPoolBackward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
                     kThreadsPerBlock, 0, d.stream()>>>(
                                         output_size, top_diff, mask, top_offset, bottom_offset, bottom_diff);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(SetZero<T>,
+      dim3((input_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
+      dim3(kThreadsPerBlock), 0, d.stream(),
+      input_size, bottom_diff);
+  hipLaunchKernel(MaxPoolBackward<T>,
+      dim3((output_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
+      dim3(kThreadsPerBlock), 0, d.stream(),
+      output_size, top_diff, mask, top_offset, bottom_offset, bottom_diff);
 #endif
   return d.ok();
 }
@@ -410,24 +434,37 @@ bool MaxPoolGradBackwardNoMask<T>::operator()(
     const int pad_l, const T* top_diff, T* bottom_diff,
     const Eigen::GpuDevice& d) {
   const int num_kernels = batch * channels * pooled_height * pooled_width;
-  // FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
-  CudaLaunchConfig config = GetCudaLaunchConfig(num_kernels, d);
+  GpuLaunchConfig config = GetGpuLaunchConfig(num_kernels, d);
 
   if (data_format == FORMAT_NHWC) {
+#if GOOGLE_CUDA
     MaxPoolGradBackwardNoMaskNHWC<<<config.block_count, config.thread_per_block,
                                     0, d.stream()>>>(
         num_kernels, bottom_data, output_data, pooled_height, pooled_width,
         channels, height, width, kernel_h, kernel_w, stride_h, stride_w, pad_t,
         pad_l, top_diff, bottom_diff);
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(MaxPoolGradBackwardNoMaskNHWC<T>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        num_kernels, bottom_data, output_data, pooled_height, pooled_width,
+        channels, height, width, kernel_h, kernel_w, stride_h, stride_w, pad_t,
+        pad_l, top_diff, bottom_diff);
+#endif
   } else {
+#if GOOGLE_CUDA
     MaxPoolGradBackwardNoMaskNCHW<<<config.block_count, config.thread_per_block,
                                     0, d.stream()>>>(
         num_kernels, bottom_data, output_data, pooled_height, pooled_width,
         channels, height, width, kernel_h, kernel_w, stride_h, stride_w, pad_t,
         pad_l, top_diff, bottom_diff);
-  }
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(MaxPoolGradBackwardNoMaskNCHW<T>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        num_kernels, bottom_data, output_data, pooled_height, pooled_width,
+        channels, height, width, kernel_h, kernel_w, stride_h, stride_w, pad_t,
+        pad_l, top_diff, bottom_diff);
 #endif
+  }
   return d.ok();
 }
 
@@ -436,12 +473,15 @@ bool MaxPoolGradBackwardWithArgmax<T>::operator()(
     const int output_size, const int input_size, const T* top_diff,
     const int64* mask, const int top_offset, const int bottom_offset,
     T* bottom_diff, const Eigen::GpuDevice& d) {
-  // FIXME implement ROCm functional equivalent
+  GpuLaunchConfig config = GetGpuLaunchConfig(output_size, d);
 #if GOOGLE_CUDA
-  CudaLaunchConfig config = GetCudaLaunchConfig(output_size, d);
   MaxPoolGradBackward<<<config.block_count, config.thread_per_block, 0,
                         d.stream()>>>(output_size, top_diff, mask, top_offset,
                                       bottom_offset, bottom_diff);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(MaxPoolGradBackward<T>,
+      dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+      output_size, top_diff, mask, top_offset, bottom_offset, bottom_diff);
 #endif
   return d.ok();
 }

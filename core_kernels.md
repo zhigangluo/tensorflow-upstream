@@ -266,7 +266,7 @@ O matrix_set_diag_op.cc
 O matrix_set_diag_op_gpu.cu.cc
 O matrix_triangular_solve_op.cc
 O maxpooling_op.cc
-T maxpooling_op_gpu.cu.cc
+O maxpooling_op_gpu.cu.cc
 O maxpooling_op_gpu.h
 O mirror_pad_op.cc
 O mirror_pad_op_gpu.cu.cc
