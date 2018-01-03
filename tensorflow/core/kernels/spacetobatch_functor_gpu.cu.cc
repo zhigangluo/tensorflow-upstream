@@ -43,8 +43,6 @@ struct S2BParameters {
   int32 block_shape[NUM_BLOCK_DIMS];
 };
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 // GPU kernel for space-to-batch (if B2S = false) and batch-to-space conversion
 // (if B2S = true).
 //
@@ -102,7 +100,6 @@ __global__ void S2B(const int32 nthreads, T* space_tensor_ptr,
     }
   }
 }
-#endif
 
 namespace functor {
 template <typename T, int NUM_BLOCK_DIMS, bool B2S>
@@ -146,12 +143,16 @@ struct SpaceToBatchFunctor<GPUDevice, T, NUM_BLOCK_DIMS, B2S> {
       return errors::InvalidArgument(
           "number of batch_tensor elements exceeds 2^32-1");
     }
-    // FIXME implement ROCm functional equivalent
+    GpuLaunchConfig config =
+        GetGpuLaunchConfig(static_cast<int32>(total_count), d);
 #if GOOGLE_CUDA
-    CudaLaunchConfig config =
-        GetCudaLaunchConfig(static_cast<int32>(total_count), d);
     S2B<T, NUM_BLOCK_DIMS,
         B2S><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+        config.virtual_thread_count, const_cast<T*>(space_tensor.data()), args,
+        const_cast<T*>(batch_tensor.data()));
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(S2B<T, NUM_BLOCK_DIMS, B2S>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, const_cast<T*>(space_tensor.data()), args,
         const_cast<T*>(batch_tensor.data()));
 #endif

@@ -331,10 +331,10 @@ O softplus_op.cc
 O softplus_op_gpu.cu.cc
 O softsign_op.cc
 O softsign_op_gpu.cu.cc
-T spacetobatch_functor_gpu.cu.cc
+O spacetobatch_functor_gpu.cu.cc
 O spacetobatch_op.cc
 O spacetodepth_op.cc
-T spacetodepth_op_gpu.cu.cc
+O spacetodepth_op_gpu.cu.cc
 O sparse_tensor_dense_matmul_op.cc
 T sparse_tensor_dense_matmul_op_gpu.cu.cc
 O sparse_xent_op.cc
