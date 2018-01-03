@@ -227,7 +227,7 @@ O debug_ops.h
 O dense_update_functor_gpu.cu.cc
 O dense_update_ops.cc
 O depthtospace_op.cc
-T depthtospace_op_gpu.cu.cc
+O depthtospace_op_gpu.cu.cc
 O depthwise_conv_grad_op.cc
 O depthwise_conv_op.cc
 T depthwise_conv_op_gpu.cu.cc
