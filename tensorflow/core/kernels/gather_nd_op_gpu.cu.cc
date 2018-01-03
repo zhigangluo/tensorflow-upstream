@@ -30,8 +30,6 @@ namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template <typename T, typename Index, int IXDIM>
 __global__ void GatherSliceOpKernel(
     const T* params, const Index* indices, T* out,
@@ -62,7 +60,6 @@ __global__ void GatherSliceOpKernel(
     out[i] = (out_of_bounds) ? T(0) : ldg(params + offset + loc_offset);
   }
 }
-#endif
 
 namespace functor {
 
@@ -86,17 +83,21 @@ struct GatherNdSlice<GPUDevice, T, Index, IXDIM> {
       batch_indices[i - 1] = Tparams.dimension(i - 1);
       batch_strides[i - 1] = batch_strides[i] * Tparams.dimension(i);
     }
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
-    CudaLaunchConfig config = GetCudaLaunchConfig(out_size, d);
+    GpuLaunchConfig config = GetGpuLaunchConfig(out_size, d);
 
     // clang-format off
+#if GOOGLE_CUDA
     GatherSliceOpKernel<T, Index, IXDIM>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             Tparams.data(), Tindices.data(), Tout.data(), batch_strides,
             batch_indices, indices_size, s_size, out_size);
-    // clang-format on
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(GatherSliceOpKernel<T, Index, IXDIM>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        Tparams.data(), Tindices.data(), Tout.data(), batch_strides,
+        batch_indices, indices_size, s_size, out_size);
 #endif
+    // clang-format on
 
     // TODO(ebrevdo): enable indices validation on GPU.
     // Right now checking for indices out of bound in the kernel would

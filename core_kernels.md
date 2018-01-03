@@ -243,9 +243,9 @@ O fused_batch_norm_op.cc
 O fused_batch_norm_op.cu.cc
 O gather_functor.cc
 O gather_functor_gpu.cu.cc
-T gather_functor_gpu.cu.h
+O gather_functor_gpu.cu.h
 O gather_nd_op.cc
-T gather_nd_op_gpu.cu.cc
+O gather_nd_op_gpu.cu.cc
 O gather_op.cc
 O gpu_device_array.h
 O gpu_device_array_gpu.h

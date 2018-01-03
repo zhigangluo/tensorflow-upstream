@@ -33,8 +33,6 @@ namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template <typename T, typename Index, bool is_axis_zero>
 __global__ void GatherOpKernel(const T* params, const Index* indices, T* out,
                                int64 gather_dim_size, int64 indices_size,
@@ -74,7 +72,6 @@ __global__ void GatherOpKernel(const T* params, const Index* indices, T* out,
     }
   }
 }
-#endif // GOOGLE_CUDA
 
 namespace functor {
 template <typename T, typename Index>
@@ -97,24 +94,36 @@ struct GatherFunctor<GPUDevice, T, Index> {
     const int64 slice_size = params.dimension(2);
 
     // FIXME implement ROCm equivalent
-#if GOOGLE_CUDA
-    CudaLaunchConfig config = GetCudaLaunchConfig(out_size, d);
+    GpuLaunchConfig config = GetGpuLaunchConfig(out_size, d);
     if (is_axis_zero) {
       // clang-format off
+#if GOOGLE_CUDA
       GatherOpKernel<T, Index, true>
           <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
               params.data(), indices.data(), out.data(), gather_dim_size,
               indices_size, slice_size, out_size);
+#elif TENSORFLOW_USE_ROCM
+      hipLaunchKernel(GatherOpKernel<T, Index, true>,
+          dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+          params.data(), indices.data(), out.data(), gather_dim_size,
+          indices_size, slice_size, out_size);
+#endif
       // clang-format on
     } else {
       // clang-format off
+#if GOOGLE_CUDA
       GatherOpKernel<T, Index, false>
           <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
               params.data(), indices.data(), out.data(), gather_dim_size,
               indices_size, slice_size, out_size);
+#elif TENSORFLOW_USE_ROCM
+      hipLaunchKernel(GatherOpKernel<T, Index, false>,
+          dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+          params.data(), indices.data(), out.data(), gather_dim_size,
+          indices_size, slice_size, out_size);
+#endif
       // clang-format on
     }
-#endif // GOOGLE_CUDA
     // TODO(fpmc): enable indices validation on GPU.
     // Right now checking for indicies out of bound in the kernel would
     // require copying code between GPU/CPU, and thus slow.
