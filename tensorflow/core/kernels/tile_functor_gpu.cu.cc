@@ -30,8 +30,6 @@ limitations under the License.
 namespace tensorflow {
 namespace internal {
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template <typename T>
 __global__ void TileKernel(int nthreads, const T* src, const int32* buf,
                            const int32 ndims, T* dst) {
@@ -48,7 +46,6 @@ __global__ void TileKernel(int nthreads, const T* src, const int32* buf,
     dst[o_idx] = ldg(src + i_idx);
   }
 }
-#endif
 
 template <typename Device, typename T>
 void TileSimple(const Device& d, Tensor* out, const Tensor& in) {
@@ -77,10 +74,14 @@ void TileSimple(const Device& d, Tensor* out, const Tensor& in) {
   const T* p = in.flat<T>().data();
   T* q = out->flat<T>().data();
 
-// FIXME implement ROCm functional equivalent
+  GpuLaunchConfig cfg = GetGpuLaunchConfig(out_nelem, d);
 #if GOOGLE_CUDA
-  CudaLaunchConfig cfg = GetCudaLaunchConfig(out_nelem, d);
   TileKernel<<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(
+      cfg.virtual_thread_count, p, reinterpret_cast<const int32*>(dev_buf),
+      ndims, q);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(TileKernel<T>,
+      dim3(cfg.block_count), dim3(cfg.thread_per_block), 0, d.stream(),
       cfg.virtual_thread_count, p, reinterpret_cast<const int32*>(dev_buf),
       ndims, q);
 #endif

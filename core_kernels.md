@@ -339,7 +339,7 @@ O sparse_tensor_dense_matmul_op.cc
 O sparse_tensor_dense_matmul_op_gpu.cu.cc
 O sparse_xent_op.cc
 O sparse_xent_op_gpu.cu.cc
-T split_lib_gpu.cu.cc
+O split_lib_gpu.cu.cc
 O split_op.cc
 O split_v_op.cc
 O stage_op.cc
@@ -359,7 +359,7 @@ O strided_slice_op_inst_7.cc
 O tensor_array.cc
 O tensor_array.h
 O tensor_array_ops.cc
-T tile_functor_gpu.cu.cc
+O tile_functor_gpu.cu.cc
 O tile_ops.cc
 O tile_ops_gpu_impl.h
 O tile_ops_gpu_impl_1.cu.cc
