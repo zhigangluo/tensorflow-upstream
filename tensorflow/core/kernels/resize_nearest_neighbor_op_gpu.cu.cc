@@ -36,8 +36,6 @@ typedef Eigen::GpuDevice GPUDevice;
 
 namespace {
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template <typename T, bool align_corners>
 __global__ void ResizeNearestNeighborNHWC(
     const int nthreads, const T* bottom_data, const int in_height,
@@ -95,7 +93,6 @@ __global__ void ResizeNearestNeighborBackwardNHWC(
     GpuAtomicAdd(bottom_diff_n + idx, ldg(top_diff + index));
   }
 }
-#endif
 
 }  // namespace
 
@@ -118,13 +115,17 @@ struct ResizeNearestNeighbor<GPUDevice, T, align_corners> {
     const int output_size = batch_size * out_height * out_width * channels;
     if (output_size == 0) return true;
 
-// FIXME implement ROCm functional equivalent
+    GpuLaunchConfig config = GetGpuLaunchConfig(output_size, d);
 #if GOOGLE_CUDA
-    CudaLaunchConfig config = GetCudaLaunchConfig(output_size, d);
     ResizeNearestNeighborNHWC<T, align_corners>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             output_size, input.data(), in_height, in_width, channels,
             out_height, out_width, height_scale, width_scale, output.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(ResizeNearestNeighborNHWC<T, align_corners>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        output_size, input.data(), in_height, in_width, channels,
+        out_height, out_width, height_scale, width_scale, output.data());
 #endif
     return d.ok();
   }
@@ -154,25 +155,35 @@ struct ResizeNearestNeighborGrad<GPUDevice, T, align_corners> {
 
     const int output_size = batch_size * channels * out_height * out_width;
 
-// FIXME implement ROCm functional equivalent
+    GpuLaunchConfig output_config = GetGpuLaunchConfig(output_size, d);
 #if GOOGLE_CUDA
-    CudaLaunchConfig output_config = GetCudaLaunchConfig(output_size, d);
     SetZero<<<output_config.block_count, output_config.thread_per_block, 0,
               d.stream()>>>(output_size, output.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(SetZero<T>,
+        dim3(output_config.block_count), dim3(output_config.thread_per_block),
+        0, d.stream(),
+        output_size, output.data());
 #endif
     if (!d.ok()) return false;
 
     const int input_size = batch_size * channels * in_height * in_width;
     if (input_size == 0) return true;
 
-// FIXME implement ROCm functional equivalent
+    GpuLaunchConfig input_config = GetGpuLaunchConfig(input_size, d);
 #if GOOGLE_CUDA
-    CudaLaunchConfig input_config = GetCudaLaunchConfig(input_size, d);
     ResizeNearestNeighborBackwardNHWC<T, align_corners>
         <<<input_config.block_count, input_config.thread_per_block, 0,
            d.stream()>>>(input_config.virtual_thread_count, input.data(),
                          in_height, in_width, channels, out_height, out_width,
                          height_scale, width_scale, output.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(ResizeNearestNeighborBackwardNHWC<T, align_corners>,
+        dim3(input_config.block_count), dim3(input_config.thread_per_block), 0,
+        d.stream(),
+        input_config.virtual_thread_count, input.data(), in_height, in_width,
+        channels, out_height, out_width, height_scale, width_scale,
+        output.data());
 #endif
     return d.ok();
   }

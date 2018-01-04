@@ -251,7 +251,7 @@ O gpu_device_array.h
 O gpu_device_array_gpu.h
 O identity_op.cc
 O inplace_ops.cc
-T inplace_ops_functor_gpu.cu.cc
+O inplace_ops_functor_gpu.cu.cc
 O l2loss_op.cc
 O l2loss_op_gpu.cu.cc
 O lrn_op.cc
@@ -279,7 +279,7 @@ O pack_op.cc
 O pad_op.cc
 O pad_op_gpu.cu.cc
 O parameterized_truncated_normal_op.cc
-T parameterized_truncated_normal_op_gpu.cu.cc
+O parameterized_truncated_normal_op_gpu.cu.cc
 T pooling_ops_3d.cc
 T pooling_ops_3d_gpu.cu.cc
 O pooling_ops_3d_gpu.h
@@ -302,9 +302,9 @@ O relu_op.cc
 O relu_op_gpu.cu.cc
 O reshape_op.cc
 O resize_bilinear_op.cc
-T resize_bilinear_op_gpu.cu.cc
+O resize_bilinear_op_gpu.cu.cc
 O resize_nearest_neighbor_op.cc
-T resize_nearest_neighbor_op_gpu.cu.cc
+O resize_nearest_neighbor_op_gpu.cu.cc
 O resource_variable_ops.cc
 O reverse_op.cc
 O reverse_op_gpu.cu.cc

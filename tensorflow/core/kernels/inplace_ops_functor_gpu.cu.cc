@@ -30,8 +30,6 @@ namespace functor {
 
 typedef Eigen::GpuDevice Device;
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template <typename T>
 __global__ void DoParallelConcatOpKernel(int nthreads, const int64 rows,
                                          const int64 cols, int32 loc,
@@ -44,23 +42,25 @@ __global__ void DoParallelConcatOpKernel(int nthreads, const int64 rows,
     *p = ldg(q);
   }
 }
-#endif
 
 template <typename T>
 Status DoParallelConcatUpdate(const Device& d, const Tensor& value, int32 loc,
                               Tensor* output) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
   const int64 nelem = value.NumElements();
-  CudaLaunchConfig cfg = GetCudaLaunchConfig(nelem, d);
+  GpuLaunchConfig cfg = GetGpuLaunchConfig(nelem, d);
   auto Toutput = output->flat_outer_dims<T>();
   const int64 nrows = Toutput.dimension(0);
   const int64 ncols = Toutput.dimension(1);
   const T* src = value.flat<T>().data();
   T* dst = output->flat<T>().data();
+#if GOOGLE_CUDA
   DoParallelConcatOpKernel<T>
       <<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(
           cfg.virtual_thread_count, nrows, ncols, loc, src, dst);
+#elif TENSORFLOW_USE_ROCM
+  hipLaunchKernel(DoParallelConcatOpKernel<T>,
+      dim3(cfg.block_count), dim3(cfg.thread_per_block), 0, d.stream(),
+      cfg.virtual_thread_count, nrows, ncols, loc, src, dst);
 #endif
   return Status::OK();
 }

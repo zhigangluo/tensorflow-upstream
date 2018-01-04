@@ -50,8 +50,6 @@ namespace functor {
 
 typedef Eigen::GpuDevice GPUDevice;
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template <typename T>
 __global__ void __launch_bounds__(1024)
     TruncatedNormalKernel(random::PhiloxRandom gen, T* data, int64 num_batches,
@@ -192,7 +190,6 @@ __global__ void __launch_bounds__(1024)
     gen.Skip(remaining_samples);
   }
 }
-#endif // GOOGLE_CUDA
 
 // Partial specialization for GPU
 template <typename T>
@@ -207,12 +204,18 @@ struct TruncatedNormalFunctor<GPUDevice, T> {
                   typename TTypes<T>::ConstFlat maxvals,
                   const random::PhiloxRandom& gen,
                   typename TTypes<T>::Flat output) {
-    // FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
-    const auto config = GetCudaLaunchConfig(num_elements, d);
+    const auto config = GetGpuLaunchConfig(num_elements, d);
 
+#if GOOGLE_CUDA
     TruncatedNormalKernel<
         T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+        gen, output.data(), num_batches, samples_per_batch, num_elements,
+        means.data(), means.dimension(0) == 1, stddevs.data(),
+        stddevs.dimension(0) == 1, minvals.data(), minvals.dimension(0) == 1,
+        maxvals.data(), maxvals.dimension(0) == 1, kMaxIterations);
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(TruncatedNormalKernel<T>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         gen, output.data(), num_batches, samples_per_batch, num_elements,
         means.data(), means.dimension(0) == 1, stddevs.data(),
         stddevs.dimension(0) == 1, minvals.data(), minvals.dimension(0) == 1,
