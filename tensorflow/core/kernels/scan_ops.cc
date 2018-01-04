@@ -92,7 +92,7 @@ class ScanOp : public OpKernel {
   bool exclusive_;
 };
 
-#ifdef GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 namespace functor {
 
 // Forward declarations of GPU functors
