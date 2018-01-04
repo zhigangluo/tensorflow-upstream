@@ -785,7 +785,7 @@ class Conv2DSlowBackpropFilterOp : public OpKernel {
       for (auto profile_algorithm : algorithms) {
         // TODO(zhengxq): profile each algorithm multiple times to better
         // accuracy.
-        CudnnScratchAllocator scratch_allocator(
+        DnnScratchAllocator scratch_allocator(
             ConvolveBackwardFilterScratchSize, context);
         ProfileResult profile_result;
         bool cudnn_launch_status =
@@ -823,7 +823,7 @@ class Conv2DSlowBackpropFilterOp : public OpKernel {
           best_result_no_scratch.algorithm());
 #else
       ProfileResult profile_result;
-      CudnnScratchAllocator scratch_allocator(
+      DnnScratchAllocator scratch_allocator(
           ConvolveBackwardFilterScratchSize, context);
       bool miopen_find_status =
           stream
@@ -844,7 +844,7 @@ class Conv2DSlowBackpropFilterOp : public OpKernel {
       AutoTuneConvBwdFilter::GetInstance()->Insert(conv_parameters,
                                                    algorithm_config);
     }
-    CudnnScratchAllocator scratch_allocator(ConvolveBackwardFilterScratchSize,
+    DnnScratchAllocator scratch_allocator(ConvolveBackwardFilterScratchSize,
                                             context);
     bool cudnn_launch_status =
         stream

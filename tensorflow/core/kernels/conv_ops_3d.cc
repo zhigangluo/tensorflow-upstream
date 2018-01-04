@@ -399,7 +399,7 @@ struct LaunchConvOp<GPUDevice, T> {
       for (auto profile_algorithm : algorithms) {
         // TODO(zhengxq): profile each algorithm multiple times to better
         // accuracy.
-        CudnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
+        DnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
         ProfileResult profile_result;
         bool cudnn_launch_status =
             stream
@@ -436,7 +436,7 @@ struct LaunchConvOp<GPUDevice, T> {
       AutoTuneConv3d::GetInstance()->Insert(conv_parameters, algorithm_config);
     }
 
-    CudnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
+    DnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
     bool cudnn_launch_status =
         stream
             ->ThenConvolveWithAlgorithm(input_desc, input_ptr, filter_desc,

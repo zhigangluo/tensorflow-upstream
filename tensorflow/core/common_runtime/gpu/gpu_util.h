@@ -50,10 +50,10 @@ int64 GetCudnnWorkspaceLimit(const string& envvar_in_mb,
 // A class to provide scratch-space allocator for Stream-Executor Cudnn
 // callback. TensorFlow is responsible for releasing the temporary buffers after
 // the kernel finishes.
-class CudnnScratchAllocator : public perftools::gputools::ScratchAllocator {
+class DnnScratchAllocator : public perftools::gputools::ScratchAllocator {
  public:
-  virtual ~CudnnScratchAllocator() {}
-  CudnnScratchAllocator(int64 memory_limit, OpKernelContext* context)
+  virtual ~DnnScratchAllocator() {}
+  DnnScratchAllocator(int64 memory_limit, OpKernelContext* context)
       : memory_limit_(memory_limit), total_byte_size_(0), context_(context) {}
   virtual int64 GetMemoryLimitInBytes(
       perftools::gputools::Stream* stream) override {

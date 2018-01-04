@@ -102,7 +102,7 @@ void DnnPooling3dOp<T>::Compute(
       // default value is in bytes despite the name of the environment variable
       "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32  // 4GB
       );
-  CudnnScratchAllocator scratch_allocator(PoolingScratchSize, context);
+  DnnScratchAllocator scratch_allocator(PoolingScratchSize, context);
   bool status = stream
                     ->ThenPoolForward(pooling_desc, input_desc, input_data,
                                       output_desc, &output_data,
@@ -237,7 +237,7 @@ void DnnPooling3dGradOp<T>::Compute(
       "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32  // 4GB
       );
 
-  CudnnScratchAllocator scratch_allocator(PoolingScratchSize, context);
+  DnnScratchAllocator scratch_allocator(PoolingScratchSize, context);
   bool status =
       stream
           ->ThenPoolBackward(pooling_desc, orig_input_desc, orig_input_data,

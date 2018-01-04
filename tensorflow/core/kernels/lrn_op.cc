@@ -555,7 +555,7 @@ struct LaunchLRNGrad<GPUDevice, T> {
           "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32  // 4GB
           );
 
-      CudnnScratchAllocator scratch_allocator(NormalizeBackwardScratchSize, context);
+      DnnScratchAllocator scratch_allocator(NormalizeBackwardScratchSize, context);
       bool status =
           stream
               ->ThenNormalizeBackwardWithDimensions(
@@ -614,7 +614,7 @@ struct LaunchLRNGrad<GPUDevice, T> {
           "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32  // 4GB
           );
 
-      CudnnScratchAllocator scratch_allocator(NormalizeBackwardScratchSize, context);
+      DnnScratchAllocator scratch_allocator(NormalizeBackwardScratchSize, context);
        bool status =
           stream
               ->ThenNormalizeBackwardWithDimensions(

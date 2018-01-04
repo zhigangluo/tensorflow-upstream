@@ -833,7 +833,7 @@ class Conv2DSlowBackpropInputOp : public OpKernel {
     static int64 ConvolveBackwardDataScratchSize = GetCudnnWorkspaceLimit(
         "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32  // 4GB by default
         );
-    CudnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
+    DnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
                                             context);
     int device_id = stream->parent()->device_ordinal();
     DataType dtype = out_backprop.dtype();
@@ -865,7 +865,7 @@ class Conv2DSlowBackpropInputOp : public OpKernel {
       for (auto profile_algorithm : algorithms) {
         // TODO(zhengxq): profile each algorithm multiple times to better
         // accuracy.
-        CudnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
+        DnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
                                                 context);
         ProfileResult profile_result;
         bool cudnn_launch_status =
@@ -904,7 +904,7 @@ class Conv2DSlowBackpropInputOp : public OpKernel {
       ProfileResult profile_result;
       // MIOpen has its own Find and autotuner so use it here, passing
       // kDefaultAlgorithm to force a search
-      CudnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
+      DnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
                                                 context);
       bool miopen_find_status =
         stream

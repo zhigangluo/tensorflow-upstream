@@ -663,7 +663,7 @@ class Conv3DBackpropInputOp<GPUDevice, T> : public OpKernel {
       for (auto profile_algorithm : algorithms) {
         // TODO(zhengxq): profile each algorithm multiple times to better
         // accuracy.
-        CudnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
+        DnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
                                                 context);
         ProfileResult profile_result;
         bool cudnn_launch_status =
@@ -701,7 +701,7 @@ class Conv3DBackpropInputOp<GPUDevice, T> : public OpKernel {
       AutoTuneConv3dBwdData::GetInstance()->Insert(conv_parameters,
                                                    algorithm_config);
     }
-    CudnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
+    DnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
                                             context);
     bool cudnn_launch_status =
         stream
@@ -1031,7 +1031,7 @@ class Conv3DBackpropFilterOp<GPUDevice, T> : public OpKernel {
       for (auto profile_algorithm : algorithms) {
         // TODO(zhengxq): profile each algorithm multiple times to better
         // accuracy.
-        CudnnScratchAllocator scratch_allocator(
+        DnnScratchAllocator scratch_allocator(
             ConvolveBackwardFilterScratchSize, context);
         ProfileResult profile_result;
         bool cudnn_launch_status =
@@ -1070,7 +1070,7 @@ class Conv3DBackpropFilterOp<GPUDevice, T> : public OpKernel {
       AutoTuneConv3dBwdFilter::GetInstance()->Insert(conv_parameters,
                                                      algorithm_config);
     }
-    CudnnScratchAllocator scratch_allocator(ConvolveBackwardFilterScratchSize,
+    DnnScratchAllocator scratch_allocator(ConvolveBackwardFilterScratchSize,
                                             context);
     bool cudnn_launch_status =
         stream

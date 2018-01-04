@@ -677,7 +677,7 @@ void LaunchConv2DOp<GPUDevice, T>::launch(
     for (auto profile_algorithm : algorithms) {
       // TODO(zhengxq): profile each algorithm multiple times to better
       // accuracy.
-      CudnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
+      DnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
       ProfileResult profile_result;
       bool cudnn_launch_status =
           stream
@@ -715,7 +715,7 @@ void LaunchConv2DOp<GPUDevice, T>::launch(
     ProfileResult profile_result;
     // MIOpen has its own Find and autotuner so use it here, passing
     // kDefaultAlgorithm to force a search
-    CudnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
+    DnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
     bool miopen_find_status =
       stream
           ->ThenConvolveWithAlgorithm(
@@ -737,7 +737,7 @@ void LaunchConv2DOp<GPUDevice, T>::launch(
     AutoTuneConv::GetInstance()->Insert(conv_parameters, algorithm_config);
   }
 
-  CudnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
+  DnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
   bool cudnn_launch_status =
       stream
           ->ThenConvolveWithAlgorithm(input_desc, input_ptr, filter_desc,
