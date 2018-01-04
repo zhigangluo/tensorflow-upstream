@@ -31,8 +31,6 @@ namespace tensorflow {
 
 typedef Eigen::GpuDevice GPUDevice;
 
-// FIXME implement ROCM functional equivalent
-#if GOOGLE_CUDA
 template <typename T, typename Tindices, bool ADJ_A, bool ADJ_B>
 __global__ void SparseTensorDenseMatMulKernel(int nnz, int m, int b_rows,
                                               int b_cols, int p,
@@ -53,7 +51,12 @@ __global__ void SparseTensorDenseMatMulKernel(int nnz, int m, int b_rows,
     // out[i, j]
     T* out_location = out + i * p + j;
     if (!FastBoundsCheck(k, n)) {
+#if GOOGLE_CUDA
       GpuAtomicAdd(out_location, std::numeric_limits<T>::quiet_NaN());
+#elif TENSORFLOW_USE_ROCM
+      // XXX FIXME need to review if this is solid
+      GpuAtomicAdd(out_location, nan(""));
+#endif
       continue;
     }
 
@@ -65,7 +68,6 @@ __global__ void SparseTensorDenseMatMulKernel(int nnz, int m, int b_rows,
     GpuAtomicAdd(out_location, a_value * b_value);
   }
 }
-#endif
 
 namespace functor {
 
@@ -84,16 +86,20 @@ struct SparseTensorDenseMatMulFunctor<GPUDevice, T, Tindices, ADJ_A, ADJ_B> {
     int b_rows = b.dimension(0);
     int b_cols = b.dimension(1);
 
-    // FIXME implement ROCM functional equivalent
-#if GOOGLE_CUDA
     // TODO(ebrevdo): Should this be alpha * nnz instead of
     // out.size()?  Perhaps p * nnz ?
-    CudaLaunchConfig config = GetCudaLaunchConfig(p * nnz, d);
+    GpuLaunchConfig config = GetGpuLaunchConfig(p * nnz, d);
 
+#if GOOGLE_CUDA
     SparseTensorDenseMatMulKernel<T, Tindices, ADJ_A, ADJ_B>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             nnz, m, b_rows, b_cols, p, a_indices.data(), a_values.data(),
             b.data(), out.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(SparseTensorDenseMatMulKernel<T, Tindices, ADJ_A, ADJ_B>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        nnz, m, b_rows, b_cols, p, a_indices.data(), a_values.data(),
+        b.data(), out.data());
 #endif
 
     return Status::OK();

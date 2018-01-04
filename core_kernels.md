@@ -336,7 +336,7 @@ O spacetobatch_op.cc
 O spacetodepth_op.cc
 O spacetodepth_op_gpu.cu.cc
 O sparse_tensor_dense_matmul_op.cc
-T sparse_tensor_dense_matmul_op_gpu.cu.cc
+O sparse_tensor_dense_matmul_op_gpu.cu.cc
 O sparse_xent_op.cc
 O sparse_xent_op_gpu.cu.cc
 T split_lib_gpu.cu.cc
