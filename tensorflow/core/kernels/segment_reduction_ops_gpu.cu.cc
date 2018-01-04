@@ -30,8 +30,6 @@ namespace tensorflow {
 
 using GPUDevice = Eigen::GpuDevice;
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 // Helper for UnusortedSegmentSumCustomKernel that adds value into dest
 // atomically.
 template <typename T>
@@ -83,7 +81,6 @@ __global__ void UnsortedSegmentSumCustomKernel(
     AccumulateInto<T>(output + output_index, ldg(input + input_index));
   }
 }
-#endif
 
 namespace functor {
 
@@ -99,11 +96,14 @@ struct UnsortedSegmentSumFunctor<GPUDevice, T, Index>: UnsortedSegmentBaseFuncto
       return;
     }
 
-    // FIXME implement ROCM functional equivalent
-#if GOOGLE_CUDA
     // Set 'output' to zeros.
-    CudaLaunchConfig config = GetCudaLaunchConfig(output.size(), d);
+    GpuLaunchConfig config = GetGpuLaunchConfig(output.size(), d);
+#if GOOGLE_CUDA
     SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+        output.size(), output.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(SetZero<T>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         output.size(), output.data());
 #endif
     if (data_size == 0 || segment_ids_shape.num_elements() == 0) {
@@ -119,12 +119,16 @@ struct UnsortedSegmentSumFunctor<GPUDevice, T, Index>: UnsortedSegmentBaseFuncto
     const Index input_outer_dim_size = segment_ids.dimension(0);
     const Index input_inner_dim_size = input_total_size / input_outer_dim_size;
 
-    // FIXME implement ROCM functional equivalent
+    config = GetGpuLaunchConfig(input_total_size, d);
 #if GOOGLE_CUDA
-    config = GetCudaLaunchConfig(input_total_size, d);
     UnsortedSegmentSumCustomKernel<
         T,
         Index><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+        input_outer_dim_size, input_inner_dim_size, output_rows,
+        segment_ids.data(), data, output.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(UnsortedSegmentSumCustomKernel<T, Index>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         input_outer_dim_size, input_inner_dim_size, output_rows,
         segment_ids.data(), data, output.data());
 #endif

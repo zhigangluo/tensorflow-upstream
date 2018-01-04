@@ -72,8 +72,6 @@ DEFINE_GPU_KERNELS(bfloat16);
 
 namespace {
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template <typename T>
 __global__ void SplitOpKernel(const T* input, int32 prefix_dim_size,
                               int32 split_dim_size, int32 suffix_dim_size,
@@ -106,12 +104,9 @@ __global__ void SplitOpKernel(const T* input, int32 prefix_dim_size,
     *(output_ptr + output_offset) = ldg(input + offset);
   }
 }
-#endif
 
 }  // namespace
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 // cannot be in anonymous namespace due to extern shared memory
 // very similar to the concat kernel except the input/output logic
 // is reversed
@@ -128,7 +123,11 @@ __global__ void split_v_kernel(const T* input_ptr,
   int num_outputs = output_ptr_data.size;
 
   // verbose declaration needed due to template
+#if GOOGLE_CUDA
   extern __shared__ __align__(sizeof(T)) unsigned char smem[];
+#elif TENSORFLOW_USE_ROCM
+  HIP_DYNAMIC_SHARED(unsigned char, smem);
+#endif
   IntType* smem_col_scan = reinterpret_cast<IntType*>(smem);
 
   if (useSmem) {
@@ -148,7 +147,7 @@ __global__ void split_v_kernel(const T* input_ptr,
   // works well when there are many small segments and when the
   // segments are much longer
   IntType segment =
-      cuda_helper::upper_bound<IntType>(col_scan, num_outputs, gidx) - 1;
+      gpu_helper::upper_bound<IntType>(col_scan, num_outputs, gidx) - 1;
 
   IntType curr_offset = col_scan[segment];
   IntType curr_segment = segment;
@@ -196,7 +195,6 @@ __global__ void SplitVOpKernel_fixed(
     output_ptr[output_offset] = input[offset];
   }
 }
-#endif
 
 template <typename T>
 struct SplitOpGPULaunch {
@@ -204,15 +202,19 @@ struct SplitOpGPULaunch {
            int32 split_dim_size, int32 suffix_dim_size,
            const GpuDeviceArrayStruct<T*>& output_ptr_data) {
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
-    CudaLaunchConfig config = GetCudaLaunchConfig(
+    GpuLaunchConfig config = GetGpuLaunchConfig(
         prefix_dim_size * split_dim_size * suffix_dim_size, d);
 
+#if GOOGLE_CUDA
     SplitOpKernel<T>
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             input, prefix_dim_size, split_dim_size, suffix_dim_size,
             output_ptr_data);
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(SplitOpKernel<T>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        input, prefix_dim_size, split_dim_size, suffix_dim_size,
+        output_ptr_data);
 #endif
   }
 };
@@ -224,19 +226,21 @@ struct SplitVOpGPULaunch {
            const GpuDeviceArrayStruct<IntType>& output_scan,
            const GpuDeviceArrayStruct<T*>& output_ptr_data) {
     if (fixed_size) {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
-      CudaLaunchConfig config =
-          GetCudaLaunchConfig(total_rows * total_cols, gpu_device);
+      GpuLaunchConfig config =
+          GetGpuLaunchConfig(total_rows * total_cols, gpu_device);
 
+#if GOOGLE_CUDA
       SplitVOpKernel_fixed<T><<<config.block_count, config.thread_per_block, 0,
                                 gpu_device.stream()>>>(
           input_ptr, total_rows, total_cols, output_ptr_data);
+#elif TENSORFLOW_USE_ROCM
+      hipLaunchKernel(SplitVOpKernel_fixed<T>,
+          dim3(config.block_count), dim3(config.thread_per_block), 0,
+          gpu_device.stream(),
+          input_ptr, total_rows, total_cols, output_ptr_data);
 #endif
     } else {
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
-      auto config = GetCuda2DLaunchConfig(total_cols, total_rows, gpu_device);
+      auto config = GetGpu2DLaunchConfig(total_cols, total_rows, gpu_device);
       IntType smem_max = gpu_device.sharedMemPerBlock();
       IntType smem_usage = output_scan.size * sizeof(IntType);
       // performance crossover is less than using maximum available shared
@@ -244,15 +248,28 @@ struct SplitVOpGPULaunch {
       // 4096 inputs is a lot, most code will take the smem path
       const int32 kMaxSmemBytesPerformance = 16384;
       if (smem_usage < smem_max && smem_usage < kMaxSmemBytesPerformance)
+#if GOOGLE_CUDA
         split_v_kernel<T, IntType, true>
             <<<config.block_count, config.thread_per_block, smem_usage,
                gpu_device.stream()>>>(input_ptr, output_scan, total_rows,
                                       total_cols, output_ptr_data);
+#elif TENSORFLOW_USE_ROCM
+        hipLaunchKernel(split_v_kernel<T, IntType, true>,
+            dim3(config.block_count), dim3(config.thread_per_block), smem_usage,
+            gpu_device.stream(),
+            input_ptr, output_scan, total_rows, total_cols, output_ptr_data);
+#endif
       else
+#if GOOGLE_CUDA
         split_v_kernel<T, IntType, false>
             <<<config.block_count, config.thread_per_block, 0,
                gpu_device.stream()>>>(input_ptr, output_scan, total_rows,
                                       total_cols, output_ptr_data);
+#elif TENSORFLOW_USE_ROCM
+        hipLaunchKernel(split_v_kernel<T, IntType, false>,
+            dim3(config.block_count), dim3(config.thread_per_block), 0,
+            gpu_device.stream(),
+            input_ptr, output_scan, total_rows, total_cols, output_ptr_data);
 #endif
     }
   }

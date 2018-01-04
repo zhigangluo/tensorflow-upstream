@@ -271,7 +271,7 @@ O maxpooling_op_gpu.h
 O mirror_pad_op.cc
 O mirror_pad_op_gpu.cu.cc
 O multinomial_op.cc
-T multinomial_op_gpu.cu.cc
+O multinomial_op_gpu.cu.cc
 O nn_ops_test.cc
 O one_hot_op.cc
 O one_hot_op_gpu.cu.cc
@@ -320,7 +320,7 @@ O scatter_nd_op_gpu.cu.cc
 O scatter_op.cc
 O scatter_op_gpu.cu.cc
 O segment_reduction_ops.cc
-T segment_reduction_ops_gpu.cu.cc
+O segment_reduction_ops_gpu.cu.cc
 O sequence_ops.cc
 O shape_ops.cc
 O slice_op.cc

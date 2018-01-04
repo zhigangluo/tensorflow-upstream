@@ -39,8 +39,6 @@ namespace functor {
 
 using GPUDevice = Eigen::GpuDevice;
 
-// FIXME implement ROCM functional equivalent
-#if GOOGLE_CUDA
 // Kernel for Multinomial op.  Data is interpreted to have the following shapes:
 //   scores: [B, S, C];  maxima: [B, S];  output: [B, S].
 __global__ void MultinomialKernel(int32 nthreads, const int32 num_classes,
@@ -49,12 +47,11 @@ __global__ void MultinomialKernel(int32 nthreads, const int32 num_classes,
   GPU_1D_KERNEL_LOOP(index, nthreads) {
     const int maxima_idx = index / num_classes;
     if (ldg(maxima + maxima_idx) == ldg(scores + index)) {
-      CudaAtomicMax(reinterpret_cast<uint64*>(output + maxima_idx),
+      GpuAtomicMax(reinterpret_cast<uint64*>(output + maxima_idx),
                     static_cast<uint64>(index % num_classes));
     }
   }
 }
-#endif
 
 template <typename T>
 struct MultinomialFunctor<GPUDevice, T> {
@@ -108,14 +105,18 @@ struct MultinomialFunctor<GPUDevice, T> {
     // Necessary for atomicMax() inside the kernel.
     output.device(d) = output.constant(0LL);
 
-    // FIXME imeplement ROCm functional equivalent
-#if GOOGLE_CUDA
     const int32 work_items = batch_size * num_samples * num_classes;
-    CudaLaunchConfig config = GetCudaLaunchConfig(work_items, d);
+    GpuLaunchConfig config = GetGpuLaunchConfig(work_items, d);
+#if GOOGLE_CUDA
     MultinomialKernel<<<config.block_count, config.thread_per_block, 0,
                         d.stream()>>>(config.virtual_thread_count, num_classes,
                                       num_samples, scores.data(), maxima.data(),
                                       output.data());
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(MultinomialKernel,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        config.virtual_thread_count, num_classes, num_samples, scores.data(),
+        maxima.data(), output.data());
 #endif
   }
 };
