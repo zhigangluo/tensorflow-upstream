@@ -33,10 +33,8 @@ limitations under the License.
 #include "tensorflow/core/util/tensor_format.h"
 #include "tensorflow/core/util/work_sharder.h"
 
-// FIXME implement ROCm functional equivalent
-//#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
-#if GOOGLE_CUDA
-#include "tensorflow/core/kernels/cudnn_pooling_gpu.h"
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#include "tensorflow/core/kernels/dnn_pooling_gpu.h"
 #include "tensorflow/core/kernels/pooling_ops_3d_gpu.h"
 #endif
 namespace tensorflow {
@@ -746,9 +744,7 @@ class MaxPooling3dGradGradOp : public OpKernel {
 TF_CALL_float(REGISTER_CPU_KERNELS);
 #undef REGISTER_CPU_KERNELS
 
-// FIXME implement ROCm functional equivalent
-//#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename T>
 struct LaunchPoolingOp<GPUDevice, T, AVG> {

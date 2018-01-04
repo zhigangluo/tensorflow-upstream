@@ -80,8 +80,8 @@ O cross_op_gpu.cu.cc
 X cuda_solvers.cc
 X cuda_solvers.h
 X cuda_solvers_gpu.cu.cc
-X cudnn_pooling_gpu.cc
-X cudnn_pooling_gpu.h
+O dnn_pooling_gpu.cc
+O dnn_pooling_gpu.h
 O cwise_op_abs.cc
 O cwise_op_acos.cc
 O cwise_op_acosh.cc
@@ -280,8 +280,8 @@ O pad_op.cc
 O pad_op_gpu.cu.cc
 O parameterized_truncated_normal_op.cc
 O parameterized_truncated_normal_op_gpu.cu.cc
-T pooling_ops_3d.cc
-T pooling_ops_3d_gpu.cu.cc
+O pooling_ops_3d.cc
+O pooling_ops_3d_gpu.cu.cc
 O pooling_ops_3d_gpu.h
 O pooling_ops_common.cc
 O pooling_ops_common_gpu.h

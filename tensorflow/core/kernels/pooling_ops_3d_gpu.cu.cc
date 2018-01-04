@@ -30,8 +30,6 @@ namespace tensorflow {
 
 namespace {
 
-// FIXME implement ROCM functional equivalent
-#if GOOGLE_CUDA
 template <typename dtype>
 __global__ void MaxPoolGradBackwardNoMaskNCDHW(
     const int nthreads, const dtype* bottom_data, const dtype* output_data,
@@ -132,7 +130,6 @@ __global__ void MaxPoolGradBackwardNoMaskNDHWC(
     }
   }
 }
-#endif
 
 }  // namespace
 
@@ -147,27 +144,42 @@ bool MaxPool3dGradBackward<T>::operator()(
     const int kernel_w, const int stride_p, const int stride_h,
     const int stride_w, const int pad_p, const int pad_t, const int pad_l,
     const T* top_diff, T* bottom_diff, const Eigen::GpuDevice& d) {
-  // FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
   int num_kernels =
       batch * channels * pooled_plane * pooled_height * pooled_width;
-  CudaLaunchConfig config = GetCudaLaunchConfig(num_kernels, d);
+  GpuLaunchConfig config = GetGpuLaunchConfig(num_kernels, d);
   if (data_format == FORMAT_NHWC) {
+#if GOOGLE_CUDA
     MaxPoolGradBackwardNoMaskNDHWC<<<config.block_count,
                                      config.thread_per_block, 0, d.stream()>>>(
         num_kernels, bottom_data, output_data, pooled_plane, pooled_height,
         pooled_width, channels, plane, height, width, kernel_p, kernel_h,
         kernel_w, stride_p, stride_h, stride_w, pad_p, pad_t, pad_l, top_diff,
         bottom_diff);
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(MaxPoolGradBackwardNoMaskNDHWC<T>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        num_kernels, bottom_data, output_data, pooled_plane, pooled_height,
+        pooled_width, channels, plane, height, width, kernel_p, kernel_h,
+        kernel_w, stride_p, stride_h, stride_w, pad_p, pad_t, pad_l, top_diff,
+        bottom_diff);
+#endif
   } else {
+#if GOOGLE_CUDA
     MaxPoolGradBackwardNoMaskNCDHW<<<config.block_count,
                                      config.thread_per_block, 0, d.stream()>>>(
         num_kernels, bottom_data, output_data, pooled_plane, pooled_height,
         pooled_width, channels, plane, height, width, kernel_p, kernel_h,
         kernel_w, stride_p, stride_h, stride_w, pad_p, pad_t, pad_l, top_diff,
         bottom_diff);
-  }
+#elif TENSORFLOW_USE_ROCM
+    hipLaunchKernel(MaxPoolGradBackwardNoMaskNCDHW<T>,
+        dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
+        num_kernels, bottom_data, output_data, pooled_plane, pooled_height,
+        pooled_width, channels, plane, height, width, kernel_p, kernel_h,
+        kernel_w, stride_p, stride_h, stride_w, pad_p, pad_t, pad_l, top_diff,
+        bottom_diff);
 #endif
+  }
   return d.ok();
 }
 

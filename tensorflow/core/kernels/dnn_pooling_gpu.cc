@@ -23,13 +23,13 @@ limitations under the License.
 #include "tensorflow/core/kernels/conv_2d.h"
 #include "tensorflow/core/kernels/conv_3d.h"
 #include "tensorflow/core/kernels/conv_ops_gpu.h"
-#include "tensorflow/core/kernels/cudnn_pooling_gpu.h"
+#include "tensorflow/core/kernels/dnn_pooling_gpu.h"
 
 typedef Eigen::GpuDevice GPUDevice;
 
 namespace tensorflow {
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename T>
 void DnnPooling3dOp<T>::Compute(
@@ -263,6 +263,6 @@ void DnnPooling3dGradOp<T>::Compute(
 TF_CALL_float(DEFINE_DNN_OPS) TF_CALL_half(DEFINE_DNN_OPS)
 #undef DEFINE_DNN_OPS
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow
