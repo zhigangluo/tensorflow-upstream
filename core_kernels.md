@@ -54,7 +54,7 @@ O cast_op_impl_uint8.cc
 O cast_op_test.cc
 O check_numerics_op.cc
 O check_numerics_op_gpu.cu.cc
-T cholesky_op.cc
+X cholesky_op.cc
 O colorspace_op.cc
 O colorspace_op_gpu.cu.cc
 O concat_lib.h
@@ -261,7 +261,7 @@ O matrix_band_part_op.cc
 O matrix_band_part_op_gpu.cu.cc
 O matrix_diag_op.cc
 O matrix_diag_op_gpu.cu.cc
-T matrix_inverse_op.cc
+X matrix_inverse_op.cc
 O matrix_set_diag_op.cc
 O matrix_set_diag_op_gpu.cu.cc
 O matrix_triangular_solve_op.cc
@@ -370,15 +370,15 @@ O tile_ops_gpu_impl_5.cu.cc
 O tile_ops_gpu_impl_6.cu.cc
 O tile_ops_gpu_impl_7.cu.cc
 O tile_ops_gpu_impl_8.cu.cc
-O topk_op.cc
-T topk_op_gpu.cu.cc
+X topk_op.cc
+X topk_op_gpu.cu.cc
 O training_ops.cc
 O training_ops_gpu.cu.cc
 O transpose_functor_gpu.cu.cc
 O transpose_op.cc
 O unpack_op.cc
 O variable_ops.cc
-T where_op.cc
-T where_op_gpu.cu.cc
+X where_op.cc
+X where_op_gpu.cu.cc
 O xent_op.cc
 O xent_op_gpu.cu.cc

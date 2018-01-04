@@ -179,7 +179,9 @@ class WhereCPUOp : public OpKernel {
 
 REGISTER_KERNEL_BUILDER(Name("Where").Device(DEVICE_CPU), WhereCPUOp);
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+// FIXME implement ROCm functional equivalent
+//#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 
 namespace functor {
 
@@ -234,8 +236,6 @@ class WhereGPUOp : public AsyncOpKernel {
   void ComputeAsyncType(const Tensor& input, const int input_dims,
                         OpKernelContext* context, DoneCallback done) {
 
-    // FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
     // Step 0: alloc nnz
     // Step 1: call nnz kernel
     // Step 2: copy nnz to host
@@ -330,7 +330,6 @@ class WhereGPUOp : public AsyncOpKernel {
     context->device()->tensorflow_gpu_device_info()->event_mgr->ThenExecute(
         stream, create_and_check_output);
 
-#endif // GOOGLE_CUDA
   }
 
  private:

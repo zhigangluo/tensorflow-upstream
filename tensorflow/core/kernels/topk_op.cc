@@ -223,7 +223,9 @@ TF_CALL_REAL_NUMBER_TYPES(REGISTER_KERNELS);
 #undef REGISTER_KERNELS_NAME
 #undef REGISTER_KERNELS
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+// FIXME implement ROCm functional equivalent
+//#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 
 namespace functor {
 #define DECLARE_GPU_SPEC(T)                                                  \
