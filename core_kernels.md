@@ -33,7 +33,7 @@ O batchtospace_op.cc
 O betainc_op.cc
 O betainc_op_gpu.cu.cc
 O bias_op.cc
-T bias_op_gpu.cu.cc
+O bias_op_gpu.cu.cc
 O bitcast_op.cc
 O cast_op.cc
 O cast_op_gpu.cu.cc
