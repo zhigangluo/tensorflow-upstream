@@ -40,8 +40,6 @@ namespace functor {
 
 typedef Eigen::GpuDevice GPUDevice;
 
-// FIXME implement ROCm functional equivalent
-#if GOOGLE_CUDA
 template <class Distribution, bool VariableSamplesPerOutput>
 struct FillPhiloxRandomKernel;
 
@@ -216,7 +214,6 @@ __global__ void __launch_bounds__(1024)
                          Distribution::kVariableSamplesPerOutput>()
       .Run(base_gen, data, size, dist);
 }
-#endif // GOOGLE_CUDA
 
 // Partial specialization for GPU
 template <class Distribution>
@@ -224,7 +221,6 @@ void FillPhiloxRandom<GPUDevice, Distribution>::operator()(
     OpKernelContext*, const GPUDevice& d, random::PhiloxRandom gen,
     typename Distribution::ResultElementType* data, int64 size,
     Distribution dist) {
-  // FIXME implement ROCm functional equivalent
 #if GOOGLE_CUDA
   const int32 block_size = d.maxCudaThreadsPerBlock();
   const int32 num_blocks =
@@ -234,6 +230,15 @@ void FillPhiloxRandom<GPUDevice, Distribution>::operator()(
   FillPhiloxRandomKernelLaunch<
       Distribution><<<num_blocks, block_size, 0, d.stream()>>>(gen, data, size,
                                                                dist);
+#elif TENSORFLOW_USE_ROCM
+  const int32 block_size = d.maxHipThreadsPerBlock();
+  const int32 num_blocks =
+      (d.getNumHipMultiProcessors() * d.maxHipThreadsPerMultiProcessor()) /
+      block_size;
+
+  hipLaunchKernel(FillPhiloxRandomKernelLaunch<Distribution>,
+      dim3(num_blocks), dim3(block_size), 0, d.stream(),
+      gen, data, size, dist);
 #endif
 };
 

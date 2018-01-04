@@ -289,7 +289,7 @@ O quantize_and_dequantize_op.cc
 O quantize_and_dequantize_op_gpu.cu.cc
 O random_op.cc
 O random_op.h
-T random_op_gpu.cu.cc
+O random_op_gpu.cu.cc
 O reduction_ops_all.cc
 O reduction_ops_any.cc
 O reduction_ops_gpu.cu.cc
