@@ -5138,7 +5138,7 @@ diff -Naur eigen/eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/Ten
  #else
 diff -Naur eigen/eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorReduction.h eigen_archive/unsupported/Eigen/CXX11/src/Tensor/TensorReduction.h
 --- eigen/eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorReduction.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen_archive/unsupported/Eigen/CXX11/src/Tensor/TensorReduction.h	2017-12-08 23:38:41.000000000 +0000
++++ eigen_archive/unsupported/Eigen/CXX11/src/Tensor/TensorReduction.h	2018-01-08 20:37:12.964751267 +0000
 @@ -334,7 +334,7 @@
  };
  
@@ -5148,20 +5148,7 @@ diff -Naur eigen/eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/Ten
  template <int B, int N, typename S, typename R, typename I>
  __global__ void FullReductionKernel(R, const S, I, typename S::CoeffReturnType*, unsigned int*);
  
-@@ -487,15 +487,20 @@
-       }
-     }
- 
--    // Special case for full reductions
--    if (NumOutputDims == 0) {
--      m_preservedStrides[0] = internal::array_prod(input_dims);
--    }
-+    // XXX FIXME HACK!
-+    //// Special case for full reductions
-+    //if (NumOutputDims == 0) {
-+    //  m_preservedStrides[0] = internal::array_prod(input_dims);
-+    //}
-   }
+@@ -495,7 +495,11 @@
  
    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Dimensions& dimensions() const { return m_dimensions; }
  
@@ -5174,7 +5161,7 @@ diff -Naur eigen/eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/Ten
      m_impl.evalSubExprsIfNeeded(NULL);
  
      // Use the FullReducer if possible.
-@@ -526,7 +531,7 @@
+@@ -526,7 +530,7 @@
      }
  
      // Attempt to use an optimized reduction.
@@ -5183,7 +5170,7 @@ diff -Naur eigen/eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/Ten
        bool reducing_inner_dims = true;
        for (int i = 0; i < NumReducedDims; ++i) {
          if (static_cast<int>(Layout) == static_cast<int>(ColMajor)) {
-@@ -694,7 +699,7 @@
+@@ -694,7 +698,7 @@
  #ifdef EIGEN_USE_THREADS
    template <typename S, typename O, bool V> friend struct internal::FullReducerShard;
  #endif
@@ -5192,7 +5179,7 @@ diff -Naur eigen/eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/Ten
    template <int B, int N, typename S, typename R, typename I> KERNEL_FRIEND void internal::FullReductionKernel(R, const S, I, typename S::CoeffReturnType*, unsigned int*);
  #ifdef EIGEN_HAS_CUDA_FP16
    template <typename S, typename R, typename I> KERNEL_FRIEND void internal::ReductionInitFullReduxKernelHalfFloat(R, const S, I, half2*);
-@@ -774,14 +779,21 @@
+@@ -774,14 +778,21 @@
    // Indexed by reduced dimensions.
    array<Index, NumReducedDims> m_reducedDims;
  
