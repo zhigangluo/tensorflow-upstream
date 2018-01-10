@@ -571,9 +571,10 @@ miopenDataType_t ToMIOpenDataType(
     dnn::DataLayout data_layout = dnn::DataLayout::kBatchDepthYX) {
   switch (data_type) {
     case dnn::DataType::kFloat:
-    case dnn::DataType::kDouble:
+      return miopenFloat;
     case dnn::DataType::kHalf:
-      return static_cast<miopenDataType_t>(data_type);
+      return miopenHalf;
+    case dnn::DataType::kDouble:
     default:
       LOG(FATAL) << "Invalid DNN data type: " << static_cast<int>(data_type);
   }
