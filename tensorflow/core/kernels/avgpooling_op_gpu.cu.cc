@@ -103,7 +103,7 @@ bool RunAvePoolBackwardNHWC(const T* const top_diff, const int num,
       pooled_height, pooled_width, kernel_h, kernel_w, stride_h, stride_w,
       pad_t, pad_t, bottom_diff);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(HIP_KERNEL_NAME(AvePoolBackwardNHWC<T>),
+  hipLaunchKernelGGL(AvePoolBackwardNHWC<T>,
       dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
       config.virtual_thread_count, top_diff, num, height, width, channels,
       pooled_height, pooled_width, kernel_h, kernel_w, stride_h, stride_w,

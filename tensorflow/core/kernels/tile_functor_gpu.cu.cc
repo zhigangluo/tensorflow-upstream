@@ -80,7 +80,7 @@ void TileSimple(const Device& d, Tensor* out, const Tensor& in) {
       cfg.virtual_thread_count, p, reinterpret_cast<const int32*>(dev_buf),
       ndims, q);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(TileKernel<T>,
+  hipLaunchKernelGGL(TileKernel<T>,
       dim3(cfg.block_count), dim3(cfg.thread_per_block), 0, d.stream(),
       cfg.virtual_thread_count, p, reinterpret_cast<const int32*>(dev_buf),
       ndims, q);

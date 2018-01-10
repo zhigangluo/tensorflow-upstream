@@ -122,7 +122,7 @@ struct ResizeNearestNeighbor<GPUDevice, T, align_corners> {
             output_size, input.data(), in_height, in_width, channels,
             out_height, out_width, height_scale, width_scale, output.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(ResizeNearestNeighborNHWC<T, align_corners>,
+    hipLaunchKernelGGL(ResizeNearestNeighborNHWC<T, align_corners>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         output_size, input.data(), in_height, in_width, channels,
         out_height, out_width, height_scale, width_scale, output.data());
@@ -160,7 +160,7 @@ struct ResizeNearestNeighborGrad<GPUDevice, T, align_corners> {
     SetZero<<<output_config.block_count, output_config.thread_per_block, 0,
               d.stream()>>>(output_size, output.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(SetZero<T>,
+    hipLaunchKernelGGL(SetZero<T>,
         dim3(output_config.block_count), dim3(output_config.thread_per_block),
         0, d.stream(),
         output_size, output.data());
@@ -178,7 +178,7 @@ struct ResizeNearestNeighborGrad<GPUDevice, T, align_corners> {
                          in_height, in_width, channels, out_height, out_width,
                          height_scale, width_scale, output.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(ResizeNearestNeighborBackwardNHWC<T, align_corners>,
+    hipLaunchKernelGGL(ResizeNearestNeighborBackwardNHWC<T, align_corners>,
         dim3(input_config.block_count), dim3(input_config.thread_per_block), 0,
         d.stream(),
         input_config.virtual_thread_count, input.data(), in_height, in_width,

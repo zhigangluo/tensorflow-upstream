@@ -96,7 +96,7 @@ struct SparseTensorDenseMatMulFunctor<GPUDevice, T, Tindices, ADJ_A, ADJ_B> {
             nnz, m, b_rows, b_cols, p, a_indices.data(), a_values.data(),
             b.data(), out.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(SparseTensorDenseMatMulKernel<T, Tindices, ADJ_A, ADJ_B>,
+    hipLaunchKernelGGL(SparseTensorDenseMatMulKernel<T, Tindices, ADJ_A, ADJ_B>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         nnz, m, b_rows, b_cols, p, a_indices.data(), a_values.data(),
         b.data(), out.data());

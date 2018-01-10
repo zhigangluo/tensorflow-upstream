@@ -58,7 +58,7 @@ Status DoParallelConcatUpdate(const Device& d, const Tensor& value, int32 loc,
       <<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(
           cfg.virtual_thread_count, nrows, ncols, loc, src, dst);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(DoParallelConcatOpKernel<T>,
+  hipLaunchKernelGGL(DoParallelConcatOpKernel<T>,
       dim3(cfg.block_count), dim3(cfg.thread_per_block), 0, d.stream(),
       cfg.virtual_thread_count, nrows, ncols, loc, src, dst);
 #endif

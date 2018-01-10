@@ -82,7 +82,7 @@ struct DepthToSpaceOpFunctor<GPUDevice, T> {
         input_height, input_width, input_depth, output_height, output_width,
         output_depth, output.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(D2S<T>,
+    hipLaunchKernelGGL(D2S<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input.data(), block_size, batch_size,
         input_height, input_width, input_depth, output_height, output_width,

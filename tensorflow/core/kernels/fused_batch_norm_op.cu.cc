@@ -48,7 +48,7 @@ void VarianceToInvVariance<T>::operator()(const Eigen::GpuDevice& d,
                                 d.stream()>>>(config.virtual_thread_count,
                                               variance, epsilon, inv_variance);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(VarianceToInvVarianceKernel<T>,
+  hipLaunchKernelGGL(VarianceToInvVarianceKernel<T>,
       dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
       config.virtual_thread_count, variance, epsilon, inv_variance);
 #endif
@@ -76,7 +76,7 @@ void InvVarianceToVariance<T>::operator()(const Eigen::GpuDevice& d,
                                 d.stream()>>>(config.virtual_thread_count,
                                               epsilon, sample_size, variance);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(InvVarianceToVarianceKernel<T>,
+  hipLaunchKernelGGL(InvVarianceToVarianceKernel<T>,
       dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
       config.virtual_thread_count, epsilon, sample_size, variance);
 #endif

@@ -114,7 +114,7 @@ struct ScatterNdFunctor<GPUDevice, T, Index, op, IXDIM> {
       Tindices.data(), Tupdates.data(), Toutput.data(), output_shape_prefix,
       batch_strides, batch_size, slice_size);
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(ScatterNdOpKernel<T, Index, op, IXDIM>,
+    hipLaunchKernelGGL(ScatterNdOpKernel<T, Index, op, IXDIM>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         Tindices.data(), Tupdates.data(), Toutput.data(), output_shape_prefix,
         batch_strides, batch_size, slice_size);

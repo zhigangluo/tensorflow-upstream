@@ -113,7 +113,7 @@ struct MultinomialFunctor<GPUDevice, T> {
                                       num_samples, scores.data(), maxima.data(),
                                       output.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(MultinomialKernel,
+    hipLaunchKernelGGL(MultinomialKernel,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, num_classes, num_samples, scores.data(),
         maxima.data(), output.data());

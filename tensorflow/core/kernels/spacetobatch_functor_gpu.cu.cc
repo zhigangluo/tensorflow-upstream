@@ -151,7 +151,7 @@ struct SpaceToBatchFunctor<GPUDevice, T, NUM_BLOCK_DIMS, B2S> {
         config.virtual_thread_count, const_cast<T*>(space_tensor.data()), args,
         const_cast<T*>(batch_tensor.data()));
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(S2B<T, NUM_BLOCK_DIMS, B2S>,
+    hipLaunchKernelGGL(S2B<T, NUM_BLOCK_DIMS, B2S>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, const_cast<T*>(space_tensor.data()), args,
         const_cast<T*>(batch_tensor.data()));

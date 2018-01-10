@@ -134,7 +134,7 @@ void AdjustHueGPU::operator()(GPUDevice* device, const int64 number_of_elements,
   internal::adjust_hue_nhwc<<<block_count, threads_per_block, 0, stream>>>(
       number_of_elements, input, output, delta);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(HIP_KERNEL_NAME(internal::adjust_hue_nhwc),
+  hipLaunchKernelGGL(internal::adjust_hue_nhwc,
       dim3(block_count), dim3(threads_per_block), 0, stream,
       number_of_elements, input, output, delta);
 #endif

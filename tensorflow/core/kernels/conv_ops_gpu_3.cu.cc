@@ -157,6 +157,7 @@ __global__ void SwapDimension0And2InTensor3Simple(int nthreads, const T* input,
   }
 }
 
+
 // A Cuda custom kernel that swaps dimension-1 and dimension-2 of a 3D tensor.
 template <typename T>
 __global__ void SwapDimension1And2InTensor3Simple(int nthreads, const T* input,
@@ -360,7 +361,7 @@ struct TransformFilter<GPUDevice, T, int, NDIMS> {
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             config.virtual_thread_count, in.data(), combined_dims, out.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(HIP_KERNEL_NAME(SwapDimension0And2InTensor3Simple<T>),
+    hipLaunchKernelGGL(SwapDimension0And2InTensor3Simple<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, in.data(), combined_dims, out.data());
 #endif
@@ -386,7 +387,7 @@ struct ReverseTransformFilter<GPUDevice, T, NDIMS> {
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             config.virtual_thread_count, in.data(), combined_dims, out.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(HIP_KERNEL_NAME(SwapDimension0And2InTensor3Simple<T>),
+    hipLaunchKernelGGL(SwapDimension0And2InTensor3Simple<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, in.data(), combined_dims, out.data());
 #endif
@@ -423,7 +424,7 @@ struct PadInput<GPUDevice, T, int, NDIMS> {
           config.virtual_thread_count, in.data(), input_dims, out.data(),
           output_dims, padding_left_dim);
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(HIP_KERNEL_NAME(PadInputCustomKernelNHWC<T, NDIMS>),
+      hipLaunchKernelGGL(PadInputCustomKernelNHWC<T, NDIMS>,
           dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
           config.virtual_thread_count, in.data(), input_dims, out.data(),
           output_dims, padding_left_dim);
@@ -435,7 +436,7 @@ struct PadInput<GPUDevice, T, int, NDIMS> {
           config.virtual_thread_count, in.data(), input_dims, out.data(),
           output_dims, padding_left_dim);
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(HIP_KERNEL_NAME(PadInputCustomKernelNCHW<T, NDIMS>),
+      hipLaunchKernelGGL(PadInputCustomKernelNCHW<T, NDIMS>,
           dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
           config.virtual_thread_count, in.data(), input_dims, out.data(),
           output_dims, padding_left_dim);
@@ -474,7 +475,7 @@ void RunSwapDimension1And2InTensor3(const GPUDevice& d, const T* input,
         total_tiles_count, dim3(TileSize, NumSubTiles), 0, d.stream()>>>(
         input, input_dims, output);
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(HIP_KERNEL_NAME(SwapDimension1And2InTensor3UsingTiles<T, TileSize, NumSubTiles>),
+    hipLaunchKernelGGL(SwapDimension1And2InTensor3UsingTiles<T, TileSize, NumSubTiles>,
         dim3(total_tiles_count), dim3(TileSize, NumSubTiles), 0, d.stream(),
         input, input_dims, output);
 #endif
@@ -486,7 +487,7 @@ void RunSwapDimension1And2InTensor3(const GPUDevice& d, const T* input,
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             config.virtual_thread_count, input, input_dims, output);
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(HIP_KERNEL_NAME(SwapDimension1And2InTensor3Simple<T>),
+    hipLaunchKernelGGL(SwapDimension1And2InTensor3Simple<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input, input_dims, output);
 #endif
@@ -524,7 +525,7 @@ struct SwapDimension0And2InTensor3<GPUDevice, T> {
         <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
             config.virtual_thread_count, in, input_dims, out);
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(HIP_KERNEL_NAME(SwapDimension0And2InTensor3Simple<T>),
+    hipLaunchKernelGGL(SwapDimension0And2InTensor3Simple<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, in, input_dims, out);
 #endif

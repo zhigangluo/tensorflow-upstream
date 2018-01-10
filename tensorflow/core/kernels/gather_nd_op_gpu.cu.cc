@@ -92,7 +92,7 @@ struct GatherNdSlice<GPUDevice, T, Index, IXDIM> {
             Tparams.data(), Tindices.data(), Tout.data(), batch_strides,
             batch_indices, indices_size, s_size, out_size);
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(GatherSliceOpKernel<T, Index, IXDIM>,
+    hipLaunchKernelGGL(GatherSliceOpKernel<T, Index, IXDIM>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         Tparams.data(), Tindices.data(), Tout.data(), batch_strides,
         batch_indices, indices_size, s_size, out_size);

@@ -211,7 +211,7 @@ struct Dilation<GPUDevice, T> {
         output_cols, stride_rows, stride_cols, rate_rows, rate_cols, pad_top,
         pad_left, output.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(HIP_KERNEL_NAME(DilationKernel<T>),
+    hipLaunchKernelGGL(DilationKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input.data(), filter.data(), batch,
         input_rows, input_cols, depth, filter_rows, filter_cols, output_rows,
@@ -250,7 +250,7 @@ struct DilationBackpropInput<GPUDevice, T> {
     SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
         total_count, in_backprop.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(HIP_KERNEL_NAME(SetZero<T>),
+    hipLaunchKernelGGL(SetZero<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         total_count, in_backprop.data());
 #endif
@@ -266,7 +266,7 @@ struct DilationBackpropInput<GPUDevice, T> {
         filter_cols, output_rows, output_cols, stride_rows, stride_cols,
         rate_rows, rate_cols, pad_top, pad_left, in_backprop.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(HIP_KERNEL_NAME(DilationBackpropInputKernel<T>),
+    hipLaunchKernelGGL(DilationBackpropInputKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input.data(), filter.data(),
         out_backprop.data(), batch, input_rows, input_cols, depth, filter_rows,
@@ -305,7 +305,7 @@ struct DilationBackpropFilter<GPUDevice, T> {
     SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
         total_count, filter_backprop.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(SetZero<T>,
+    hipLaunchKernelGGL(SetZero<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         total_count, filter_backprop.data());
 #endif
@@ -321,7 +321,7 @@ struct DilationBackpropFilter<GPUDevice, T> {
         filter_cols, output_rows, output_cols, stride_rows, stride_cols,
         rate_rows, rate_cols, pad_top, pad_left, filter_backprop.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(DilationBackpropFilterKernel<T>,
+    hipLaunchKernelGGL(DilationBackpropFilterKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input.data(), filter.data(),
         out_backprop.data(), batch, input_rows, input_cols, depth, filter_rows,

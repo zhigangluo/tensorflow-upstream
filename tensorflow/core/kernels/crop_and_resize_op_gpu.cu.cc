@@ -349,7 +349,7 @@ struct CropAndResize<GPUDevice, T> {
           box_ind.data(), num_boxes, batch, image_height, image_width,
           crop_height, crop_width, depth, extrapolation_value, crops.data());
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(HIP_KERNEL_NAME(CropAndResizeKernel<T>),
+      hipLaunchKernelGGL(CropAndResizeKernel<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           config.virtual_thread_count, image.data(), boxes.data(),
@@ -388,7 +388,7 @@ struct CropAndResizeBackpropImage<GPUDevice, T> {
       SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
           config.virtual_thread_count, grads_image.data());
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(HIP_KERNEL_NAME(SetZero<T>),
+      hipLaunchKernelGGL(SetZero<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           config.virtual_thread_count, grads_image.data());
@@ -406,7 +406,7 @@ struct CropAndResizeBackpropImage<GPUDevice, T> {
           box_ind.data(), num_boxes, batch, image_height, image_width,
           crop_height, crop_width, depth, grads_image.data());
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(HIP_KERNEL_NAME(CropAndResizeBackpropImageKernel<T>),
+      hipLaunchKernelGGL(CropAndResizeBackpropImageKernel<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           config.virtual_thread_count, grads.data(), boxes.data(),
@@ -446,7 +446,7 @@ struct CropAndResizeBackpropBoxes<GPUDevice, T> {
       SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
           config.virtual_thread_count, grads_boxes.data());
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(HIP_KERNEL_NAME(SetZero<T>),
+      hipLaunchKernelGGL(SetZero<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           config.virtual_thread_count, grads_boxes.data());
@@ -464,7 +464,7 @@ struct CropAndResizeBackpropBoxes<GPUDevice, T> {
           box_ind.data(), num_boxes, batch, image_height, image_width,
           crop_height, crop_width, depth, grads_boxes.data());
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(HIP_KERNEL_NAME(CropAndResizeBackpropBoxesKernel<T>),
+      hipLaunchKernelGGL(CropAndResizeBackpropBoxesKernel<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           config.virtual_thread_count, grads.data(), image.data(), boxes.data(),

@@ -86,7 +86,7 @@ void BiasGPU<T>::compute(const GPUDevice& d, const T* input, const T* bias,
         T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
         config.virtual_thread_count, input, bias, output, bias_size);
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(BiasNHWCKernel<T>,
+    hipLaunchKernelGGL(BiasNHWCKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input, bias, output, bias_size);
 #endif
@@ -97,7 +97,7 @@ void BiasGPU<T>::compute(const GPUDevice& d, const T* input, const T* bias,
         config.virtual_thread_count, input, bias, output, bias_size,
         image_size);
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(BiasNCHWKernel<T>,
+    hipLaunchKernelGGL(BiasNCHWKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input, bias, output, bias_size,
         image_size);
@@ -234,7 +234,7 @@ void BiasGradGPU<T>::compute(const GPUDevice& d, const T* output_backprop,
                d.stream()>>>(total_count, output_backprop, bias_backprop,
                              bias_size);
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(HIP_KERNEL_NAME(BiasGradNHWC_SharedAtomics<T>),
+      hipLaunchKernelGGL(BiasGradNHWC_SharedAtomics<T>,
           dim3(config.block_count), dim3(config.thread_per_block),
           shared_memory_size, d.stream(),
           total_count, output_backprop, bias_backprop, bias_size);
@@ -252,7 +252,7 @@ void BiasGradGPU<T>::compute(const GPUDevice& d, const T* output_backprop,
           output_backprop, bias_backprop, batch, bias_size, image_size,
           group_size);
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(BiasGradNCHW_SharedAtomics<T>,
+      hipLaunchKernelGGL(BiasGradNCHW_SharedAtomics<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           output_backprop, bias_backprop, batch, bias_size, image_size,
@@ -269,7 +269,7 @@ void BiasGradGPU<T>::compute(const GPUDevice& d, const T* output_backprop,
           T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
           total_count, output_backprop, bias_backprop, bias_size);
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(BiasGradNHWC_Naive<T>,
+      hipLaunchKernelGGL(BiasGradNHWC_Naive<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           total_count, output_backprop, bias_backprop, bias_size);
@@ -280,7 +280,7 @@ void BiasGradGPU<T>::compute(const GPUDevice& d, const T* output_backprop,
           T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
           total_count, output_backprop, bias_backprop, bias_size, image_size);
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(BiasGradNCHW_Naive<T>,
+      hipLaunchKernelGGL(BiasGradNCHW_Naive<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           total_count, output_backprop, bias_backprop, bias_size, image_size);

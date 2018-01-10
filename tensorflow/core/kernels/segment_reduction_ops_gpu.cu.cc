@@ -102,7 +102,7 @@ struct UnsortedSegmentSumFunctor<GPUDevice, T, Index>: UnsortedSegmentBaseFuncto
     SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
         output.size(), output.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(SetZero<T>,
+    hipLaunchKernelGGL(SetZero<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         output.size(), output.data());
 #endif
@@ -127,7 +127,7 @@ struct UnsortedSegmentSumFunctor<GPUDevice, T, Index>: UnsortedSegmentBaseFuncto
         input_outer_dim_size, input_inner_dim_size, output_rows,
         segment_ids.data(), data, output.data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(UnsortedSegmentSumCustomKernel<T, Index>,
+    hipLaunchKernelGGL(UnsortedSegmentSumCustomKernel<T, Index>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         input_outer_dim_size, input_inner_dim_size, output_rows,
         segment_ids.data(), data, output.data());

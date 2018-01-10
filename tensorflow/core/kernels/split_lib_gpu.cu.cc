@@ -211,7 +211,7 @@ struct SplitOpGPULaunch {
             input, prefix_dim_size, split_dim_size, suffix_dim_size,
             output_ptr_data);
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(SplitOpKernel<T>,
+    hipLaunchKernelGGL(SplitOpKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         input, prefix_dim_size, split_dim_size, suffix_dim_size,
         output_ptr_data);
@@ -234,7 +234,7 @@ struct SplitVOpGPULaunch {
                                 gpu_device.stream()>>>(
           input_ptr, total_rows, total_cols, output_ptr_data);
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(SplitVOpKernel_fixed<T>,
+      hipLaunchKernelGGL(SplitVOpKernel_fixed<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           gpu_device.stream(),
           input_ptr, total_rows, total_cols, output_ptr_data);
@@ -254,7 +254,7 @@ struct SplitVOpGPULaunch {
                gpu_device.stream()>>>(input_ptr, output_scan, total_rows,
                                       total_cols, output_ptr_data);
 #elif TENSORFLOW_USE_ROCM
-        hipLaunchKernel(split_v_kernel<T, IntType, true>,
+        hipLaunchKernelGGL(split_v_kernel<T, IntType, true>,
             dim3(config.block_count), dim3(config.thread_per_block), smem_usage,
             gpu_device.stream(),
             input_ptr, output_scan, total_rows, total_cols, output_ptr_data);
@@ -266,7 +266,7 @@ struct SplitVOpGPULaunch {
                gpu_device.stream()>>>(input_ptr, output_scan, total_rows,
                                       total_cols, output_ptr_data);
 #elif TENSORFLOW_USE_ROCM
-        hipLaunchKernel(split_v_kernel<T, IntType, false>,
+        hipLaunchKernelGGL(split_v_kernel<T, IntType, false>,
             dim3(config.block_count), dim3(config.thread_per_block), 0,
             gpu_device.stream(),
             input_ptr, output_scan, total_rows, total_cols, output_ptr_data);

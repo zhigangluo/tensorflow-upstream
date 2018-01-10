@@ -214,7 +214,7 @@ struct TruncatedNormalFunctor<GPUDevice, T> {
         stddevs.dimension(0) == 1, minvals.data(), minvals.dimension(0) == 1,
         maxvals.data(), maxvals.dimension(0) == 1, kMaxIterations);
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(TruncatedNormalKernel<T>,
+    hipLaunchKernelGGL(TruncatedNormalKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         gen, output.data(), num_batches, samples_per_batch, num_elements,
         means.data(), means.dimension(0) == 1, stddevs.data(),

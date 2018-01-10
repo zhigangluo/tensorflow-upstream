@@ -103,7 +103,7 @@ struct GatherFunctor<GPUDevice, T, Index> {
               params.data(), indices.data(), out.data(), gather_dim_size,
               indices_size, slice_size, out_size);
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(GatherOpKernel<T, Index, true>,
+      hipLaunchKernelGGL(GatherOpKernel<T, Index, true>,
           dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
           params.data(), indices.data(), out.data(), gather_dim_size,
           indices_size, slice_size, out_size);
@@ -117,7 +117,7 @@ struct GatherFunctor<GPUDevice, T, Index> {
               params.data(), indices.data(), out.data(), gather_dim_size,
               indices_size, slice_size, out_size);
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(GatherOpKernel<T, Index, false>,
+      hipLaunchKernelGGL(GatherOpKernel<T, Index, false>,
           dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
           params.data(), indices.data(), out.data(), gather_dim_size,
           indices_size, slice_size, out_size);

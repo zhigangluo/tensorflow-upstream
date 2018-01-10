@@ -94,7 +94,7 @@ struct ScatterFunctor<GPUDevice, T, Index, op> {
             params.data(), updates.data(), indices.data(),
             first_dim_size, updates_size, indices_size);
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(ScatterOpCustomKernel<T, Index, op>,
+    hipLaunchKernelGGL(ScatterOpCustomKernel<T, Index, op>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         params.data(), updates.data(), indices.data(), first_dim_size,
         updates_size, indices_size);

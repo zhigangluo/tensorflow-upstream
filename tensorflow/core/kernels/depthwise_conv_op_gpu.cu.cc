@@ -609,7 +609,7 @@ void LaunchDepthwiseConv2dGPUSmall(const GpuDevice& d, const DepthwiseArgs args,
   kernel<<<config.block_count, block_dim, shared_memory_size, d.stream()>>>(
       args, input, filter, output);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(kernel,
+  hipLaunchKernelGGL(kernel,
       dim3(config.block_count), dim3(block_dim), shared_memory_size, d.stream(),
       args, input, filter, output);
 #endif
@@ -690,7 +690,7 @@ void LaunchDepthwiseConv2dGPU(const GpuDevice& d, const DepthwiseArgs args,
            config.thread_per_block, 0, d.stream()>>>(args, input, filter,
                                                      output, num_outputs);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(kernel,
+  hipLaunchKernelGGL(kernel,
        dim3(std::min(max_block_count, config.block_count)),
        dim3(config.thread_per_block), 0, d.stream(),
        args, input, filter, output, num_outputs);
@@ -897,7 +897,7 @@ void LaunchDepthwiseConv2dBackpropInputGPU(const GpuDevice& d,
   kernel<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
       args, out_backprop, filter, in_backprop, num_in_backprop);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(kernel,
+  hipLaunchKernelGGL(kernel,
       dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
       args, out_backprop, filter, in_backprop, num_in_backprop);
 
@@ -1504,7 +1504,7 @@ bool TryLaunchDepthwiseConv2dBackpropFilterGPUSmall(
   kernel<<<config.block_count, block_dim, shared_memory_size, d.stream()>>>(
       args, out_backprop, input, filter_backprop);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(kernel,
+  hipLaunchKernelGGL(kernel,
       dim3(config.block_count), dim3(block_dim), shared_memory_size, d.stream(),
       args, out_backprop, input, filter_backprop);
 #endif
@@ -1607,7 +1607,7 @@ void LaunchDepthwiseConv2dBackpropFilterGPU(const GpuDevice& d,
   kernel<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
       args, out_backprop, input, filter_backprop, num_out_backprop);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(kernel,
+  hipLaunchKernelGGL(kernel,
       dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
       args, out_backprop, input, filter_backprop, num_out_backprop);
 

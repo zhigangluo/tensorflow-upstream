@@ -236,7 +236,7 @@ void FillPhiloxRandom<GPUDevice, Distribution>::operator()(
       (d.getNumHipMultiProcessors() * d.maxHipThreadsPerMultiProcessor()) /
       block_size;
 
-  hipLaunchKernel(FillPhiloxRandomKernelLaunch<Distribution>,
+  hipLaunchKernelGGL(FillPhiloxRandomKernelLaunch<Distribution>,
       dim3(num_blocks), dim3(block_size), 0, d.stream(),
       gen, data, size, dist);
 #endif

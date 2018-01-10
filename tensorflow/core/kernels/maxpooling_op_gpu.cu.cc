@@ -351,7 +351,7 @@ bool MaxPoolForwardWithOptionalArgmax<T>::operator()(
       pooled_width, kernel_h, kernel_w, stride_h, stride_w, pad_t, pad_l,
       top_data, mask);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(MaxPoolForwardNHWC<T>,
+  hipLaunchKernelGGL(MaxPoolForwardNHWC<T>,
       dim3((output_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
       dim3(kThreadsPerBlock), 0, d.stream(),
       output_size, bottom_data, height, width, channels, pooled_height,
@@ -375,7 +375,7 @@ bool MaxPoolBackwardNoMask<T>::operator()(
   SetZero<<<(bottom_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
             kThreadsPerBlock, 0, d.stream()>>>(bottom_size, bottom_diff);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(SetZero<T>,
+  hipLaunchKernelGGL(SetZero<T>,
       dim3((bottom_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
       dim3(kThreadsPerBlock), 0, d.stream(),
       bottom_size, bottom_diff);
@@ -390,7 +390,7 @@ bool MaxPoolBackwardNoMask<T>::operator()(
       pooled_width, kernel_h, kernel_w, stride_h, stride_w, pad_t, pad_l,
       top_diff, bottom_diff);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(MaxPoolBackwardNoMaskNHWC<T>,
+  hipLaunchKernelGGL(MaxPoolBackwardNoMaskNHWC<T>,
       dim3((top_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
       dim3(kThreadsPerBlock), 0, d.stream(),
       top_size, bottom_data, height, width, channels, pooled_height,
@@ -413,11 +413,11 @@ bool MaxPoolBackwardWithArgmax<T>::operator()(
                     kThreadsPerBlock, 0, d.stream()>>>(
                                         output_size, top_diff, mask, top_offset, bottom_offset, bottom_diff);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(SetZero<T>,
+  hipLaunchKernelGGL(SetZero<T>,
       dim3((input_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
       dim3(kThreadsPerBlock), 0, d.stream(),
       input_size, bottom_diff);
-  hipLaunchKernel(MaxPoolBackward<T>,
+  hipLaunchKernelGGL(MaxPoolBackward<T>,
       dim3((output_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
       dim3(kThreadsPerBlock), 0, d.stream(),
       output_size, top_diff, mask, top_offset, bottom_offset, bottom_diff);
@@ -444,7 +444,7 @@ bool MaxPoolGradBackwardNoMask<T>::operator()(
         channels, height, width, kernel_h, kernel_w, stride_h, stride_w, pad_t,
         pad_l, top_diff, bottom_diff);
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(MaxPoolGradBackwardNoMaskNHWC<T>,
+    hipLaunchKernelGGL(MaxPoolGradBackwardNoMaskNHWC<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         num_kernels, bottom_data, output_data, pooled_height, pooled_width,
         channels, height, width, kernel_h, kernel_w, stride_h, stride_w, pad_t,
@@ -458,7 +458,7 @@ bool MaxPoolGradBackwardNoMask<T>::operator()(
         channels, height, width, kernel_h, kernel_w, stride_h, stride_w, pad_t,
         pad_l, top_diff, bottom_diff);
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(MaxPoolGradBackwardNoMaskNCHW<T>,
+    hipLaunchKernelGGL(MaxPoolGradBackwardNoMaskNCHW<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         num_kernels, bottom_data, output_data, pooled_height, pooled_width,
         channels, height, width, kernel_h, kernel_w, stride_h, stride_w, pad_t,
@@ -479,7 +479,7 @@ bool MaxPoolGradBackwardWithArgmax<T>::operator()(
                         d.stream()>>>(output_size, top_diff, mask, top_offset,
                                       bottom_offset, bottom_diff);
 #elif TENSORFLOW_USE_ROCM
-  hipLaunchKernel(MaxPoolGradBackward<T>,
+  hipLaunchKernelGGL(MaxPoolGradBackward<T>,
       dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
       output_size, top_diff, mask, top_offset, bottom_offset, bottom_diff);
 #endif

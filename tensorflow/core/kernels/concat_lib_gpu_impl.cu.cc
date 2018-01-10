@@ -157,7 +157,7 @@ void ConcatGPUImpl(const Eigen::GpuDevice& gpu_device,
            gpu_device.stream()>>>(input_ptrs, split_size, output->dimension(0),
                                   output->dimension(1), output->data());
 #elif TENSORFLOW_USE_ROCM
-    hipLaunchKernel(HIP_KERNEL_NAME(concat_fixed_kernel<T, IntType>),
+    hipLaunchKernelGGL(concat_fixed_kernel<T, IntType>,
         dim3(config.block_count), dim3(config.thread_per_block), 0,
         gpu_device.stream(),
         input_ptrs, split_size, output->dimension(0), output->dimension(1),
@@ -185,13 +185,13 @@ void ConcatGPUImpl(const Eigen::GpuDevice& gpu_device,
                                     output->dimension(0), output->dimension(1),
                                     output->data());
 #elif TENSORFLOW_USE_ROCM
-      hipLaunchKernel(HIP_KERNEL_NAME(concat_variable_kernel<T, IntType, true>),
+      hipLaunchKernelGGL(concat_variable_kernel<T, IntType, true>,
           dim3(config.block_count), dim3(config.thread_per_block), smem_usage,
           gpu_device.stream(),
           input_ptrs, output_scan, output->dimension(0), output->dimension(1),
           output->data());
     else
-      hipLaunchKernel(HIP_KERNEL_NAME(concat_variable_kernel<T, IntType, false>),
+      hipLaunchKernelGGL(concat_variable_kernel<T, IntType, false>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           gpu_device.stream(),
           input_ptrs, output_scan, output->dimension(0), output->dimension(1),

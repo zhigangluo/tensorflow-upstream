@@ -78,7 +78,7 @@ struct CheckNumericsLaunch {
         (d.getNumHipMultiProcessors() * d.maxHipThreadsPerMultiProcessor()) /
         block_size;
 
-    hipLaunchKernel(HIP_KERNEL_NAME(CheckNumericsKernel<T>),
+    hipLaunchKernelGGL(CheckNumericsKernel<T>,
         dim3(num_blocks), dim3(block_size), 0, d.stream(),
         data, size, abnormal_detected);
 #endif
