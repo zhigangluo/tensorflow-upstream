@@ -356,15 +356,9 @@ struct TransformFilter<GPUDevice, T, int, NDIMS> {
     combined_dims[1] = in.dimension(NDIMS - 2);  // input filters
     combined_dims[2] = in.dimension(NDIMS - 1);  // output filters
     GpuLaunchConfig config = GetGpuLaunchConfig(out.size(), d);
-#if GOOGLE_CUDA
-    SwapDimension0And2InTensor3Simple<T>
-        <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            config.virtual_thread_count, in.data(), combined_dims, out.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(SwapDimension0And2InTensor3Simple<T>,
+    GPU_LAUNCH_KERNEL(SwapDimension0And2InTensor3Simple<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, in.data(), combined_dims, out.data());
-#endif
   }
 };
 
@@ -382,15 +376,9 @@ struct ReverseTransformFilter<GPUDevice, T, NDIMS> {
       combined_dims[2] *= in.dimension(i);
     }
     GpuLaunchConfig config = GetGpuLaunchConfig(out.size(), d);
-#if GOOGLE_CUDA
-    SwapDimension0And2InTensor3Simple<T>
-        <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            config.virtual_thread_count, in.data(), combined_dims, out.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(SwapDimension0And2InTensor3Simple<T>,
+    GPU_LAUNCH_KERNEL(SwapDimension0And2InTensor3Simple<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, in.data(), combined_dims, out.data());
-#endif
   }
 };
 
@@ -418,29 +406,15 @@ struct PadInput<GPUDevice, T, int, NDIMS> {
     const Dimension<NDIMS - 2> padding_left_dim(padding_left);
 
     if (format == FORMAT_NHWC) {
-#if GOOGLE_CUDA
-      PadInputCustomKernelNHWC<T, NDIMS><<<
-          config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          config.virtual_thread_count, in.data(), input_dims, out.data(),
-          output_dims, padding_left_dim);
-#elif TENSORFLOW_USE_ROCM
-      hipLaunchKernelGGL(PadInputCustomKernelNHWC<T, NDIMS>,
+      GPU_LAUNCH_KERNEL(PadInputCustomKernelNHWC<T, NDIMS>,
           dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
           config.virtual_thread_count, in.data(), input_dims, out.data(),
           output_dims, padding_left_dim);
-#endif
     } else if (format == FORMAT_NCHW) {
-#if GOOGLE_CUDA
-      PadInputCustomKernelNCHW<T, NDIMS><<<
-          config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          config.virtual_thread_count, in.data(), input_dims, out.data(),
-          output_dims, padding_left_dim);
-#elif TENSORFLOW_USE_ROCM
-      hipLaunchKernelGGL(PadInputCustomKernelNCHW<T, NDIMS>,
+      GPU_LAUNCH_KERNEL(PadInputCustomKernelNCHW<T, NDIMS>,
           dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
           config.virtual_thread_count, in.data(), input_dims, out.data(),
           output_dims, padding_left_dim);
-#endif
     } else {
       LOG(FATAL) << "Invalid data format: " << format;
     }
@@ -470,27 +444,15 @@ void RunSwapDimension1And2InTensor3(const GPUDevice& d, const T* input,
     };
     int total_tiles_count = input_dims_in_tiles[0] * input_dims_in_tiles[1] *
                             input_dims_in_tiles[2];
-#if GOOGLE_CUDA
-    SwapDimension1And2InTensor3UsingTiles<T, TileSize, NumSubTiles><<<
-        total_tiles_count, dim3(TileSize, NumSubTiles), 0, d.stream()>>>(
-        input, input_dims, output);
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(SwapDimension1And2InTensor3UsingTiles<T, TileSize, NumSubTiles>,
+    GPU_LAUNCH_KERNEL(SwapDimension1And2InTensor3UsingTiles<T, TileSize, NumSubTiles>,
         dim3(total_tiles_count), dim3(TileSize, NumSubTiles), 0, d.stream(),
         input, input_dims, output);
-#endif
   } else {
     int total_element_count = input_dims[0] * input_dims[1] * input_dims[2];
     GpuLaunchConfig config = GetGpuLaunchConfig(total_element_count, d);
-#if GOOGLE_CUDA
-    SwapDimension1And2InTensor3Simple<T>
-        <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            config.virtual_thread_count, input, input_dims, output);
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(SwapDimension1And2InTensor3Simple<T>,
+    GPU_LAUNCH_KERNEL(SwapDimension1And2InTensor3Simple<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input, input_dims, output);
-#endif
   }
 }
 
@@ -520,15 +482,9 @@ struct SwapDimension0And2InTensor3<GPUDevice, T> {
                                static_cast<int>(combined_dims[2])};
     size_t total_size = combined_dims[0] * combined_dims[1] * combined_dims[2];
     GpuLaunchConfig config = GetGpuLaunchConfig(total_size, d);
-#if GOOGLE_CUDA
-    SwapDimension0And2InTensor3Simple<T>
-        <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            config.virtual_thread_count, in, input_dims, out);
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(SwapDimension0And2InTensor3Simple<T>,
+    GPU_LAUNCH_KERNEL(SwapDimension0And2InTensor3Simple<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, in, input_dims, out);
-#endif
   }
 };
 

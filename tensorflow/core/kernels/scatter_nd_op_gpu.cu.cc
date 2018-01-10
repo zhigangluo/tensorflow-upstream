@@ -108,17 +108,10 @@ struct ScatterNdFunctor<GPUDevice, T, Index, op, IXDIM> {
 
     GpuLaunchConfig config = GetGpuLaunchConfig(Toutput.size(), d);
     // clang-format off
-# if GOOGLE_CUDA
-    ScatterNdOpKernel<T, Index, op, IXDIM>
-    <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-      Tindices.data(), Tupdates.data(), Toutput.data(), output_shape_prefix,
-      batch_strides, batch_size, slice_size);
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(ScatterNdOpKernel<T, Index, op, IXDIM>,
+    GPU_LAUNCH_KERNEL(ScatterNdOpKernel<T, Index, op, IXDIM>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         Tindices.data(), Tupdates.data(), Toutput.data(), output_shape_prefix,
         batch_strides, batch_size, slice_size);
-#endif
     // clang-format on
 
     return -1;

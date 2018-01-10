@@ -86,17 +86,10 @@ struct GatherNdSlice<GPUDevice, T, Index, IXDIM> {
     GpuLaunchConfig config = GetGpuLaunchConfig(out_size, d);
 
     // clang-format off
-#if GOOGLE_CUDA
-    GatherSliceOpKernel<T, Index, IXDIM>
-        <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            Tparams.data(), Tindices.data(), Tout.data(), batch_strides,
-            batch_indices, indices_size, s_size, out_size);
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(GatherSliceOpKernel<T, Index, IXDIM>,
+    GPU_LAUNCH_KERNEL(GatherSliceOpKernel<T, Index, IXDIM>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         Tparams.data(), Tindices.data(), Tout.data(), batch_strides,
         batch_indices, indices_size, s_size, out_size);
-#endif
     // clang-format on
 
     // TODO(ebrevdo): enable indices validation on GPU.

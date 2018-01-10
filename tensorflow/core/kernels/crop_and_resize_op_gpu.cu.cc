@@ -342,20 +342,12 @@ struct CropAndResize<GPUDevice, T> {
 
     if (total_count > 0) {
       GpuLaunchConfig config = GetGpuLaunchConfig(total_count, d);
-#if GOOGLE_CUDA
-      CropAndResizeKernel<<<config.block_count, config.thread_per_block, 0,
-                            d.stream()>>>(
-          config.virtual_thread_count, image.data(), boxes.data(),
-          box_ind.data(), num_boxes, batch, image_height, image_width,
-          crop_height, crop_width, depth, extrapolation_value, crops.data());
-#elif TENSORFLOW_USE_ROCM
-      hipLaunchKernelGGL(CropAndResizeKernel<T>,
+      GPU_LAUNCH_KERNEL(CropAndResizeKernel<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           config.virtual_thread_count, image.data(), boxes.data(),
           box_ind.data(), num_boxes, batch, image_height, image_width,
           crop_height, crop_width, depth, extrapolation_value, crops.data());
-#endif
     }
     return d.ok();
   }
@@ -384,35 +376,22 @@ struct CropAndResizeBackpropImage<GPUDevice, T> {
     total_count = batch * image_height * image_width * depth;
     if (total_count > 0) {
       config = GetGpuLaunchConfig(total_count, d);
-#if GOOGLE_CUDA
-      SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          config.virtual_thread_count, grads_image.data());
-#elif TENSORFLOW_USE_ROCM
-      hipLaunchKernelGGL(SetZero<T>,
+      GPU_LAUNCH_KERNEL(SetZero<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           config.virtual_thread_count, grads_image.data());
-#endif
     }
 
     // Accumulate.
     total_count = num_boxes * crop_height * crop_width * depth;
     if (total_count > 0) {
       config = GetGpuLaunchConfig(total_count, d);
-#if GOOGLE_CUDA
-      CropAndResizeBackpropImageKernel<<<
-          config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          config.virtual_thread_count, grads.data(), boxes.data(),
-          box_ind.data(), num_boxes, batch, image_height, image_width,
-          crop_height, crop_width, depth, grads_image.data());
-#elif TENSORFLOW_USE_ROCM
-      hipLaunchKernelGGL(CropAndResizeBackpropImageKernel<T>,
+      GPU_LAUNCH_KERNEL(CropAndResizeBackpropImageKernel<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           config.virtual_thread_count, grads.data(), boxes.data(),
           box_ind.data(), num_boxes, batch, image_height, image_width,
           crop_height, crop_width, depth, grads_image.data());
-#endif
     }
     return d.ok();
   }
@@ -442,35 +421,22 @@ struct CropAndResizeBackpropBoxes<GPUDevice, T> {
     total_count = num_boxes * 4;
     if (total_count > 0) {
       config = GetGpuLaunchConfig(total_count, d);
-#if GOOGLE_CUDA
-      SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          config.virtual_thread_count, grads_boxes.data());
-#elif TENSORFLOW_USE_ROCM
-      hipLaunchKernelGGL(SetZero<T>,
+      GPU_LAUNCH_KERNEL(SetZero<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           config.virtual_thread_count, grads_boxes.data());
-#endif
     }
 
     // Accumulate.
     total_count = num_boxes * crop_height * crop_width * depth;
     if (total_count > 0) {
       config = GetGpuLaunchConfig(total_count, d);
-#if GOOGLE_CUDA
-      CropAndResizeBackpropBoxesKernel<<<
-          config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          config.virtual_thread_count, grads.data(), image.data(), boxes.data(),
-          box_ind.data(), num_boxes, batch, image_height, image_width,
-          crop_height, crop_width, depth, grads_boxes.data());
-#elif TENSORFLOW_USE_ROCM
-      hipLaunchKernelGGL(CropAndResizeBackpropBoxesKernel<T>,
+      GPU_LAUNCH_KERNEL(CropAndResizeBackpropBoxesKernel<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           config.virtual_thread_count, grads.data(), image.data(), boxes.data(),
           box_ind.data(), num_boxes, batch, image_height, image_width,
           crop_height, crop_width, depth, grads_boxes.data());
-#endif
     }
     return d.ok();
   }

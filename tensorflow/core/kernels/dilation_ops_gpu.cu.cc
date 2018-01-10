@@ -203,21 +203,12 @@ struct Dilation<GPUDevice, T> {
     const int total_count = batch * output_rows * output_cols * depth;
     GpuLaunchConfig config = GetGpuLaunchConfig(total_count, d);
 
-#if GOOGLE_CUDA
-    DilationKernel<<<config.block_count, config.thread_per_block, 0,
-                     d.stream()>>>(
-        config.virtual_thread_count, input.data(), filter.data(), batch,
-        input_rows, input_cols, depth, filter_rows, filter_cols, output_rows,
-        output_cols, stride_rows, stride_cols, rate_rows, rate_cols, pad_top,
-        pad_left, output.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(DilationKernel<T>,
+    GPU_LAUNCH_KERNEL(DilationKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input.data(), filter.data(), batch,
         input_rows, input_cols, depth, filter_rows, filter_cols, output_rows,
         output_cols, stride_rows, stride_cols, rate_rows, rate_cols, pad_top,
         pad_left, output.data());
-#endif
   }
 };
 
@@ -246,33 +237,19 @@ struct DilationBackpropInput<GPUDevice, T> {
     // Initialize in_backprop with all zeros.
     total_count = batch * input_rows * input_cols * depth;
     config = GetGpuLaunchConfig(total_count, d);
-#if GOOGLE_CUDA
-    SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-        total_count, in_backprop.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(SetZero<T>,
+    GPU_LAUNCH_KERNEL(SetZero<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         total_count, in_backprop.data());
-#endif
 
     // Accumulate.
     total_count = batch * output_rows * output_cols * depth;
     config = GetGpuLaunchConfig(total_count, d);
-#if GOOGLE_CUDA
-    DilationBackpropInputKernel<<<config.block_count, config.thread_per_block,
-                                  0, d.stream()>>>(
-        config.virtual_thread_count, input.data(), filter.data(),
-        out_backprop.data(), batch, input_rows, input_cols, depth, filter_rows,
-        filter_cols, output_rows, output_cols, stride_rows, stride_cols,
-        rate_rows, rate_cols, pad_top, pad_left, in_backprop.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(DilationBackpropInputKernel<T>,
+    GPU_LAUNCH_KERNEL(DilationBackpropInputKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input.data(), filter.data(),
         out_backprop.data(), batch, input_rows, input_cols, depth, filter_rows,
         filter_cols, output_rows, output_cols, stride_rows, stride_cols,
         rate_rows, rate_cols, pad_top, pad_left, in_backprop.data());
-#endif
   }
 };
 
@@ -301,33 +278,19 @@ struct DilationBackpropFilter<GPUDevice, T> {
     // Initialize filter_backprop with all zeros.
     total_count = filter_rows * filter_cols * depth;
     config = GetGpuLaunchConfig(total_count, d);
-#if GOOGLE_CUDA
-    SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-        total_count, filter_backprop.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(SetZero<T>,
+    GPU_LAUNCH_KERNEL(SetZero<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         total_count, filter_backprop.data());
-#endif
 
     // Accumulate.
     total_count = batch * output_rows * output_cols * depth;
     config = GetGpuLaunchConfig(total_count, d);
-#if GOOGLE_CUDA
-    DilationBackpropFilterKernel<<<config.block_count, config.thread_per_block,
-                                   0, d.stream()>>>(
-        config.virtual_thread_count, input.data(), filter.data(),
-        out_backprop.data(), batch, input_rows, input_cols, depth, filter_rows,
-        filter_cols, output_rows, output_cols, stride_rows, stride_cols,
-        rate_rows, rate_cols, pad_top, pad_left, filter_backprop.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(DilationBackpropFilterKernel<T>,
+    GPU_LAUNCH_KERNEL(DilationBackpropFilterKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input.data(), filter.data(),
         out_backprop.data(), batch, input_rows, input_cols, depth, filter_rows,
         filter_cols, output_rows, output_cols, stride_rows, stride_cols,
         rate_rows, rate_cols, pad_top, pad_left, filter_backprop.data());
-#endif
   }
 };
 

@@ -344,20 +344,12 @@ bool MaxPoolForwardWithOptionalArgmax<T>::operator()(
   const int kThreadsPerBlock = 1024;
   const int output_size = batch * channels * pooled_height * pooled_width;
 
-#if GOOGLE_CUDA
-  MaxPoolForwardNHWC<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
-                       kThreadsPerBlock, 0, d.stream()>>>(
-      output_size, bottom_data, height, width, channels, pooled_height,
-      pooled_width, kernel_h, kernel_w, stride_h, stride_w, pad_t, pad_l,
-      top_data, mask);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(MaxPoolForwardNHWC<T>,
+  GPU_LAUNCH_KERNEL(MaxPoolForwardNHWC<T>,
       dim3((output_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
       dim3(kThreadsPerBlock), 0, d.stream(),
       output_size, bottom_data, height, width, channels, pooled_height,
       pooled_width, kernel_h, kernel_w, stride_h, stride_w, pad_t, pad_l,
       top_data, mask);
-#endif
   return d.ok();
 }
 
@@ -371,32 +363,18 @@ bool MaxPoolBackwardNoMask<T>::operator()(
   const int kThreadsPerBlock = 1024;
 
   const int bottom_size = batch * channels * height * width;
-#if GOOGLE_CUDA
-  SetZero<<<(bottom_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
-            kThreadsPerBlock, 0, d.stream()>>>(bottom_size, bottom_diff);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(SetZero<T>,
+  GPU_LAUNCH_KERNEL(SetZero<T>,
       dim3((bottom_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
       dim3(kThreadsPerBlock), 0, d.stream(),
       bottom_size, bottom_diff);
-#endif
 
   const int top_size = batch * channels * pooled_height * pooled_width;
-#if GOOGLE_CUDA
-  MaxPoolBackwardNoMaskNHWC<<<(top_size + kThreadsPerBlock - 1) /
-                                  kThreadsPerBlock,
-                              kThreadsPerBlock, 0, d.stream()>>>(
-      top_size, bottom_data, height, width, channels, pooled_height,
-      pooled_width, kernel_h, kernel_w, stride_h, stride_w, pad_t, pad_l,
-      top_diff, bottom_diff);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(MaxPoolBackwardNoMaskNHWC<T>,
+  GPU_LAUNCH_KERNEL(MaxPoolBackwardNoMaskNHWC<T>,
       dim3((top_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
       dim3(kThreadsPerBlock), 0, d.stream(),
       top_size, bottom_data, height, width, channels, pooled_height,
       pooled_width, kernel_h, kernel_w, stride_h, stride_w, pad_t, pad_l,
       top_diff, bottom_diff);
-#endif
   return d.ok();
 }
 
@@ -406,22 +384,14 @@ bool MaxPoolBackwardWithArgmax<T>::operator()(
     const int64* mask, const int top_offset, const int bottom_offset,
     T* bottom_diff, const Eigen::GpuDevice& d) {
   const int kThreadsPerBlock = 1024;
-#if GOOGLE_CUDA
-  SetZero<<<(input_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
-    kThreadsPerBlock, 0, d.stream()>>>(input_size, bottom_diff);
-  MaxPoolBackward<<<(output_size + kThreadsPerBlock - 1) / kThreadsPerBlock,
-                    kThreadsPerBlock, 0, d.stream()>>>(
-                                        output_size, top_diff, mask, top_offset, bottom_offset, bottom_diff);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(SetZero<T>,
+  GPU_LAUNCH_KERNEL(SetZero<T>,
       dim3((input_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
       dim3(kThreadsPerBlock), 0, d.stream(),
       input_size, bottom_diff);
-  hipLaunchKernelGGL(MaxPoolBackward<T>,
+  GPU_LAUNCH_KERNEL(MaxPoolBackward<T>,
       dim3((output_size + kThreadsPerBlock - 1) / kThreadsPerBlock),
       dim3(kThreadsPerBlock), 0, d.stream(),
       output_size, top_diff, mask, top_offset, bottom_offset, bottom_diff);
-#endif
   return d.ok();
 }
 
@@ -437,33 +407,17 @@ bool MaxPoolGradBackwardNoMask<T>::operator()(
   GpuLaunchConfig config = GetGpuLaunchConfig(num_kernels, d);
 
   if (data_format == FORMAT_NHWC) {
-#if GOOGLE_CUDA
-    MaxPoolGradBackwardNoMaskNHWC<<<config.block_count, config.thread_per_block,
-                                    0, d.stream()>>>(
-        num_kernels, bottom_data, output_data, pooled_height, pooled_width,
-        channels, height, width, kernel_h, kernel_w, stride_h, stride_w, pad_t,
-        pad_l, top_diff, bottom_diff);
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(MaxPoolGradBackwardNoMaskNHWC<T>,
+    GPU_LAUNCH_KERNEL(MaxPoolGradBackwardNoMaskNHWC<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         num_kernels, bottom_data, output_data, pooled_height, pooled_width,
         channels, height, width, kernel_h, kernel_w, stride_h, stride_w, pad_t,
         pad_l, top_diff, bottom_diff);
-#endif
   } else {
-#if GOOGLE_CUDA
-    MaxPoolGradBackwardNoMaskNCHW<<<config.block_count, config.thread_per_block,
-                                    0, d.stream()>>>(
-        num_kernels, bottom_data, output_data, pooled_height, pooled_width,
-        channels, height, width, kernel_h, kernel_w, stride_h, stride_w, pad_t,
-        pad_l, top_diff, bottom_diff);
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(MaxPoolGradBackwardNoMaskNCHW<T>,
+    GPU_LAUNCH_KERNEL(MaxPoolGradBackwardNoMaskNCHW<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         num_kernels, bottom_data, output_data, pooled_height, pooled_width,
         channels, height, width, kernel_h, kernel_w, stride_h, stride_w, pad_t,
         pad_l, top_diff, bottom_diff);
-#endif
   }
   return d.ok();
 }
@@ -474,15 +428,9 @@ bool MaxPoolGradBackwardWithArgmax<T>::operator()(
     const int64* mask, const int top_offset, const int bottom_offset,
     T* bottom_diff, const Eigen::GpuDevice& d) {
   GpuLaunchConfig config = GetGpuLaunchConfig(output_size, d);
-#if GOOGLE_CUDA
-  MaxPoolGradBackward<<<config.block_count, config.thread_per_block, 0,
-                        d.stream()>>>(output_size, top_diff, mask, top_offset,
-                                      bottom_offset, bottom_diff);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(MaxPoolGradBackward<T>,
+  GPU_LAUNCH_KERNEL(MaxPoolGradBackward<T>,
       dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
       output_size, top_diff, mask, top_offset, bottom_offset, bottom_diff);
-#endif
   return d.ok();
 }
 

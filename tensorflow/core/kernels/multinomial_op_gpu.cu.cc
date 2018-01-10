@@ -107,17 +107,10 @@ struct MultinomialFunctor<GPUDevice, T> {
 
     const int32 work_items = batch_size * num_samples * num_classes;
     GpuLaunchConfig config = GetGpuLaunchConfig(work_items, d);
-#if GOOGLE_CUDA
-    MultinomialKernel<<<config.block_count, config.thread_per_block, 0,
-                        d.stream()>>>(config.virtual_thread_count, num_classes,
-                                      num_samples, scores.data(), maxima.data(),
-                                      output.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(MultinomialKernel,
+    GPU_LAUNCH_KERNEL(MultinomialKernel,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, num_classes, num_samples, scores.data(),
         maxima.data(), output.data());
-#endif
   }
 };
 

@@ -53,15 +53,9 @@ Status DoParallelConcatUpdate(const Device& d, const Tensor& value, int32 loc,
   const int64 ncols = Toutput.dimension(1);
   const T* src = value.flat<T>().data();
   T* dst = output->flat<T>().data();
-#if GOOGLE_CUDA
-  DoParallelConcatOpKernel<T>
-      <<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(
-          cfg.virtual_thread_count, nrows, ncols, loc, src, dst);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(DoParallelConcatOpKernel<T>,
+  GPU_LAUNCH_KERNEL(DoParallelConcatOpKernel<T>,
       dim3(cfg.block_count), dim3(cfg.thread_per_block), 0, d.stream(),
       cfg.virtual_thread_count, nrows, ncols, loc, src, dst);
-#endif
   return Status::OK();
 }
 

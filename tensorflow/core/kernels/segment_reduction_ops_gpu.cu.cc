@@ -98,14 +98,9 @@ struct UnsortedSegmentSumFunctor<GPUDevice, T, Index>: UnsortedSegmentBaseFuncto
 
     // Set 'output' to zeros.
     GpuLaunchConfig config = GetGpuLaunchConfig(output.size(), d);
-#if GOOGLE_CUDA
-    SetZero<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-        output.size(), output.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(SetZero<T>,
+    GPU_LAUNCH_KERNEL(SetZero<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         output.size(), output.data());
-#endif
     if (data_size == 0 || segment_ids_shape.num_elements() == 0) {
       return;
     }
@@ -120,18 +115,10 @@ struct UnsortedSegmentSumFunctor<GPUDevice, T, Index>: UnsortedSegmentBaseFuncto
     const Index input_inner_dim_size = input_total_size / input_outer_dim_size;
 
     config = GetGpuLaunchConfig(input_total_size, d);
-#if GOOGLE_CUDA
-    UnsortedSegmentSumCustomKernel<
-        T,
-        Index><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-        input_outer_dim_size, input_inner_dim_size, output_rows,
-        segment_ids.data(), data, output.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(UnsortedSegmentSumCustomKernel<T, Index>,
+    GPU_LAUNCH_KERNEL(UnsortedSegmentSumCustomKernel<T, Index>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         input_outer_dim_size, input_inner_dim_size, output_rows,
         segment_ids.data(), data, output.data());
-#endif
   }
 };
 

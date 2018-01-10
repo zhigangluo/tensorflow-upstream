@@ -75,16 +75,10 @@ void TileSimple(const Device& d, Tensor* out, const Tensor& in) {
   T* q = out->flat<T>().data();
 
   GpuLaunchConfig cfg = GetGpuLaunchConfig(out_nelem, d);
-#if GOOGLE_CUDA
-  TileKernel<<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(
-      cfg.virtual_thread_count, p, reinterpret_cast<const int32*>(dev_buf),
-      ndims, q);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(TileKernel<T>,
+  GPU_LAUNCH_KERNEL(TileKernel<T>,
       dim3(cfg.block_count), dim3(cfg.thread_per_block), 0, d.stream(),
       cfg.virtual_thread_count, p, reinterpret_cast<const int32*>(dev_buf),
       ndims, q);
-#endif
   // Safe to deallocate immediately after the kernel launch.
   d.deallocate(dev_buf);
 }

@@ -96,19 +96,11 @@ bool RunAvePoolBackwardNHWC(const T* const top_diff, const int num,
                             const GPUDevice& d) {
   int x_size = num * height * width * channels;
   GpuLaunchConfig config = GetGpuLaunchConfig(x_size, d);
-#if GOOGLE_CUDA
-  AvePoolBackwardNHWC<
-      T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-      config.virtual_thread_count, top_diff, num, height, width, channels,
-      pooled_height, pooled_width, kernel_h, kernel_w, stride_h, stride_w,
-      pad_t, pad_t, bottom_diff);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(AvePoolBackwardNHWC<T>,
+  GPU_LAUNCH_KERNEL(AvePoolBackwardNHWC<T>,
       dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
       config.virtual_thread_count, top_diff, num, height, width, channels,
       pooled_height, pooled_width, kernel_h, kernel_w, stride_h, stride_w,
       pad_t, pad_t, bottom_diff);
-#endif
 
   return d.ok();
 }

@@ -116,17 +116,10 @@ struct ResizeNearestNeighbor<GPUDevice, T, align_corners> {
     if (output_size == 0) return true;
 
     GpuLaunchConfig config = GetGpuLaunchConfig(output_size, d);
-#if GOOGLE_CUDA
-    ResizeNearestNeighborNHWC<T, align_corners>
-        <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            output_size, input.data(), in_height, in_width, channels,
-            out_height, out_width, height_scale, width_scale, output.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(ResizeNearestNeighborNHWC<T, align_corners>,
+    GPU_LAUNCH_KERNEL(ResizeNearestNeighborNHWC<T, align_corners>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         output_size, input.data(), in_height, in_width, channels,
         out_height, out_width, height_scale, width_scale, output.data());
-#endif
     return d.ok();
   }
 };
@@ -156,35 +149,22 @@ struct ResizeNearestNeighborGrad<GPUDevice, T, align_corners> {
     const int output_size = batch_size * channels * out_height * out_width;
 
     GpuLaunchConfig output_config = GetGpuLaunchConfig(output_size, d);
-#if GOOGLE_CUDA
-    SetZero<<<output_config.block_count, output_config.thread_per_block, 0,
-              d.stream()>>>(output_size, output.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(SetZero<T>,
+    GPU_LAUNCH_KERNEL(SetZero<T>,
         dim3(output_config.block_count), dim3(output_config.thread_per_block),
         0, d.stream(),
         output_size, output.data());
-#endif
     if (!d.ok()) return false;
 
     const int input_size = batch_size * channels * in_height * in_width;
     if (input_size == 0) return true;
 
     GpuLaunchConfig input_config = GetGpuLaunchConfig(input_size, d);
-#if GOOGLE_CUDA
-    ResizeNearestNeighborBackwardNHWC<T, align_corners>
-        <<<input_config.block_count, input_config.thread_per_block, 0,
-           d.stream()>>>(input_config.virtual_thread_count, input.data(),
-                         in_height, in_width, channels, out_height, out_width,
-                         height_scale, width_scale, output.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(ResizeNearestNeighborBackwardNHWC<T, align_corners>,
+    GPU_LAUNCH_KERNEL(ResizeNearestNeighborBackwardNHWC<T, align_corners>,
         dim3(input_config.block_count), dim3(input_config.thread_per_block), 0,
         d.stream(),
         input_config.virtual_thread_count, input.data(), in_height, in_width,
         channels, out_height, out_width, height_scale, width_scale,
         output.data());
-#endif
     return d.ok();
   }
 };

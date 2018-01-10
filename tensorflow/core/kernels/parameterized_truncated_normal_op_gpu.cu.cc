@@ -206,21 +206,12 @@ struct TruncatedNormalFunctor<GPUDevice, T> {
                   typename TTypes<T>::Flat output) {
     const auto config = GetGpuLaunchConfig(num_elements, d);
 
-#if GOOGLE_CUDA
-    TruncatedNormalKernel<
-        T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-        gen, output.data(), num_batches, samples_per_batch, num_elements,
-        means.data(), means.dimension(0) == 1, stddevs.data(),
-        stddevs.dimension(0) == 1, minvals.data(), minvals.dimension(0) == 1,
-        maxvals.data(), maxvals.dimension(0) == 1, kMaxIterations);
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(TruncatedNormalKernel<T>,
+    GPU_LAUNCH_KERNEL(TruncatedNormalKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         gen, output.data(), num_batches, samples_per_batch, num_elements,
         means.data(), means.dimension(0) == 1, stddevs.data(),
         stddevs.dimension(0) == 1, minvals.data(), minvals.dimension(0) == 1,
         maxvals.data(), maxvals.dimension(0) == 1, kMaxIterations);
-#endif
   };
 };
 

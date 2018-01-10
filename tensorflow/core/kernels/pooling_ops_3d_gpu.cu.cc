@@ -148,37 +148,19 @@ bool MaxPool3dGradBackward<T>::operator()(
       batch * channels * pooled_plane * pooled_height * pooled_width;
   GpuLaunchConfig config = GetGpuLaunchConfig(num_kernels, d);
   if (data_format == FORMAT_NHWC) {
-#if GOOGLE_CUDA
-    MaxPoolGradBackwardNoMaskNDHWC<<<config.block_count,
-                                     config.thread_per_block, 0, d.stream()>>>(
-        num_kernels, bottom_data, output_data, pooled_plane, pooled_height,
-        pooled_width, channels, plane, height, width, kernel_p, kernel_h,
-        kernel_w, stride_p, stride_h, stride_w, pad_p, pad_t, pad_l, top_diff,
-        bottom_diff);
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(MaxPoolGradBackwardNoMaskNDHWC<T>,
+    GPU_LAUNCH_KERNEL(MaxPoolGradBackwardNoMaskNDHWC<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         num_kernels, bottom_data, output_data, pooled_plane, pooled_height,
         pooled_width, channels, plane, height, width, kernel_p, kernel_h,
         kernel_w, stride_p, stride_h, stride_w, pad_p, pad_t, pad_l, top_diff,
         bottom_diff);
-#endif
   } else {
-#if GOOGLE_CUDA
-    MaxPoolGradBackwardNoMaskNCDHW<<<config.block_count,
-                                     config.thread_per_block, 0, d.stream()>>>(
-        num_kernels, bottom_data, output_data, pooled_plane, pooled_height,
-        pooled_width, channels, plane, height, width, kernel_p, kernel_h,
-        kernel_w, stride_p, stride_h, stride_w, pad_p, pad_t, pad_l, top_diff,
-        bottom_diff);
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(MaxPoolGradBackwardNoMaskNCDHW<T>,
+    GPU_LAUNCH_KERNEL(MaxPoolGradBackwardNoMaskNCDHW<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         num_kernels, bottom_data, output_data, pooled_plane, pooled_height,
         pooled_width, channels, plane, height, width, kernel_p, kernel_h,
         kernel_w, stride_p, stride_h, stride_w, pad_p, pad_t, pad_l, top_diff,
         bottom_diff);
-#endif
   }
   return d.ok();
 }

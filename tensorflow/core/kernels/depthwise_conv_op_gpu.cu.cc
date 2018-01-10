@@ -605,14 +605,9 @@ void LaunchDepthwiseConv2dGPUSmall(const GpuDevice& d, const DepthwiseArgs args,
   GpuLaunchConfig config =
       GetGpuLaunchConfig(num_outputs, d, kernel, shared_memory_size,
                           block_dim.x * block_dim.y * block_dim.z);
-#if GOOGLE_CUDA
-  kernel<<<config.block_count, block_dim, shared_memory_size, d.stream()>>>(
-      args, input, filter, output);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(kernel,
+  GPU_LAUNCH_KERNEL(kernel,
       dim3(config.block_count), dim3(block_dim), shared_memory_size, d.stream(),
       args, input, filter, output);
-#endif
 }
 
 template <typename T, DepthwiseConv2dDirection kDirection,
@@ -685,16 +680,10 @@ void LaunchDepthwiseConv2dGPU(const GpuDevice& d, const DepthwiseArgs args,
                                   : d.getNumHipMultiProcessors();
 #endif
 
-#if GOOGLE_CUDA
-  kernel<<<std::min(max_block_count, config.block_count),
-           config.thread_per_block, 0, d.stream()>>>(args, input, filter,
-                                                     output, num_outputs);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(kernel,
+  GPU_LAUNCH_KERNEL(kernel,
        dim3(std::min(max_block_count, config.block_count)),
        dim3(config.thread_per_block), 0, d.stream(),
        args, input, filter, output, num_outputs);
-#endif
 }
 
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight>
@@ -893,15 +882,9 @@ void LaunchDepthwiseConv2dBackpropInputGPU(const GpuDevice& d,
       args.batch * args.in_rows * args.in_cols * args.in_depth;
   GpuLaunchConfig config =
       GetGpuLaunchConfig(num_in_backprop, d, kernel, 0, 0);
-#if GOOGLE_CUDA
-  kernel<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-      args, out_backprop, filter, in_backprop, num_in_backprop);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(kernel,
+  GPU_LAUNCH_KERNEL(kernel,
       dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
       args, out_backprop, filter, in_backprop, num_in_backprop);
-
-#endif
 }
 
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight>
@@ -1500,14 +1483,9 @@ bool TryLaunchDepthwiseConv2dBackpropFilterGPUSmall(
   GpuLaunchConfig config =
       GetGpuLaunchConfig(num_out_backprop, d, kernel, shared_memory_size,
                           block_dim.x * block_dim.y * block_dim.z);
-#if GOOGLE_CUDA
-  kernel<<<config.block_count, block_dim, shared_memory_size, d.stream()>>>(
-      args, out_backprop, input, filter_backprop);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(kernel,
+  GPU_LAUNCH_KERNEL(kernel,
       dim3(config.block_count), dim3(block_dim), shared_memory_size, d.stream(),
       args, out_backprop, input, filter_backprop);
-#endif
   return true;
 }
 
@@ -1603,15 +1581,9 @@ void LaunchDepthwiseConv2dBackpropFilterGPU(const GpuDevice& d,
       args.batch * args.out_rows * args.out_cols * args.out_depth;
   GpuLaunchConfig config =
       GetGpuLaunchConfig(num_out_backprop, d, kernel, 0, 0);
-#if GOOGLE_CUDA
-  kernel<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-      args, out_backprop, input, filter_backprop, num_out_backprop);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(kernel,
+  GPU_LAUNCH_KERNEL(kernel,
       dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
       args, out_backprop, input, filter_backprop, num_out_backprop);
-
-#endif
 }
 
 template <typename T, int kKnownFilterWidth, int kKnownFilterHeight>

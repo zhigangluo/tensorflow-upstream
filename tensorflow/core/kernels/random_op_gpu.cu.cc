@@ -227,19 +227,16 @@ void FillPhiloxRandom<GPUDevice, Distribution>::operator()(
       (d.getNumCudaMultiProcessors() * d.maxCudaThreadsPerMultiProcessor()) /
       block_size;
 
-  FillPhiloxRandomKernelLaunch<
-      Distribution><<<num_blocks, block_size, 0, d.stream()>>>(gen, data, size,
-                                                               dist);
 #elif TENSORFLOW_USE_ROCM
   const int32 block_size = d.maxHipThreadsPerBlock();
   const int32 num_blocks =
       (d.getNumHipMultiProcessors() * d.maxHipThreadsPerMultiProcessor()) /
       block_size;
+#endif
 
-  hipLaunchKernelGGL(FillPhiloxRandomKernelLaunch<Distribution>,
+  GPU_LAUNCH_KERNEL(FillPhiloxRandomKernelLaunch<Distribution>,
       dim3(num_blocks), dim3(block_size), 0, d.stream(),
       gen, data, size, dist);
-#endif
 };
 
 // Explicit instantiation of the GPU distributions functors

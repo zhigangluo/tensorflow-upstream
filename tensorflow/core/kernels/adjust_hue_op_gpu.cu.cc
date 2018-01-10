@@ -130,14 +130,9 @@ void AdjustHueGPU::operator()(GPUDevice* device, const int64 number_of_elements,
   const int threads_per_block = config.thread_per_block;
   const int block_count =
       (number_of_elements + threads_per_block - 1) / threads_per_block;
-#if GOOGLE_CUDA
-  internal::adjust_hue_nhwc<<<block_count, threads_per_block, 0, stream>>>(
-      number_of_elements, input, output, delta);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(internal::adjust_hue_nhwc,
+  GPU_LAUNCH_KERNEL(internal::adjust_hue_nhwc,
       dim3(block_count), dim3(threads_per_block), 0, stream,
       number_of_elements, input, output, delta);
-#endif
 }
 }  // namespace functor
 }  // namespace tensorflow

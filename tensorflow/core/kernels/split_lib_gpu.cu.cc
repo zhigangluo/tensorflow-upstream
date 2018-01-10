@@ -205,17 +205,10 @@ struct SplitOpGPULaunch {
     GpuLaunchConfig config = GetGpuLaunchConfig(
         prefix_dim_size * split_dim_size * suffix_dim_size, d);
 
-#if GOOGLE_CUDA
-    SplitOpKernel<T>
-        <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            input, prefix_dim_size, split_dim_size, suffix_dim_size,
-            output_ptr_data);
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(SplitOpKernel<T>,
+    GPU_LAUNCH_KERNEL(SplitOpKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         input, prefix_dim_size, split_dim_size, suffix_dim_size,
         output_ptr_data);
-#endif
   }
 };
 
@@ -229,16 +222,10 @@ struct SplitVOpGPULaunch {
       GpuLaunchConfig config =
           GetGpuLaunchConfig(total_rows * total_cols, gpu_device);
 
-#if GOOGLE_CUDA
-      SplitVOpKernel_fixed<T><<<config.block_count, config.thread_per_block, 0,
-                                gpu_device.stream()>>>(
-          input_ptr, total_rows, total_cols, output_ptr_data);
-#elif TENSORFLOW_USE_ROCM
-      hipLaunchKernelGGL(SplitVOpKernel_fixed<T>,
+      GPU_LAUNCH_KERNEL(SplitVOpKernel_fixed<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           gpu_device.stream(),
           input_ptr, total_rows, total_cols, output_ptr_data);
-#endif
     } else {
       auto config = GetGpu2DLaunchConfig(total_cols, total_rows, gpu_device);
       IntType smem_max = gpu_device.sharedMemPerBlock();
@@ -247,30 +234,17 @@ struct SplitVOpGPULaunch {
       // memory on most processors possibly due to decreasing occupancy
       // 4096 inputs is a lot, most code will take the smem path
       const int32 kMaxSmemBytesPerformance = 16384;
-      if (smem_usage < smem_max && smem_usage < kMaxSmemBytesPerformance)
-#if GOOGLE_CUDA
-        split_v_kernel<T, IntType, true>
-            <<<config.block_count, config.thread_per_block, smem_usage,
-               gpu_device.stream()>>>(input_ptr, output_scan, total_rows,
-                                      total_cols, output_ptr_data);
-#elif TENSORFLOW_USE_ROCM
-        hipLaunchKernelGGL(split_v_kernel<T, IntType, true>,
+      if (smem_usage < smem_max && smem_usage < kMaxSmemBytesPerformance) {
+        GPU_LAUNCH_KERNEL(split_v_kernel<T, IntType, true>,
             dim3(config.block_count), dim3(config.thread_per_block), smem_usage,
             gpu_device.stream(),
             input_ptr, output_scan, total_rows, total_cols, output_ptr_data);
-#endif
-      else
-#if GOOGLE_CUDA
-        split_v_kernel<T, IntType, false>
-            <<<config.block_count, config.thread_per_block, 0,
-               gpu_device.stream()>>>(input_ptr, output_scan, total_rows,
-                                      total_cols, output_ptr_data);
-#elif TENSORFLOW_USE_ROCM
-        hipLaunchKernelGGL(split_v_kernel<T, IntType, false>,
+      } else {
+        GPU_LAUNCH_KERNEL(split_v_kernel<T, IntType, false>,
             dim3(config.block_count), dim3(config.thread_per_block), 0,
             gpu_device.stream(),
             input_ptr, output_scan, total_rows, total_cols, output_ptr_data);
-#endif
+      }
     }
   }
 };

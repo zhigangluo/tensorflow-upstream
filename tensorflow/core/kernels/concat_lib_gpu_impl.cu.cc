@@ -151,18 +151,11 @@ void ConcatGPUImpl(const Eigen::GpuDevice& gpu_device,
                                       output->dimension(0), gpu_device);
 
   if (fixed_size) {
-#if GOOGLE_CUDA
-    concat_fixed_kernel<T, IntType>
-        <<<config.block_count, config.thread_per_block, 0,
-           gpu_device.stream()>>>(input_ptrs, split_size, output->dimension(0),
-                                  output->dimension(1), output->data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(concat_fixed_kernel<T, IntType>,
+    GPU_LAUNCH_KERNEL(concat_fixed_kernel<T, IntType>,
         dim3(config.block_count), dim3(config.thread_per_block), 0,
         gpu_device.stream(),
         input_ptrs, split_size, output->dimension(0), output->dimension(1),
         output->data());
-#endif
   } else {
     IntType smem_max = gpu_device.sharedMemPerBlock();
     IntType smem_usage = output_scan.size * sizeof(IntType);
@@ -171,32 +164,19 @@ void ConcatGPUImpl(const Eigen::GpuDevice& gpu_device,
     // possibly due to decreasing occupancy
     // 4096 inputs is a lot, most code will take the smem path
     const int32 kMaxSmemBytesPerformance = 16384;
-    if (smem_usage < smem_max && smem_usage < kMaxSmemBytesPerformance)
-#if GOOGLE_CUDA
-      concat_variable_kernel<T, IntType, true>
-          <<<config.block_count, config.thread_per_block, smem_usage,
-             gpu_device.stream()>>>(input_ptrs, output_scan,
-                                    output->dimension(0), output->dimension(1),
-                                    output->data());
-    else
-      concat_variable_kernel<T, IntType, false>
-          <<<config.block_count, config.thread_per_block, 0,
-             gpu_device.stream()>>>(input_ptrs, output_scan,
-                                    output->dimension(0), output->dimension(1),
-                                    output->data());
-#elif TENSORFLOW_USE_ROCM
-      hipLaunchKernelGGL(concat_variable_kernel<T, IntType, true>,
+    if (smem_usage < smem_max && smem_usage < kMaxSmemBytesPerformance) {
+      GPU_LAUNCH_KERNEL(concat_variable_kernel<T, IntType, true>,
           dim3(config.block_count), dim3(config.thread_per_block), smem_usage,
           gpu_device.stream(),
           input_ptrs, output_scan, output->dimension(0), output->dimension(1),
           output->data());
-    else
-      hipLaunchKernelGGL(concat_variable_kernel<T, IntType, false>,
+    } else {
+      GPU_LAUNCH_KERNEL(concat_variable_kernel<T, IntType, false>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           gpu_device.stream(),
           input_ptrs, output_scan, output->dimension(0), output->dimension(1),
           output->data());
-#endif
+    }
   }
 }
 

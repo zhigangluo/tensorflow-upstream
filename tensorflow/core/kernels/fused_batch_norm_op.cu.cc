@@ -43,15 +43,9 @@ void VarianceToInvVariance<T>::operator()(const Eigen::GpuDevice& d,
                                           const T* variance, double epsilon,
                                           int channels, T* inv_variance) {
   GpuLaunchConfig config = GetGpuLaunchConfig(channels, d);
-#if GOOGLE_CUDA
-  VarianceToInvVarianceKernel<<<config.block_count, config.thread_per_block, 0,
-                                d.stream()>>>(config.virtual_thread_count,
-                                              variance, epsilon, inv_variance);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(VarianceToInvVarianceKernel<T>,
+  GPU_LAUNCH_KERNEL(VarianceToInvVarianceKernel<T>,
       dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
       config.virtual_thread_count, variance, epsilon, inv_variance);
-#endif
 }
 
 template <class T>
@@ -71,15 +65,9 @@ void InvVarianceToVariance<T>::operator()(const Eigen::GpuDevice& d,
                                           double epsilon, int sample_size,
                                           int channels, T* variance) {
   GpuLaunchConfig config = GetGpuLaunchConfig(channels, d);
-#if GOOGLE_CUDA
-  InvVarianceToVarianceKernel<<<config.block_count, config.thread_per_block, 0,
-                                d.stream()>>>(config.virtual_thread_count,
-                                              epsilon, sample_size, variance);
-#elif TENSORFLOW_USE_ROCM
-  hipLaunchKernelGGL(InvVarianceToVarianceKernel<T>,
+  GPU_LAUNCH_KERNEL(InvVarianceToVarianceKernel<T>,
       dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
       config.virtual_thread_count, epsilon, sample_size, variance);
-#endif
 }
 
 template class VarianceToInvVariance<float>;

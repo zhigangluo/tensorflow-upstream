@@ -28,6 +28,7 @@ limitations under the License.
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/platform/types.h"
+#include "tensorflow/core/util/gpu_kernel_helper.h"
 
 namespace tensorflow {
 
@@ -69,19 +70,16 @@ struct CheckNumericsLaunch {
     const int32 num_blocks =
         (d.getNumCudaMultiProcessors() * d.maxCudaThreadsPerMultiProcessor()) /
         block_size;
-
-    CheckNumericsKernel<T><<<num_blocks, block_size, 0, d.stream()>>>(
-        data, size, abnormal_detected);
 #elif TENSORFLOW_USE_ROCM
     const int32 block_size = d.maxHipThreadsPerBlock();
     const int32 num_blocks =
         (d.getNumHipMultiProcessors() * d.maxHipThreadsPerMultiProcessor()) /
         block_size;
+#endif
 
-    hipLaunchKernelGGL(CheckNumericsKernel<T>,
+    GPU_LAUNCH_KERNEL(CheckNumericsKernel<T>,
         dim3(num_blocks), dim3(block_size), 0, d.stream(),
         data, size, abnormal_detected);
-#endif
   }
 };
 

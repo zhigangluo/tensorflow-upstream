@@ -78,18 +78,11 @@ struct SpaceToDepthOpFunctor<GPUDevice, T> {
         batch_size * input_height * input_width * input_depth;
 
     GpuLaunchConfig config = GetGpuLaunchConfig(total_count, d);
-#if GOOGLE_CUDA
-    S2D<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-        config.virtual_thread_count, input.data(), block_size, batch_size,
-        input_height, input_width, input_depth, output_height, output_width,
-        output_depth, output.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(S2D<T>,
+    GPU_LAUNCH_KERNEL(S2D<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input.data(), block_size, batch_size,
         input_height, input_width, input_depth, output_height, output_width,
         output_depth, output.data());
-#endif
   }
 };
 }  // end namespace functor

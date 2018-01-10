@@ -81,27 +81,14 @@ void BiasGPU<T>::compute(const GPUDevice& d, const T* input, const T* bias,
   }
   GpuLaunchConfig config = GetGpuLaunchConfig(total_count, d);
   if (data_format == FORMAT_NHWC) {
-#if GOOGLE_CUDA
-    BiasNHWCKernel<
-        T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-        config.virtual_thread_count, input, bias, output, bias_size);
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(BiasNHWCKernel<T>,
+    GPU_LAUNCH_KERNEL(BiasNHWCKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input, bias, output, bias_size);
-#endif
   } else {
-#if GOOGLE_CUDA
-    BiasNCHWKernel<
-        T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-        config.virtual_thread_count, input, bias, output, bias_size,
-        image_size);
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(BiasNCHWKernel<T>,
+    GPU_LAUNCH_KERNEL(BiasNCHWKernel<T>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         config.virtual_thread_count, input, bias, output, bias_size,
         image_size);
-#endif
   }
 }
 
@@ -228,17 +215,10 @@ void BiasGradGPU<T>::compute(const GPUDevice& d, const T* output_backprop,
   // Check if we have enough shared memory.
   if (shared_memory_size <= max_shared_memory_size) {
     if (data_format == FORMAT_NHWC) {
-#if GOOGLE_CUDA
-      BiasGradNHWC_SharedAtomics<
-          T><<<config.block_count, config.thread_per_block, shared_memory_size,
-               d.stream()>>>(total_count, output_backprop, bias_backprop,
-                             bias_size);
-#elif TENSORFLOW_USE_ROCM
-      hipLaunchKernelGGL(BiasGradNHWC_SharedAtomics<T>,
+      GPU_LAUNCH_KERNEL(BiasGradNHWC_SharedAtomics<T>,
           dim3(config.block_count), dim3(config.thread_per_block),
           shared_memory_size, d.stream(),
           total_count, output_backprop, bias_backprop, bias_size);
-#endif
     } else {
       // Round up the block count to multiple of bias_size.
       int group_size = (config.block_count + bias_size - 1) / bias_size;
@@ -246,45 +226,26 @@ void BiasGradGPU<T>::compute(const GPUDevice& d, const T* output_backprop,
       if (config.thread_per_block < kWarpSize) {
         config.thread_per_block = kWarpSize;
       }
-#if GOOGLE_CUDA
-      BiasGradNCHW_SharedAtomics<
-          T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          output_backprop, bias_backprop, batch, bias_size, image_size,
-          group_size);
-#elif TENSORFLOW_USE_ROCM
-      hipLaunchKernelGGL(BiasGradNCHW_SharedAtomics<T>,
+      GPU_LAUNCH_KERNEL(BiasGradNCHW_SharedAtomics<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           output_backprop, bias_backprop, batch, bias_size, image_size,
           group_size);
-#endif
     }
   } else {
     // Note that even if we don't have enough shared memory to fit the entire
     // output block, it is possible to process one group of elements at a time.
     // But for now, we simply fall back to the naive implementation.
     if (data_format == FORMAT_NHWC) {
-#if GOOGLE_CUDA
-      BiasGradNHWC_Naive<
-          T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          total_count, output_backprop, bias_backprop, bias_size);
-#elif TENSORFLOW_USE_ROCM
-      hipLaunchKernelGGL(BiasGradNHWC_Naive<T>,
+      GPU_LAUNCH_KERNEL(BiasGradNHWC_Naive<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           total_count, output_backprop, bias_backprop, bias_size);
-#endif
     } else {
-#if GOOGLE_CUDA
-      BiasGradNCHW_Naive<
-          T><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-          total_count, output_backprop, bias_backprop, bias_size, image_size);
-#elif TENSORFLOW_USE_ROCM
-      hipLaunchKernelGGL(BiasGradNCHW_Naive<T>,
+      GPU_LAUNCH_KERNEL(BiasGradNCHW_Naive<T>,
           dim3(config.block_count), dim3(config.thread_per_block), 0,
           d.stream(),
           total_count, output_backprop, bias_backprop, bias_size, image_size);
-#endif
     }
   }
 }

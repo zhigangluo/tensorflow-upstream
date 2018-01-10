@@ -90,17 +90,10 @@ struct SparseTensorDenseMatMulFunctor<GPUDevice, T, Tindices, ADJ_A, ADJ_B> {
     // out.size()?  Perhaps p * nnz ?
     GpuLaunchConfig config = GetGpuLaunchConfig(p * nnz, d);
 
-#if GOOGLE_CUDA
-    SparseTensorDenseMatMulKernel<T, Tindices, ADJ_A, ADJ_B>
-        <<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
-            nnz, m, b_rows, b_cols, p, a_indices.data(), a_values.data(),
-            b.data(), out.data());
-#elif TENSORFLOW_USE_ROCM
-    hipLaunchKernelGGL(SparseTensorDenseMatMulKernel<T, Tindices, ADJ_A, ADJ_B>,
+    GPU_LAUNCH_KERNEL(SparseTensorDenseMatMulKernel<T, Tindices, ADJ_A, ADJ_B>,
         dim3(config.block_count), dim3(config.thread_per_block), 0, d.stream(),
         nnz, m, b_rows, b_cols, p, a_indices.data(), a_values.data(),
         b.data(), out.data());
-#endif
 
     return Status::OK();
   }
