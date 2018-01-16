@@ -88,9 +88,9 @@ cc_library(
 )
 
 cc_library(
-    name = "hiprng",
-    srcs = ["rocm/lib/%{hiprng_lib}"],
-    data = ["rocm/lib/%{hiprng_lib}"],
+    name = "hiprand",
+    srcs = ["rocm/lib/%{hiprand_lib}"],
+    data = ["rocm/lib/%{hiprand_lib}"],
     includes = [
         ".",
         "rocm/include",
@@ -119,7 +119,7 @@ cc_library(
         ":rocmrt",
         ":hipblas",
         ":hipfft",
-        ":hiprng",
+        ":hiprand",
         ":miopen",
     ],
 )

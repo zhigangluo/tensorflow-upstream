@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "rocm/include/hiprng/hiprng.h"
+#include "rocm/include/hiprand/hiprand.h"
 #include "tensorflow/stream_executor/rocm/rocm_rng.h"
 
 #include "tensorflow/stream_executor/rocm/rocm_activation.h"
@@ -28,28 +28,28 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform/logging.h"
 #include "tensorflow/stream_executor/rng.h"
 
-// Formats hiprngStatus_t to output prettified values into a log stream.
-std::ostream &operator<<(std::ostream &in, const hiprngStatus_t &status) {
-#define OSTREAM_HIPRNG_STATUS(__name) \
-  case HIPRNG_STATUS_##__name:        \
-    in << "HIPRNG_STATUS_" #__name;   \
+// Formats hiprandStatus_t to output prettified values into a log stream.
+std::ostream &operator<<(std::ostream &in, const hiprandStatus_t &status) {
+#define OSTREAM_HIPRAND_STATUS(__name) \
+  case HIPRAND_STATUS_##__name:        \
+    in << "HIPRAND_STATUS_" #__name;   \
     return in;
 
   switch (status) {
-    OSTREAM_HIPRNG_STATUS(SUCCESS)
-    OSTREAM_HIPRNG_STATUS(VERSION_MISMATCH)
-    OSTREAM_HIPRNG_STATUS(NOT_INITIALIZED)
-    OSTREAM_HIPRNG_STATUS(ALLOCATION_FAILED)
-    OSTREAM_HIPRNG_STATUS(TYPE_ERROR)
-    OSTREAM_HIPRNG_STATUS(OUT_OF_RANGE)
-    OSTREAM_HIPRNG_STATUS(LENGTH_NOT_MULTIPLE)
-    OSTREAM_HIPRNG_STATUS(LAUNCH_FAILURE)
-    OSTREAM_HIPRNG_STATUS(PREEXISTING_FAILURE)
-    OSTREAM_HIPRNG_STATUS(INITIALIZATION_FAILED)
-    OSTREAM_HIPRNG_STATUS(ARCH_MISMATCH)
-    OSTREAM_HIPRNG_STATUS(INTERNAL_ERROR)
+    OSTREAM_HIPRAND_STATUS(SUCCESS)
+    OSTREAM_HIPRAND_STATUS(VERSION_MISMATCH)
+    OSTREAM_HIPRAND_STATUS(NOT_INITIALIZED)
+    OSTREAM_HIPRAND_STATUS(ALLOCATION_FAILED)
+    OSTREAM_HIPRAND_STATUS(TYPE_ERROR)
+    OSTREAM_HIPRAND_STATUS(OUT_OF_RANGE)
+    OSTREAM_HIPRAND_STATUS(LENGTH_NOT_MULTIPLE)
+    OSTREAM_HIPRAND_STATUS(LAUNCH_FAILURE)
+    OSTREAM_HIPRAND_STATUS(PREEXISTING_FAILURE)
+    OSTREAM_HIPRAND_STATUS(INITIALIZATION_FAILED)
+    OSTREAM_HIPRAND_STATUS(ARCH_MISMATCH)
+    OSTREAM_HIPRAND_STATUS(INTERNAL_ERROR)
     default:
-      in << "hiprngStatus_t(" << static_cast<int>(status) << ")";
+      in << "hiprandStatus_t(" << static_cast<int>(status) << ")";
       return in;
   }
 }
@@ -58,28 +58,28 @@ namespace perftools {
 namespace gputools {
 namespace rocm {
 
-PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kHipRngPlugin);
+PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kHipRandPlugin);
 
 namespace wrap {
 
-#define PERFTOOLS_GPUTOOLS_HIPRNG_WRAP(__name)                      \
+#define PERFTOOLS_GPUTOOLS_HIPRAND_WRAP(__name)                      \
   struct WrapperShim__##__name {                                    \
     template <typename... Args>                                     \
-    hiprngStatus_t operator()(ROCMExecutor *parent, Args... args) { \
+    hiprandStatus_t operator()(ROCMExecutor *parent, Args... args) { \
       rocm::ScopedActivateExecutorContext sac{parent};              \
       return ::__name(args...);                                     \
     }                                                               \
   } __name;
 
-PERFTOOLS_GPUTOOLS_HIPRNG_WRAP(hiprngCreateGenerator);
-PERFTOOLS_GPUTOOLS_HIPRNG_WRAP(hiprngDestroyGenerator);
-PERFTOOLS_GPUTOOLS_HIPRNG_WRAP(hiprngSetStream);
-PERFTOOLS_GPUTOOLS_HIPRNG_WRAP(hiprngGenerateUniform);
-PERFTOOLS_GPUTOOLS_HIPRNG_WRAP(hiprngGenerateUniformDouble);
-PERFTOOLS_GPUTOOLS_HIPRNG_WRAP(hiprngSetPseudoRandomGeneratorSeed);
-PERFTOOLS_GPUTOOLS_HIPRNG_WRAP(hiprngSetGeneratorOffset);
-PERFTOOLS_GPUTOOLS_HIPRNG_WRAP(hiprngGenerateNormal);
-PERFTOOLS_GPUTOOLS_HIPRNG_WRAP(hiprngGenerateNormalDouble);
+PERFTOOLS_GPUTOOLS_HIPRAND_WRAP(hiprandCreateGenerator);
+PERFTOOLS_GPUTOOLS_HIPRAND_WRAP(hiprandDestroyGenerator);
+PERFTOOLS_GPUTOOLS_HIPRAND_WRAP(hiprandSetStream);
+PERFTOOLS_GPUTOOLS_HIPRAND_WRAP(hiprandGenerateUniform);
+PERFTOOLS_GPUTOOLS_HIPRAND_WRAP(hiprandGenerateUniformDouble);
+PERFTOOLS_GPUTOOLS_HIPRAND_WRAP(hiprandSetPseudoRandomGeneratorSeed);
+PERFTOOLS_GPUTOOLS_HIPRAND_WRAP(hiprandSetGeneratorOffset);
+PERFTOOLS_GPUTOOLS_HIPRAND_WRAP(hiprandGenerateNormal);
+PERFTOOLS_GPUTOOLS_HIPRAND_WRAP(hiprandGenerateNormalDouble);
 
 }  // namespace wrap
 
@@ -110,7 +110,7 @@ ROCMRng::ROCMRng(ROCMExecutor *parent) : parent_(parent), rng_(nullptr) {}
 
 ROCMRng::~ROCMRng() {
   if (rng_ != nullptr) {
-    wrap::hiprngDestroyGenerator(parent_, rng_);
+    wrap::hiprandDestroyGenerator(parent_, rng_);
   }
 }
 
@@ -118,9 +118,9 @@ bool ROCMRng::Init() {
   mutex_lock lock{mu_};
   CHECK(rng_ == nullptr);
 
-  hiprngStatus_t ret =
-      wrap::hiprngCreateGenerator(parent_, &rng_, HIPRNG_RNG_PSEUDO_DEFAULT);
-  if (ret != HIPRNG_STATUS_SUCCESS) {
+  hiprandStatus_t ret =
+      wrap::hiprandCreateGenerator(parent_, &rng_, HIPRAND_RNG_PSEUDO_DEFAULT);
+  if (ret != HIPRAND_STATUS_SUCCESS) {
     LOG(ERROR) << "failed to create random number generator: " << ret;
     return false;
   }
@@ -130,9 +130,9 @@ bool ROCMRng::Init() {
 }
 
 bool ROCMRng::SetStream(Stream *stream) {
-  hiprngStatus_t ret =
-      wrap::hiprngSetStream(parent_, rng_, AsROCMStreamValue(stream));
-  if (ret != HIPRNG_STATUS_SUCCESS) {
+  hiprandStatus_t ret =
+      wrap::hiprandSetStream(parent_, rng_, AsROCMStreamValue(stream));
+  if (ret != HIPRAND_STATUS_SUCCESS) {
     LOG(ERROR) << "failed to set stream for random generation: " << ret;
     return false;
   }
@@ -166,18 +166,18 @@ bool ROCMRng::DoPopulateRandUniformInternal(Stream *stream,
     element_count *= 2;
   }
 
-  hiprngStatus_t ret;
+  hiprandStatus_t ret;
   if (std::is_same<T, float>::value ||
       std::is_same<T, std::complex<float>>::value) {
-    ret = wrap::hiprngGenerateUniform(
+    ret = wrap::hiprandGenerateUniform(
         parent_, rng_, reinterpret_cast<float *>(ROCMMemoryMutable(v)),
         element_count);
   } else {
-    ret = wrap::hiprngGenerateUniformDouble(
+    ret = wrap::hiprandGenerateUniformDouble(
         parent_, rng_, reinterpret_cast<double *>(ROCMMemoryMutable(v)),
         element_count);
   }
-  if (ret != HIPRNG_STATUS_SUCCESS) {
+  if (ret != HIPRAND_STATUS_SUCCESS) {
     LOG(ERROR) << "failed to do uniform generation of " << v->ElementCount()
                << " " << TypeString<T>() << "s at " << v->opaque() << ": "
                << ret;
@@ -217,10 +217,10 @@ bool ROCMRng::DoPopulateRandGaussianInternal(Stream *stream, ElemT mean,
   }
 
   uint64 element_count = v->ElementCount();
-  hiprngStatus_t ret =
+  hiprandStatus_t ret =
       func(parent_, rng_, ROCMMemoryMutable(v), element_count, mean, stddev);
 
-  if (ret != HIPRNG_STATUS_SUCCESS) {
+  if (ret != HIPRAND_STATUS_SUCCESS) {
     LOG(ERROR) << "failed to do gaussian generation of " << v->ElementCount()
                << " floats at " << v->opaque() << ": " << ret;
     return false;
@@ -232,13 +232,13 @@ bool ROCMRng::DoPopulateRandGaussianInternal(Stream *stream, ElemT mean,
 bool ROCMRng::DoPopulateRandGaussian(Stream *stream, float mean, float stddev,
                                      DeviceMemory<float> *v) {
   return DoPopulateRandGaussianInternal(stream, mean, stddev, v,
-                                        wrap::hiprngGenerateNormal);
+                                        wrap::hiprandGenerateNormal);
 }
 
 bool ROCMRng::DoPopulateRandGaussian(Stream *stream, double mean, double stddev,
                                      DeviceMemory<double> *v) {
   return DoPopulateRandGaussianInternal(stream, mean, stddev, v,
-                                        wrap::hiprngGenerateNormalDouble);
+                                        wrap::hiprandGenerateNormalDouble);
 }
 
 bool ROCMRng::SetSeed(Stream *stream, const uint8 *seed, uint64 seed_bytes) {
@@ -255,15 +255,15 @@ bool ROCMRng::SetSeed(Stream *stream, const uint8 *seed, uint64 seed_bytes) {
 
   // Requires 8 bytes of seed data; checked in RngSupport::CheckSeed (above)
   // (which itself requires 16 for API consistency with host RNG fallbacks).
-  hiprngStatus_t ret = wrap::hiprngSetPseudoRandomGeneratorSeed(
+  hiprandStatus_t ret = wrap::hiprandSetPseudoRandomGeneratorSeed(
       parent_, rng_, *(reinterpret_cast<const uint64 *>(seed)));
-  if (ret != HIPRNG_STATUS_SUCCESS) {
+  if (ret != HIPRAND_STATUS_SUCCESS) {
     LOG(ERROR) << "failed to set rng seed: " << ret;
     return false;
   }
 
-  ret = wrap::hiprngSetGeneratorOffset(parent_, rng_, 0);
-  if (ret != HIPRNG_STATUS_SUCCESS) {
+  ret = wrap::hiprandSetGeneratorOffset(parent_, rng_, 0);
+  if (ret != HIPRAND_STATUS_SUCCESS) {
     LOG(ERROR) << "failed to reset rng position: " << ret;
     return false;
   }
@@ -276,18 +276,18 @@ bool ROCMRng::SetSeed(Stream *stream, const uint8 *seed, uint64 seed_bytes) {
 
 namespace gpu = ::perftools::gputools;
 
-REGISTER_MODULE_INITIALIZER(register_hiprng, {
+REGISTER_MODULE_INITIALIZER(register_hiprand, {
   gpu::port::Status status =
       gpu::PluginRegistry::Instance()
           ->RegisterFactory<gpu::PluginRegistry::RngFactory>(
-              gpu::rocm::kROCmPlatformId, gpu::rocm::kHipRngPlugin, "hipRNG",
+              gpu::rocm::kROCmPlatformId, gpu::rocm::kHipRandPlugin, "hipRAND",
               [](gpu::internal::StreamExecutorInterface
                      *parent) -> gpu::rng::RngSupport * {
                 gpu::rocm::ROCMExecutor *rocm_executor =
                     dynamic_cast<gpu::rocm::ROCMExecutor *>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
-                      << "Attempting to initialize an instance of the hipRNG "
+                      << "Attempting to initialize an instance of the hipRAND "
                       << "support library with a non-ROCM StreamExecutor";
                   return nullptr;
                 }
@@ -302,11 +302,11 @@ REGISTER_MODULE_INITIALIZER(register_hiprng, {
               });
 
   if (!status.ok()) {
-    LOG(ERROR) << "Unable to register hipRNG factory: "
+    LOG(ERROR) << "Unable to register hipRAND factory: "
                << status.error_message();
   }
 
   gpu::PluginRegistry::Instance()->SetDefaultFactory(gpu::rocm::kROCmPlatformId,
                                                      gpu::PluginKind::kRng,
-                                                     gpu::rocm::kHipRngPlugin);
+                                                     gpu::rocm::kHipRandPlugin);
 });

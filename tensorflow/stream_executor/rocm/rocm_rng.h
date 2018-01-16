@@ -31,8 +31,8 @@ class DeviceMemory;
 
 namespace rocm {
 
-// Opaque and unique identifier for the hipRNG plugin.
-extern const PluginId kHipRngPlugin;
+// Opaque and unique identifier for the hipRAND plugin.
+extern const PluginId kHipRandPlugin;
 
 class ROCMExecutor;
 
@@ -82,15 +82,15 @@ class ROCMRng : public rng::RngSupport {
   // with random number generation.
   bool SetStream(Stream *stream) EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
-  // mutex that guards the hipRNG handle for this device.
+  // mutex that guards the hipRAND handle for this device.
   mutex mu_;
 
   // ROCMExecutor which instantiated this ROCMRng.
   // Immutable post-initialization.
   ROCMExecutor *parent_;
 
-  // hipRNGalibrary handle on the device.
-  hiprngGenerator_t rng_ GUARDED_BY(mu_);
+  // hipRAND library handle on the device.
+  hiprandGenerator_t rng_ GUARDED_BY(mu_);
 
   SE_DISALLOW_COPY_AND_ASSIGN(ROCMRng);
 };
