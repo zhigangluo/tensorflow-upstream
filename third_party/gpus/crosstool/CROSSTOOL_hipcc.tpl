@@ -130,8 +130,8 @@ toolchain {
   cxx_builtin_include_directory: "/opt/rocm/hipfft/include"
   cxx_builtin_include_directory: "/opt/rocm/hiprand/include"
   cxx_builtin_include_directory: "/opt/rocm/hcc/include"
-  cxx_builtin_include_directory: "/opt/rocm/hcc-1.2/compiler/lib/clang/6.0.0/include/"
-  cxx_builtin_include_directory: "/opt/rocm/hcc-1.2/lib/clang/6.0.0/include"
+  cxx_builtin_include_directory: "/opt/rocm/hcc/compiler/lib/clang/6.0.0/include/"
+  cxx_builtin_include_directory: "/opt/rocm/hcc/lib/clang/6.0.0/include"
 
   compilation_mode_flags {
     mode: DBG
@@ -237,8 +237,8 @@ toolchain {
   cxx_builtin_include_directory: "/opt/rocm/hipfft/include"
   cxx_builtin_include_directory: "/opt/rocm/hiprand/include"
   cxx_builtin_include_directory: "/opt/rocm/hcc/include"
-  cxx_builtin_include_directory: "/opt/rocm/hcc-1.2/compiler/lib/clang/6.0.0/include/"
-  cxx_builtin_include_directory: "/opt/rocm/hcc-1.2/lib/clang/6.0.0/include"
+  cxx_builtin_include_directory: "/opt/rocm/hcc/compiler/lib/clang/6.0.0/include/"
+  cxx_builtin_include_directory: "/opt/rocm/hcc/lib/clang/6.0.0/include"
 
   compilation_mode_flags {
     mode: DBG
