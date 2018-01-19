@@ -94,6 +94,7 @@ cc_library(
     includes = [
         ".",
         "rocm/include",
+        "rocm/include/rocrand",
     ],
     linkstatic = 1,
     visibility = ["//visibility:public"],
