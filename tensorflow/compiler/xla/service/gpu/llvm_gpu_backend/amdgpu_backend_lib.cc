@@ -56,7 +56,6 @@ limitations under the License.
 #include "external/llvm/include/llvm/Transforms/IPO.h"
 #include "external/llvm/include/llvm/Transforms/IPO/AlwaysInliner.h"
 #include "external/llvm/include/llvm/Transforms/IPO/PassManagerBuilder.h"
-
 #include "external/llvm/include/llvm/Transforms/IPO/Internalize.h"
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/core/lib/core/stringpiece.h"
@@ -219,10 +218,7 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
   std::string ir_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".ll");
   std::string ir_path = tensorflow::io::JoinPath(tempdir_name, ir_filename);
 
-  std::string isa_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".isa");
-  std::string isa_path = tensorflow::io::JoinPath(tempdir_name, isa_filename);
-
-  std::string isabin_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".isabin");
+  std::string isabin_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".s");
   std::string isabin_path = tensorflow::io::JoinPath(tempdir_name, isabin_filename);
 
   std::string hsaco_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".hsaco");
@@ -236,30 +232,7 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
   module->print(*ir_fs, nullptr);
   ir_fs->flush();
 
-  std::string gcnisa;  // need a std::string instead of a ::string.
-  {
-    llvm::raw_string_ostream stream(gcnisa);
-    llvm::buffer_ostream pstream(stream);
-    // The extension is stripped by IrDumpingPassManager, so we need to
-    // get creative to add a suffix.
-    string module_id(llvm_ir::AsString(module->getModuleIdentifier()));
-    IrDumpingPassManager codegen_passes(
-        ReplaceFilenameExtension(tensorflow::io::Basename(module_id),
-                                 "-amdgpu.dummy"),
-        "", false);
-    codegen_passes.add(new llvm::TargetLibraryInfoWrapperPass(
-        llvm::Triple(module->getTargetTriple())));
-
-    target_machine->addPassesToEmitFile(codegen_passes, pstream,
-                                        llvm::TargetMachine::CGFT_AssemblyFile);
-    codegen_passes.run(*module);
-  }
-
-  // dump GCN ISA text
-  std::unique_ptr<llvm::raw_fd_ostream> isa_fs(new llvm::raw_fd_ostream(isa_path, ec, llvm::sys::fs::F_None));
-  *isa_fs << gcnisa;
-  isa_fs->flush();
-
+  // emit GCN ISA binary
   std::string gcnisa_binary;  // need a std::string instead of a ::string.
   {
     llvm::raw_string_ostream stream(gcnisa_binary);
