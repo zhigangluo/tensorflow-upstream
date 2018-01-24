@@ -484,10 +484,10 @@ def tf_workspace(path_prefix="", tf_repo_name=""):
   temp_workaround_http_archive(
       name = "llvm",
       urls = [
-          "http://releases.llvm.org/5.0.0/llvm-5.0.0.src.tar.xz",
+          "http://releases.llvm.org/5.0.1/llvm-5.0.1.src.tar.xz",
       ],
-      sha256 = "e35dcbae6084adcf4abb32514127c5eabd7d63b733852ccdb31e06f1373136da",
-      strip_prefix = "llvm-5.0.0.src",
+      sha256 = "5fa7489fc0225b11821cab0362f5813a05f2bcf2533e8a4ea9c9c860168807b0",
+      strip_prefix = "llvm-5.0.1.src",
       build_file = str(Label("//third_party/llvm:llvm.BUILD")),
       repository = tf_repo_name,
   )

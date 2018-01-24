@@ -56,7 +56,6 @@ limitations under the License.
 #include "external/llvm/include/llvm/Transforms/IPO.h"
 #include "external/llvm/include/llvm/Transforms/IPO/AlwaysInliner.h"
 #include "external/llvm/include/llvm/Transforms/IPO/PassManagerBuilder.h"
-
 #include "external/llvm/include/llvm/Transforms/IPO/Internalize.h"
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/core/lib/core/stringpiece.h"
@@ -219,10 +218,7 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
   std::string ir_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".ll");
   std::string ir_path = tensorflow::io::JoinPath(tempdir_name, ir_filename);
 
-  std::string isa_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".isa");
-  std::string isa_path = tensorflow::io::JoinPath(tempdir_name, isa_filename);
-
-  std::string isabin_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".isabin");
+  std::string isabin_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".s");
   std::string isabin_path = tensorflow::io::JoinPath(tempdir_name, isabin_filename);
 
   std::string hsaco_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".hsaco");
@@ -236,9 +232,10 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
   module->print(*ir_fs, nullptr);
   ir_fs->flush();
 
-  std::string gcnisa;  // need a std::string instead of a ::string.
+  // emit GCN ISA binary
+  std::string gcnisa_binary;  // need a std::string instead of a ::string.
   {
-    llvm::raw_string_ostream stream(gcnisa);
+    llvm::raw_string_ostream stream(gcnisa_binary);
     llvm::buffer_ostream pstream(stream);
     // The extension is stripped by IrDumpingPassManager, so we need to
     // get creative to add a suffix.
@@ -251,45 +248,14 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
         llvm::Triple(module->getTargetTriple())));
 
     target_machine->addPassesToEmitFile(codegen_passes, pstream,
-                                        llvm::TargetMachine::CGFT_AssemblyFile);
+                                        llvm::TargetMachine::CGFT_ObjectFile);
     codegen_passes.run(*module);
   }
 
-  // dump GCN ISA text
-  std::unique_ptr<llvm::raw_fd_ostream> isa_fs(new llvm::raw_fd_ostream(isa_path, ec, llvm::sys::fs::F_None));
-  *isa_fs << gcnisa;
-  isa_fs->flush();
-
-  // execute llvm-mc to convertr GCN ISA text to GCN ISA binary
-  auto llvm_mc_program = llvm::sys::findProgramByName("llvm-mc");
-  if (!llvm_mc_program) {
-    LOG(FATAL) << "unable to find llvm-mc in PATH: "
-               << llvm_mc_program.getError().message();
-  }
-
-  std::array<const char*, 11> llvm_mc_args {
-    "llvm-mc",
-    "-arch", "amdgcn",
-    "-mcpu", "amdgpu_version",
-    "isa_path",
-    "-filetype", "obj",
-    "-o", "isabin_path",
-    nullptr,
-  };
-  std::string mcpu_str = target_machine->getTargetCPU().str();
-  llvm_mc_args[4] = mcpu_str.c_str();
-  llvm_mc_args[5] = isa_path.c_str();
-  llvm_mc_args[9] = isabin_path.c_str();
-
-  std::string error_message;
-  int llvm_mc_result = llvm::sys::ExecuteAndWait(*llvm_mc_program,
-                                                 llvm_mc_args.data(),
-                                                 nullptr, {}, 0, 0,
-                                                 &error_message);
-
-  if (llvm_mc_result) {
-    LOG(FATAL) << "llvm-mc execute fail: " << error_message;
-  }
+  // dump GCN ISA binary
+  std::unique_ptr<llvm::raw_fd_ostream> isabin_fs(new llvm::raw_fd_ostream(isabin_path, ec, llvm::sys::fs::F_None));
+  *isabin_fs << gcnisa_binary;
+  isabin_fs->flush();
 
   // execute ld.lld to convert GCN ISA binary into HSACO
   auto lld_program = llvm::sys::findProgramByName("ld.lld");
@@ -307,6 +273,7 @@ std::vector<char> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target_
   lld_args[4] = isabin_path.c_str();
   lld_args[6] = hsaco_path.c_str();
 
+  std::string error_message;
   int lld_result = llvm::sys::ExecuteAndWait(*lld_program, lld_args,
                                              nullptr, {}, 0, 0,
                                              &error_message); 
