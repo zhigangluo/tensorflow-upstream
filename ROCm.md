@@ -1,5 +1,7 @@
 # How to use on ROCm Machine
 
+## Installation
+
 ```shell
 $ git checkout rocm-v1
 
@@ -37,4 +39,15 @@ Configuration finished
 
 $ bazel build --config=opt --config=rocm //tensorflow/tools/pip_package:build_pip_package 
 
+```
+
+## Known Issues / Workarounds
+
+### tensorflow/benchmarks workaround for TF v1.3
+Since our current port of TF supports v1.3, we can't use some of the newest commits in `tensorflow/benchmarks`.  One specific error you could observe is a `ImportError: cannot import name batching`.  "Batching" was introduced in this [commit](https://github.com/tensorflow/benchmarks/commit/82dd0539c76afa8491e50d8f796e686b4d97b988).
+
+We have to drop back to an earlier point in the commit history:  
+```
+git clone https://github.com/tensorflow/benchmarks.git 
+git checkout -b oct23 f5d85aef2851881001130b28385795bc4c59fa38
 ```
