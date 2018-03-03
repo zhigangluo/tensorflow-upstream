@@ -421,14 +421,11 @@ class CudnnRNNTest(TensorFlowTestCase):
     has_input_c = (rnn_mode == cudnn_rnn_ops.CUDNN_LSTM)
     params_size_t = model.params_size()
     input_data = array_ops.ones([seq_length, batch_size, input_size])
-#    input_data = tf.Print(input_data, [input_data], "print inputs")
     input_h = array_ops.ones([num_layers * dir_count, batch_size, num_units])
-#    print("input_h shape=  ", input_h.shape);
     params = variables.Variable(
         array_ops.ones([params_size_t]), validate_shape=False)
     if has_input_c:
       input_c = array_ops.ones([num_layers * dir_count, batch_size, num_units])
-#      print("input_c shape=  ", input_c.shape);
       output, output_h, output_c = model(
           input_data=input_data,
           input_h=input_h,
@@ -441,13 +438,10 @@ class CudnnRNNTest(TensorFlowTestCase):
           input_h=input_h,
           params=params,
           is_training=False)
-#    output = tf.Print(output, [output], "!!!print output", -1, 200)
     output_sum = math_ops.reduce_sum(output)
-#    output_h = tf.Print(output_h, [output_h], "!!!print output_h", -1, 200)
     output_h_sum = math_ops.reduce_sum(output_h)
     total_sum = output_sum + output_h_sum
     if has_input_c:
-#      output_c = tf.Print(output_c, [output_c], "!!!print output_c", -1, 200)
       output_c_sum = math_ops.reduce_sum(output_c)
       total_sum += output_c_sum
     with self.test_session(use_gpu=True, graph=ops.get_default_graph()) as sess:
@@ -553,8 +547,6 @@ class CudnnRNNTest(TensorFlowTestCase):
             [num_layers * dir_count, batch_size, num_units]))
     params = variables.Variable(
         random_ops.random_uniform([params_size_t]), validate_shape=False)
-#    print("input_data shape=  ", input_data.shape);      
-#    input_data = tf.Print(input_data, [input_data], "!!!print input", -1, 200)      
     if has_input_c:
       input_c = variables.Variable(
           random_ops.random_uniform(
@@ -568,8 +560,6 @@ class CudnnRNNTest(TensorFlowTestCase):
     else:
       output, output_h = model(
           input_data=input_data, input_h=input_h, params=params)
-#    print("output shape=  ", output.shape);      
-#    output = tf.Print(output, [output], "!!!print output", -1, 200)      
     output_sum = math_ops.reduce_sum(output)
     output_h_sum = math_ops.reduce_sum(output_h)
     total_sum = output_sum + output_h_sum
