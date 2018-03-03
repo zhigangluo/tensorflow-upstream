@@ -361,13 +361,13 @@ class CudnnRNNTest(TensorFlowTestCase):
   def testSaveRestore(self):
     rnn_modes = [
         cudnn_rnn_ops.CUDNN_LSTM,
-#        cudnn_rnn_ops.CUDNN_GRU,
-#        cudnn_rnn_ops.CUDNN_RNN_TANH,
-#      cudnn_rnn_ops.CUDNN_RNN_RELU
+        cudnn_rnn_ops.CUDNN_GRU,
+        cudnn_rnn_ops.CUDNN_RNN_TANH,
+      cudnn_rnn_ops.CUDNN_RNN_RELU
     ]
-#    for rnn_mode in rnn_modes:
-#      self._testSaveRestoreVariable(rnn_mode)
-#      self._testSaveRestoreOutput(rnn_mode)
+    for rnn_mode in rnn_modes:
+      self._testSaveRestoreVariable(rnn_mode)
+      self._testSaveRestoreOutput(rnn_mode)
 
   def _MinLSTMParamSize(self,
                         num_layers,

@@ -657,8 +657,8 @@ class MixinBase<void> {};
 }  // namespace
 
 
-#define ROCM_RETURN_IF_FAIL(STATUS, ...)                                \
-  if (!SE_PREDICT_TRUE((STATUS) == miopenStatusSuccess)) {              \
+#define ROCM_RETURN_IF_FAIL(STATUS, ...)                                 \
+  if (!SE_PREDICT_TRUE((STATUS) == miopenStatusSuccess)) {               \
     string error_msg = port::StrCat(ToString(STATUS), " ", __VA_ARGS__); \
     SetFailure(port::Status(port::error::UNKNOWN, error_msg));           \
     LOG(ERROR) << error_msg;                                             \
