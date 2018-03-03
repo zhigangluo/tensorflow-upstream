@@ -21,7 +21,7 @@ from __future__ import print_function
 import time
 
 from tensorflow.contrib.cudnn_rnn.python.ops import cudnn_rnn_ops
-from tensorflow.contrib.rnn.python.ops import rnn
+from tensorflow.contrib.rnn.python.ops import core_rnn
 from tensorflow.contrib.rnn.python.ops import lstm_ops
 from tensorflow.python.client import session
 from tensorflow.python.framework import dtypes

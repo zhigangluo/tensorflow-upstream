@@ -34,7 +34,7 @@ class ROCMExecutor;
 class MIOpenRnnDescriptor;
 class MIOpenRnnSequenceTensorDescriptor;
 class MIOpenRnnStateTensorDescriptor;
-
+ 
 // Opaque and unique identifier for the MIOpen plugin.
 extern const PluginId kMIOpenPlugin;
 
@@ -430,15 +430,15 @@ class MIOpenSupport : public dnn::DnnSupport {
       const dnn::BatchDescriptor& output_dimensions,
       DeviceMemory<float>* output_data) override;
 
-  bool DoXYPad(Stream* stream, const dnn::BatchDescriptor& dimensions,
-               const DeviceMemory<float>& input_data, int64 left_pad,
-               int64 right_pad, int64 top_pad, int64 bottom_pad,
-               DeviceMemory<float>* output_data) override;
+  bool DoXYPad(Stream* stream, const dnn::BatchDescriptor &dimensions,
+               const DeviceMemory<float> &input_data,
+               int64 left_pad, int64 right_pad, int64 top_pad,
+               int64 bottom_pad, DeviceMemory<float> *output_data) override;
 
-  bool DoXYSlice(Stream* stream, const dnn::BatchDescriptor& dimensions,
-                 const DeviceMemory<float>& input_data, int64 left_trim,
-                 int64 right_trim, int64 top_trim, int64 bottom_trim,
-                 DeviceMemory<float>* output_data) override;
+  bool DoXYSlice(Stream* stream, const dnn::BatchDescriptor &dimensions,
+                 const DeviceMemory<float> &input_data,
+                 int64 left_trim, int64 right_trim, int64 top_trim,
+                 int64 bottom_trim, DeviceMemory<float> *output_data) override;
 
   bool DoMemcpyD2HQuantized(Stream* stream,
                             const DeviceMemory<float>& device_unquantized_src,
@@ -486,7 +486,7 @@ class MIOpenSupport : public dnn::DnnSupport {
   //
   // transform_scratch is populated with a legitimate temporary allocation iff
   // the original output data needs to be transformed.
-  template <class T>
+  template<class T>
   DeviceMemory<T> MaybeTransformLayout(
       Stream* stream,
       int miopen_type,  // Actually miopenDataType_t.
@@ -564,13 +564,12 @@ class MIOpenSupport : public dnn::DnnSupport {
       dnn::ProfileResult* output_profile_result);
 
   template <class T>
-  bool DoConvolveBackwardBiasImpl(
-      Stream* stream,
-      int miopen_type,  // Actually miopenDataType_t.
-      const dnn::BatchDescriptor& input_descriptor,
-      const DeviceMemory<T>& input_data,
-      const dnn::BatchDescriptor& bias_descriptor,
-      DeviceMemory<T>* backward_bias_data);
+  bool DoConvolveBackwardBiasImpl(Stream* stream,
+                                  int miopen_type,  // Actually miopenDataType_t.
+                                  const dnn::BatchDescriptor& input_descriptor,
+                                  const DeviceMemory<T>& input_data,
+                                  const dnn::BatchDescriptor& bias_descriptor,
+                                  DeviceMemory<T>* backward_bias_data);
 
   template <class T>
   bool DoRnnForwardImpl(Stream* stream, const MIOpenRnnDescriptor& rnn_desc,

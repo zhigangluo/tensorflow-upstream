@@ -22,6 +22,7 @@ limitations under the License.
 #include <string>
 #include <unordered_set>
 
+#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/device_base.h"
 #include "tensorflow/core/framework/kernel_def_builder.h"
 #include "tensorflow/core/framework/op.h"
@@ -40,7 +41,6 @@ limitations under the License.
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/util/env_var.h"
-#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/platform/stream_executor.h"
@@ -204,9 +204,10 @@ DeviceMemoryBase SliceDeviceMemory(const DeviceMemoryBase& device_memory,
 }
 
 inline Status FromExecutorStatus(const perftools::gputools::port::Status& s) {
-  return s.ok() ? Status::OK() : Status(static_cast<tensorflow::error::Code>(
-                                            static_cast<int>(s.code())),
-                                        s.error_message());
+  return s.ok() ? Status::OK()
+                : Status(static_cast<tensorflow::error::Code>(
+                             static_cast<int>(s.code())),
+                         s.error_message());
 }
 
 template <typename T>
@@ -723,7 +724,7 @@ class CudnnRNNCanonicalToParams<GPUDevice, T> : public CudnnRNNKernelCommon {
                      stream);
   }
 };
-
+    
 REGISTER_KERNEL_BUILDER(Name("CudnnRNNCanonicalToParams")
                             .Device(DEVICE_GPU)
                             .HostMemory("num_layers")
@@ -911,9 +912,9 @@ class CudnnRNNBackwardOp<GPUDevice, T> : public CudnnRNNKernelCommon {
     const Tensor* output_h = nullptr;
     OP_REQUIRES_OK(context, context->input("output_h", &output_h));
     OP_REQUIRES(context, output_h->shape() == hidden_state_shape,
-                errors::InvalidArgument("Invalid output_h shape: ",
-                                        output_h->shape().DebugString(), " ",
-                                        hidden_state_shape.DebugString()));
+                errors::InvalidArgument(
+                    "Invalid output_h shape: ", output_h->shape().DebugString(),
+                    " ", hidden_state_shape.DebugString()));
     const Tensor* output_c = nullptr;
     if (HasInputC()) {
       // Only LSTM uses input_c and output_c. So for all other models, we only
