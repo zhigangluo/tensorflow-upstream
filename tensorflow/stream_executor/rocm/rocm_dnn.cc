@@ -730,13 +730,12 @@ class MIOpenRnnDescriptor : public MIOpenDescriptorCommon<dnn::RnnDescriptor> {
         direction_mode_(direction_mode),
         rnn_mode_(rnn_mode),
         data_type_(data_type) {
-    // no dropout support in MIOpen currently.
 #if 0      
-    // Create the dropout handle.
-    cudnn_dropout_desc_.reset(new CudnnDropoutDescriptor(
-        parent, cudnn_handle, dropout, seed, state_allocator));
-    if (!cudnn_dropout_desc_->ok()) {
-      SetFailure(cudnn_dropout_desc_->Status());
+    // no dropout support in MIOpen currently. Create the dropout handle.
+    miopen_dropout_desc_.reset(new miopenDropoutDescriptor(
+        parent, miopen_handle, dropout, seed, state_allocator));
+    if (!miopen_dropout_desc_->ok()) {
+      SetFailure(miopen_dropout_desc_->Status());
       return;
     }
 #endif    
@@ -804,7 +803,8 @@ class MIOpenRnnDescriptor : public MIOpenDescriptorCommon<dnn::RnnDescriptor> {
   miopenRNNMode_t rnn_mode_;
   miopenDataType_t data_type_;
   port::Status status_;
-  // std::unique_ptr<CudnnDropoutDescriptor> cudnn_dropout_desc_;
+  // no dropout in MIOpen.
+  // std::unique_ptr<miopenDropoutDescriptor> miopen_dropout_desc_;
   std::unique_ptr<MIOpenRnnParamsDescriptor> miopen_params_desc_;
   SE_DISALLOW_COPY_AND_ASSIGN(MIOpenRnnDescriptor);
 };
@@ -1225,7 +1225,8 @@ bool MIOpenSupport::DoRnnBackwardImpl(
     LOG(ERROR) << "Unable to create rnn workspace";
     return false;
   }
-#if 1
+
+#if 1  
   long size_data = input_desc.seq_length()*input_desc.batch_size() * input_desc.data_size(); 
   if ((size_data > 0) && (input_backprop_data->opaque() != nullptr))
       stream->ThenMemZero(input_backprop_data, size_data * sizeof(float));
@@ -1327,7 +1328,8 @@ MIOpenRnnParamsDescriptor::MIOpenRnnParamsDescriptor(
   }
 #if 0
   {
-    // TODO: _handle gets undesirably overwritten by the following code.
+    // TODO: The following is for save and restore parameter ops from "saver"
+    // class.  Currently, "_handle" gets overwritten by MIOpen API, which is undesirable.
     // Create the weights and biases into the params buffer
     int region_count_per_layer = GetRegionCountPerLayer();
     miopenTensorDescriptor_t region_desc_handle = nullptr;
