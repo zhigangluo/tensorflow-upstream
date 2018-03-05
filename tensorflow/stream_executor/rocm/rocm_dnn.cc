@@ -809,6 +809,8 @@ class MIOpenRnnDescriptor : public MIOpenDescriptorCommon<dnn::RnnDescriptor> {
   SE_DISALLOW_COPY_AND_ASSIGN(MIOpenRnnDescriptor);
 };
 
+// Get ID of the internal parameter tensor.
+//    
 int MIOpenRnnParamsDescriptor::GetRegionCountPerLayer() const {
   auto rnn_mode = rnn_desc_->rnn_mode();
   switch (rnn_mode) {
