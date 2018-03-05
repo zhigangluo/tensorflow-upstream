@@ -1186,6 +1186,8 @@ CudnnRnnParamsDescriptor::CudnnRnnParamsDescriptor(
   }
 }
 
+// Get ID of the internal parameter tensor.
+//    
 int CudnnRnnParamsDescriptor::GetRegionCountPerLayer() const {
   auto rnn_mode = rnn_desc_->rnn_mode();
   switch (rnn_mode) {
