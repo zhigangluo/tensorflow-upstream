@@ -605,20 +605,6 @@ class CudnnRNNTest(TensorFlowTestCase):
                 "dir_count": 1,
            },
         },
-#        {
-#            "rnn_mode": cudnn_rnn_ops.CUDNN_GRU,
-#            "dropout": [0., 0.5, 1.],
-#            "tolerance": 4e-3,
-#            "tolerance": 6.4e-3,
-#            "shape": {
-#                "num_layers": 2,
-#                "num_units": 3,
-#                "input_size": 4,
-#                "batch_size": 3,
-#                "seq_length": 4,
-#                "dir_count": 1,
-#            },
-#        },
         {
            "rnn_mode": cudnn_rnn_ops.CUDNN_RNN_TANH,
             "dropout": [0., 0.5, 1.],
@@ -646,6 +632,19 @@ class CudnnRNNTest(TensorFlowTestCase):
                 "dir_count": 1,
            },
        },
+       {
+            "rnn_mode": cudnn_rnn_ops.CUDNN_GRU,
+            "dropout": [0., 0.5, 1.],
+            "tolerance": 4e-3,
+            "shape": {
+                "num_layers": 2,
+                "num_units": 3,
+                "input_size": 4,
+                "batch_size": 3,
+                "seq_length": 4,
+                "dir_count": 1,
+            },
+        },
     ]
     ops.reset_default_graph()
     with ops.Graph().as_default():
