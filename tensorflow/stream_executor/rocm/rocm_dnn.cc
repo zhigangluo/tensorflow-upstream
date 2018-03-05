@@ -1228,7 +1228,8 @@ bool MIOpenSupport::DoRnnBackwardImpl(
     return false;
   }
 
-#if 1  
+  // workaround for missing initialization support in MIOpen.
+  // TODO: remove this when MIOpen is ready.
   long size_data = input_desc.seq_length()*input_desc.batch_size() * input_desc.data_size(); 
   if ((size_data > 0) && (input_backprop_data->opaque() != nullptr))
       stream->ThenMemZero(input_backprop_data, size_data * sizeof(float));
@@ -1240,7 +1241,6 @@ bool MIOpenSupport::DoRnnBackwardImpl(
   size_data = input_c_desc.num_layers()*input_c_desc.batch_size()*input_c_desc.data_size();
   if ((size_data > 0) && (input_c_backprop_data->opaque() != nullptr))
       stream->ThenMemZero(input_c_backprop_data, size_data * sizeof(float));
-#endif  
   
   // make the backward data call
   miopenStatus_t status = wrap::miopenRNNBackwardData(
