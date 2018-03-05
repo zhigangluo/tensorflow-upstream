@@ -452,7 +452,7 @@ port::Status ROCMExecutor::SynchronousMemcpyDeviceToDevice(
 bool ROCMExecutor::MemZero(Stream *stream, DeviceMemoryBase *location,
                            uint64 size) {
   if (reinterpret_cast<uintptr_t>(location->opaque()) % 4 == 0 &&
-      size % 4 == 0 && (size >= 8)) {
+      size % 4 == 0) {
     return Memset32(stream, location, 0x0, size);
   } else {
     return Memset(stream, location, 0x0, size);
