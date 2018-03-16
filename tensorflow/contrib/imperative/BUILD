@@ -7,7 +7,7 @@ exports_files(["LICENSE"])
 
 package(default_visibility = ["//tensorflow:__subpackages__"])
 
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
+load("//tensorflow:tensorflow.bzl", "gpu_py_test")
 
 py_library(
     name = "imperative",
@@ -66,7 +66,7 @@ py_library(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "imperative_test",
     size = "small",
     srcs = ["imperative_test.py"],

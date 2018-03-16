@@ -10,9 +10,9 @@ exports_files(["LICENSE"])
 
 package(default_visibility = ["//tensorflow:__subpackages__"])
 
-load("//tensorflow:tensorflow.bzl", "cuda_py_tests")
+load("//tensorflow:tensorflow.bzl", "gpu_py_tests")
 
-cuda_py_tests(
+gpu_py_tests(
     name = "linear_operator_test",
     size = "small",
     srcs = ["python/kernel_tests/linear_operator_test.py"],
@@ -28,7 +28,7 @@ cuda_py_tests(
     ],
 )
 
-cuda_py_tests(
+gpu_py_tests(
     name = "linear_operator_addition_test",
     size = "small",
     srcs = ["python/kernel_tests/linear_operator_addition_test.py"],
@@ -45,7 +45,7 @@ cuda_py_tests(
     ],
 )
 
-cuda_py_tests(
+gpu_py_tests(
     name = "linear_operator_composition_test",
     size = "medium",
     srcs = ["python/kernel_tests/linear_operator_composition_test.py"],
@@ -63,7 +63,7 @@ cuda_py_tests(
     tags = ["noasan"],  # times out b/63678675
 )
 
-cuda_py_tests(
+gpu_py_tests(
     name = "linear_operator_diag_test",
     size = "medium",
     srcs = ["python/kernel_tests/linear_operator_diag_test.py"],
@@ -80,7 +80,7 @@ cuda_py_tests(
     ],
 )
 
-cuda_py_tests(
+gpu_py_tests(
     name = "linear_operator_identity_test",
     size = "medium",
     srcs = ["python/kernel_tests/linear_operator_identity_test.py"],
@@ -96,7 +96,7 @@ cuda_py_tests(
     ],
 )
 
-cuda_py_tests(
+gpu_py_tests(
     name = "linear_operator_full_matrix_test",
     size = "medium",
     srcs = ["python/kernel_tests/linear_operator_full_matrix_test.py"],
@@ -111,7 +111,7 @@ cuda_py_tests(
     ],
 )
 
-cuda_py_tests(
+gpu_py_tests(
     name = "linear_operator_tril_test",
     size = "medium",
     srcs = ["python/kernel_tests/linear_operator_tril_test.py"],
@@ -126,7 +126,7 @@ cuda_py_tests(
     ],
 )
 
-cuda_py_tests(
+gpu_py_tests(
     name = "linear_operator_udvh_update_test",
     size = "medium",
     srcs = ["python/kernel_tests/linear_operator_udvh_update_test.py"],
@@ -142,7 +142,7 @@ cuda_py_tests(
     shard_count = 5,
 )
 
-cuda_py_tests(
+gpu_py_tests(
     name = "linear_operator_util_test",
     size = "medium",
     srcs = ["python/kernel_tests/linear_operator_util_test.py"],

@@ -14,7 +14,7 @@ load("//tensorflow:tensorflow.bzl", "tf_custom_op_library")
 load("//tensorflow:tensorflow.bzl", "tf_gen_op_libs")
 load("//tensorflow:tensorflow.bzl", "tf_gen_op_wrapper_py")
 load("//tensorflow:tensorflow.bzl", "tf_kernel_library")
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
+load("//tensorflow:tensorflow.bzl", "gpu_py_test")
 load("//tensorflow:tensorflow.bzl", "tf_custom_op_py_library")
 
 tf_custom_op_library(
@@ -80,7 +80,7 @@ tf_custom_op_py_library(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "cudnn_rnn_ops_test",
     size = "medium",
     srcs = ["python/kernel_tests/cudnn_rnn_ops_test.py"],
@@ -107,7 +107,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "cudnn_rnn_ops_benchmark",
     size = "large",
     srcs = ["python/kernel_tests/cudnn_rnn_ops_benchmark.py"],

@@ -4,7 +4,7 @@ licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
 
-load("//tensorflow:tensorflow.bzl", "cuda_py_tests")
+load("//tensorflow:tensorflow.bzl", "gpu_py_tests")
 
 py_library(
     name = "signal_py",
@@ -22,7 +22,7 @@ py_library(
     ],
 )
 
-cuda_py_tests(
+gpu_py_tests(
     name = "reconstruction_ops_test",
     srcs = ["python/kernel_tests/reconstruction_ops_test.py"],
     additional_deps = [
@@ -39,7 +39,7 @@ cuda_py_tests(
     ],
 )
 
-cuda_py_tests(
+gpu_py_tests(
     name = "shape_ops_test",
     srcs = ["python/kernel_tests/shape_ops_test.py"],
     additional_deps = [
@@ -55,7 +55,7 @@ cuda_py_tests(
     ],
 )
 
-cuda_py_tests(
+gpu_py_tests(
     name = "spectral_ops_test",
     size = "large",
     srcs = ["python/kernel_tests/spectral_ops_test.py"],
@@ -76,7 +76,7 @@ cuda_py_tests(
     tags = ["nomac"],
 )
 
-cuda_py_tests(
+gpu_py_tests(
     name = "window_ops_test",
     size = "small",
     srcs = ["python/kernel_tests/window_ops_test.py"],

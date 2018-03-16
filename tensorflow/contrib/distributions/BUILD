@@ -8,7 +8,7 @@ exports_files(["LICENSE"])
 
 package(default_visibility = ["//tensorflow:__subpackages__"])
 
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
+load("//tensorflow:tensorflow.bzl", "gpu_py_test")
 
 py_library(
     name = "bijectors_py",
@@ -56,7 +56,7 @@ py_library(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "distribution_test",
     size = "small",
     srcs = ["python/kernel_tests/distribution_test.py"],
@@ -72,7 +72,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "conditional_distribution_test",
     size = "small",
     srcs = [
@@ -92,7 +92,7 @@ cuda_py_test(
     tags = ["no_pip"],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "operator_pd_test",
     size = "small",
     srcs = ["python/kernel_tests/operator_pd_test.py"],
@@ -110,7 +110,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "operator_pd_cholesky_test",
     size = "medium",
     srcs = ["python/kernel_tests/operator_pd_cholesky_test.py"],
@@ -126,7 +126,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "operator_pd_diag_test",
     size = "medium",
     srcs = ["python/kernel_tests/operator_pd_diag_test.py"],
@@ -141,7 +141,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "operator_pd_full_test",
     size = "medium",
     srcs = ["python/kernel_tests/operator_pd_full_test.py"],
@@ -155,7 +155,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "operator_pd_identity_test",
     size = "medium",
     srcs = ["python/kernel_tests/operator_pd_identity_test.py"],
@@ -170,7 +170,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "operator_pd_vdvt_update_test",
     size = "large",
     srcs = ["python/kernel_tests/operator_pd_vdvt_update_test.py"],
@@ -188,7 +188,7 @@ cuda_py_test(
     tags = ["notap"],  # http://b/30441813
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "binomial_test",
     size = "small",
     srcs = ["python/kernel_tests/binomial_test.py"],
@@ -201,7 +201,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "chi2_test",
     srcs = ["python/kernel_tests/chi2_test.py"],
     additional_deps = [
@@ -215,7 +215,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "deterministic_test",
     size = "small",
     srcs = ["python/kernel_tests/deterministic_test.py"],
@@ -232,7 +232,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "geometric_test",
     size = "small",
     srcs = ["python/kernel_tests/geometric_test.py"],
@@ -248,7 +248,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "inverse_gamma_test",
     srcs = ["python/kernel_tests/inverse_gamma_test.py"],
     additional_deps = [
@@ -263,7 +263,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "mvn_diag_test",
     size = "small",
     srcs = ["python/kernel_tests/mvn_diag_test.py"],
@@ -280,7 +280,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "mvn_diag_plus_low_rank_test",
     size = "medium",
     srcs = ["python/kernel_tests/mvn_diag_plus_low_rank_test.py"],
@@ -297,7 +297,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "mvn_full_covariance_test",
     size = "small",
     srcs = ["python/kernel_tests/mvn_full_covariance_test.py"],
@@ -314,7 +314,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "mvn_tril_test",
     size = "small",
     srcs = ["python/kernel_tests/mvn_tril_test.py"],
@@ -331,7 +331,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "mixture_test",
     size = "medium",
     srcs = ["python/kernel_tests/mixture_test.py"],
@@ -352,7 +352,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "negative_binomial_test",
     size = "small",
     srcs = ["python/kernel_tests/negative_binomial_test.py"],
@@ -368,7 +368,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "poisson_test",
     size = "small",
     srcs = ["python/kernel_tests/poisson_test.py"],
@@ -382,7 +382,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "sample_stats_test",
     size = "small",
     srcs = ["python/kernel_tests/sample_stats_test.py"],
@@ -400,7 +400,7 @@ cuda_py_test(
     tags = ["nomsan"],  # disable to avoid false positives from scipy.
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "vector_exponential_diag_test",
     size = "medium",
     srcs = ["python/kernel_tests/vector_exponential_diag_test.py"],
@@ -416,7 +416,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "vector_laplace_diag_test",
     size = "medium",
     srcs = ["python/kernel_tests/vector_laplace_diag_test.py"],
@@ -432,7 +432,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "vector_student_t_test",
     size = "medium",
     srcs = ["python/kernel_tests/vector_student_t_test.py"],
@@ -448,7 +448,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "wishart_test",
     size = "small",
     srcs = ["python/kernel_tests/wishart_test.py"],
@@ -466,7 +466,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "normal_conjugate_posteriors_test",
     size = "small",
     srcs = ["python/kernel_tests/normal_conjugate_posteriors_test.py"],
@@ -481,7 +481,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "quantized_distribution_test",
     size = "medium",
     srcs = ["python/kernel_tests/quantized_distribution_test.py"],
@@ -498,7 +498,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "logistic_test",
     size = "small",
     srcs = ["python/kernel_tests/logistic_test.py"],
@@ -512,7 +512,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "relaxed_bernoulli_test",
     size = "small",
     srcs = ["python/kernel_tests/relaxed_bernoulli_test.py"],
@@ -526,7 +526,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "onehot_categorical_test",
     size = "small",
     srcs = ["python/kernel_tests/onehot_categorical_test.py"],
@@ -540,7 +540,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "relaxed_onehot_categorical_test",
     size = "small",
     srcs = ["python/kernel_tests/relaxed_onehot_categorical_test.py"],
@@ -554,7 +554,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "transformed_distribution_test",
     size = "medium",
     srcs = ["python/kernel_tests/transformed_distribution_test.py"],
@@ -571,7 +571,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "conditional_transformed_distribution_test",
     size = "medium",
     srcs = [
@@ -591,7 +591,7 @@ cuda_py_test(
     tags = ["no_pip"],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "distribution_util_test",
     size = "small",
     srcs = ["python/kernel_tests/distribution_util_test.py"],
@@ -609,7 +609,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "shape_test",
     size = "medium",
     srcs = ["python/kernel_tests/shape_test.py"],
@@ -625,7 +625,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "trig_test",
     size = "small",
     srcs = ["python/kernel_tests/trig_test.py"],
@@ -656,7 +656,7 @@ filegroup(
 
 # === Bijector Tests ==========================================================
 
-cuda_py_test(
+gpu_py_test(
     name = "conditional_bijector_test",
     size = "small",
     srcs = ["python/kernel_tests/bijectors/conditional_bijector_test.py"],
@@ -675,7 +675,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "affine_test",
     size = "medium",
     srcs = ["python/kernel_tests/bijectors/affine_test.py"],
@@ -696,7 +696,7 @@ cuda_py_test(
     tags = ["noasan"],  # times out b/63678675
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "affine_linear_operator_test",
     size = "small",
     srcs = ["python/kernel_tests/bijectors/affine_linear_operator_test.py"],
@@ -715,7 +715,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "chain_test",
     size = "small",
     srcs = ["python/kernel_tests/bijectors/chain_test.py"],
@@ -734,7 +734,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "cholesky_outer_product_test",
     size = "small",
     srcs = ["python/kernel_tests/bijectors/cholesky_outer_product_test.py"],
@@ -753,7 +753,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "exp_test",
     size = "small",
     srcs = ["python/kernel_tests/bijectors/exp_test.py"],
@@ -772,7 +772,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "inline_test",
     size = "small",
     srcs = ["python/kernel_tests/bijectors/inline_test.py"],
@@ -791,7 +791,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "invert_test",
     size = "small",
     srcs = ["python/kernel_tests/bijectors/invert_test.py"],
@@ -810,7 +810,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "power_transform_test",
     size = "small",
     srcs = ["python/kernel_tests/bijectors/power_transform_test.py"],
@@ -829,7 +829,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "sigmoid_test",
     size = "small",
     srcs = ["python/kernel_tests/bijectors/sigmoid_test.py"],
@@ -848,7 +848,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "sigmoid_centered_test",
     size = "small",
     srcs = ["python/kernel_tests/bijectors/sigmoid_centered_test.py"],
@@ -867,7 +867,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "sinh_arcsinh_test",
     size = "small",
     srcs = ["python/kernel_tests/bijectors/sinh_arcsinh_test.py"],
@@ -886,7 +886,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "softmax_centered_test",
     size = "small",
     srcs = ["python/kernel_tests/bijectors/softmax_centered_test.py"],
@@ -905,7 +905,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "softplus_test",
     size = "small",
     srcs = ["python/kernel_tests/bijectors/softplus_test.py"],

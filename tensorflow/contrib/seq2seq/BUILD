@@ -7,7 +7,7 @@ exports_files(["LICENSE"])
 
 package(default_visibility = ["//tensorflow:__subpackages__"])
 
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
+load("//tensorflow:tensorflow.bzl", "gpu_py_test")
 load("//tensorflow:tensorflow.bzl", "tf_custom_op_py_library")
 load(
     "//tensorflow:tensorflow.bzl",
@@ -86,7 +86,7 @@ tf_kernel_library(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "loss_test",
     size = "medium",
     srcs = ["python/kernel_tests/loss_test.py"],
@@ -104,7 +104,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "basic_decoder_test",
     size = "medium",
     srcs = ["python/kernel_tests/basic_decoder_test.py"],
@@ -124,7 +124,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "beam_search_ops_test",
     size = "medium",
     srcs = ["python/kernel_tests/beam_search_ops_test.py"],
@@ -138,7 +138,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "decoder_test",
     size = "medium",
     srcs = ["python/kernel_tests/decoder_test.py"],
@@ -158,7 +158,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "beam_search_decoder_test",
     size = "small",
     srcs = ["python/kernel_tests/beam_search_decoder_test.py"],
@@ -179,7 +179,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "attention_wrapper_test",
     size = "medium",
     srcs = ["python/kernel_tests/attention_wrapper_test.py"],

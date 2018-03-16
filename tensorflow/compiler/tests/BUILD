@@ -19,7 +19,7 @@ package(
 )
 
 load("//tensorflow:tensorflow.bzl", "tf_gpu_cc_test")
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
+load("//tensorflow:tensorflow.bzl", "gpu_py_test")
 load("//tensorflow/compiler/aot:tfcompile.bzl", "tf_library")
 load("//tensorflow/compiler/tests:build_defs.bzl", "tf_xla_py_test")
 load("//tensorflow/compiler/tests:build_defs.bzl", "generate_backend_suites")
@@ -444,7 +444,7 @@ tf_xla_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "xla_device_test",
     size = "small",
     srcs = ["xla_device_test.py"],
@@ -458,7 +458,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "jit_test",
     size = "medium",
     srcs = ["jit_test.py"],
@@ -526,7 +526,7 @@ py_library(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "lstm_test",
     srcs = ["lstm_test.py"],
     additional_deps = [

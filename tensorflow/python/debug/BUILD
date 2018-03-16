@@ -20,7 +20,7 @@ licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
 
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
+load("//tensorflow:tensorflow.bzl", "gpu_py_test")
 load("//tensorflow:tensorflow.bzl", "py_test")
 load("//tensorflow:tensorflow.bzl", "if_not_windows")
 
@@ -398,7 +398,7 @@ py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "debug_gradients_test",
     size = "small",
     srcs = [
@@ -458,7 +458,7 @@ py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "stepper_test",
     size = "small",
     srcs = [
@@ -574,7 +574,7 @@ py_library(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "session_debug_file_test",
     size = "small",
     srcs = ["lib/session_debug_file_test.py"],
@@ -591,7 +591,7 @@ cuda_py_test(
     tags = ["notsan"],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "session_debug_multi_gpu_test",
     size = "small",
     srcs = ["lib/session_debug_multi_gpu_test.py"],
@@ -671,7 +671,7 @@ py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "analyzer_cli_test",
     size = "small",
     srcs = [
@@ -718,7 +718,7 @@ py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "stepper_cli_test",
     size = "small",
     srcs = [

@@ -463,7 +463,9 @@ def tf_gpu_cc_test(name,
       name=name,
       srcs=srcs,
       suffix="_gpu",
-      deps=deps + if_cuda([clean_dep("//tensorflow/core:gpu_runtime")]),
+      # XXX figure this out
+      #deps=deps + if_cuda([clean_dep("//tensorflow/core:gpu_runtime")]),
+      deps=deps + if_rocm([clean_dep("//tensorflow/core:gpu_runtime")]),
       linkstatic=if_cuda(1, 0),
       tags=tags + tf_gpu_tests_tags(),
       data=data,
@@ -1135,7 +1137,7 @@ def tf_py_test(name,
       srcs_version="PY2AND3")
 
 
-def cuda_py_test(name,
+def gpu_py_test(name,
                  srcs,
                  size="medium",
                  data=[],
@@ -1212,7 +1214,7 @@ def py_tests(name,
         xla_enabled=xla_enabled)
 
 
-def cuda_py_tests(name,
+def gpu_py_tests(name,
                   srcs,
                   size="medium",
                   additional_deps=[],
