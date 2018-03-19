@@ -12,6 +12,7 @@ CUDA kernels under tensorflow/contrib are not considered yet.
 
 Kernels under tensorflow/core/kernels
 =====================================
+
 | status | operator |
 | ------ | -------- |
 | O | adjust_contrast_op.cc

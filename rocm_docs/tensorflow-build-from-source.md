@@ -4,6 +4,17 @@
 This instruction provides a starting point for build TensorFlow ROCm port from source.
 *Note*: it is recommended to start with a clean Ubuntu 16.04 system
 
+## Install ROCm
+
+Follow steps at [Basic Installation](https://github.com/ROCmSoftwarePlatform/tensorflow/blob/rocm-v1/rocm_docs/tensorflow-install-basic.md#install-rocm) to install ROCm stack.
+
+Setup environment variables, and add those environment variables at the end of ~/.bashrc 
+```
+export HCC_HOME=/opt/rocm/hcc
+export HIP_PATH=/opt/rocm/hip
+export PATH=$HCC_HOME/bin:$HIP_PATH/bin:$PATH
+```
+
 ## Install hcFFT 
 ```
 git clone https://github.com/ROCmSoftwarePlatform/hcFFT.git ~/hcfft
@@ -45,10 +56,4 @@ cd ~/tensorflow && ./configure
 
 # Build and install TensorFlow ROCm port pip package
 ./build
-```
-
-## Clone TensorFlow models and benchmarks
-```
-cd ~ && git clone https://github.com/soumith/convnet-benchmarks.git
-cd ~ && git clone https://github.com/tensorflow/models.git
 ```

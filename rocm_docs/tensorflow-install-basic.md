@@ -62,13 +62,6 @@ sudo apt-get update && \
     miopen-hip miopengemm
 ```
 
-Setup environment variables, and add those environment variables at the end of ~/.bashrc 
-```
-export HCC_HOME=/opt/rocm/hcc
-export HIP_PATH=/opt/rocm/hip
-export PATH=$HCC_HOME/bin:$HIP_PATH/bin:$PATH
-```
-
 ## Install required python packages
 ```
 sudo apt-get update && sudo apt-get install -y \
@@ -82,12 +75,6 @@ sudo apt-get update && sudo apt-get install -y \
     python-setuptools && \
     sudo apt-get clean && \
     sudo rm -rf /var/lib/apt/lists/*
-```
-
-## Clone TensorFlow models and benchmarks
-```
-cd ~ && git clone https://github.com/soumith/convnet-benchmarks.git
-cd ~ && git clone https://github.com/tensorflow/models.git
 ```
 
 ## Install TensorFlow ROCm port
