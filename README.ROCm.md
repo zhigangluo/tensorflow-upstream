@@ -20,10 +20,9 @@ For details on installation and usage, see these links:
 ## Known Issues / Workarounds
 
 ### tensorflow/benchmarks workaround for TF v1.3
-Since our current port of TF supports v1.3, we can't use some of the newest commits in `tensorflow/benchmarks`.  One specific error you could observe is a `ImportError: cannot import name batching`.  "Batching" was introduced in this [commit](https://github.com/tensorflow/benchmarks/commit/82dd0539c76afa8491e50d8f796e686b4d97b988).
+Since our current port of TF supports v1.3, we can't use some of the newest commits in `tensorflow/benchmarks`.  One specific error you could observe is a `ImportError: cannot import name batching`.  "Batching" was introduced in this [commit](https://github.com/tensorflow/benchmarks/commit/82dd0539c76afa8491e50d8f796e686b4d97b988). Also RCCL, a ROCm version of NCCL, is under implementation. Therefore we have to drop back to an earlier point in the commit history, and disable NCCL.
 
-We have to drop back to an earlier point in the commit history:  
 ```
-git clone https://github.com/tensorflow/benchmarks.git 
-git checkout -b oct23 f5d85aef2851881001130b28385795bc4c59fa38
+git checkout -b sep7 6a33b4a4b5bda950bb7e45faf13120115cbfdb2f
+sed -i 's|from tensorflow.contrib import nccl|#from tensorflow.contrib import nccl|g' ./scripts/tf_cnn_benchmarks/variable_mgr.py
 ```
