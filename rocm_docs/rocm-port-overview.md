@@ -35,18 +35,40 @@ In this port efforts were made to try ensure logic for existing CUDA / NVPTX pat
 ---
 ## Runtime
 
+- added **tensorflow/stream_executor/rocm** to contain ROCm implementation for StreamExecutor interface
+- integrated with MIOpen for convolution / pooling / LRN / batch normalization operators
+- integrated with rocBLAS for certain GEMM operations
+
 ---
 ## GPU kernel implementation
 
+- renamed the following files under **tensorflow/core/kernels** as they can be shared between CUDA and ROCm platform
+  - **cuda_device_array.h** to **gpu_device_array.h**
+  - **cuda_device_array_gpu.h** to **gpu_device_array_gpu.h**
+  - **cudnn_pooling_gpu.cc** to **dnn_pooling_gpu.cc**
+  - **util/cuda_kernel_helper.h** to **util/gpu_kernel_helper.h**
+- introduced `TENSORFLOW_USE_ROCM` macro and use it in conjunction with `GOOGLE_CUDA`
+  - on CUDA platform: `GOOGLE_CUDA` would be enabled
+  - on ROCm platform: `TENSORFLOW_USE_ROCM` would be enabled
+  - in certain kernels these macros are used to distinguish different logic be used on CUDA or ROCm platform
+- introduced `EIGEN_USE_HIP` in kernels where Eigen is used
+  - guarded with `TENSORFLOW_USE_ROCM` macro so they won't be enabled on CUDA platform
+- replaced CUDA `<<< >>>` kernel launch syntax with `GPU_LAUNCH_KERNEL` macro
+- added `GPU_LAUNCH_KERNEL` in **util/gpu_kernel_helper.h**
+- renamed `CudaLaunchConfig` to `GpuLaunchConfig`
+- renamed macros with perfix CUDA/Cuda to GPU/Gpu shall they are usable on ROCm platform
 - [List of supported operators](rocm_docs/core_kernels.md)
+
 
 ---
 ## XLA
 
+XLA support for LLVM AMDGPU backend is still highly experimental at this point. MIOpen and rocBLAS kernels would be invoked as libcalls via StreamExecutor interface.
+
 - **tensorflow/compiler/jit/xla_gpu_device.cc**
   - **XXX**: disable registering XLA devices for CUDA
 - **tensorflow/compiler/xla/service/computation_placer.cc**
-  - register for ROCm platofmr
+  - register for ROCm platform
 - **tensorflow/compiler/xla/service/generic_transfer_manager.cc**
   - register for ROCm platform
 - added the following files for AMDGPU backend
