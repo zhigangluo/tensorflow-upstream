@@ -33,12 +33,31 @@ In this port efforts were made to try ensure logic for existing CUDA / NVPTX pat
   - added logic to load ROCm-specific functions such as `if_rocm()` or `if_rocm_is_configured()`
 
 ---
-## Runtime
+## StreamExecutor
 
 - added **tensorflow/stream_executor/rocm** to contain ROCm implementation for StreamExecutor interface
+- integrated with HIP runtime APIs for stream, memory management, and copy
 - integrated with MIOpen for convolution / pooling / LRN / batch normalization operators
+  - fp16 kernels are not enabled yet and would likely be introduced in the upcoming MIOpen 1.3 release
+  - RNN kernels are not enabled yet. A working branch `rocm-v1-rnn` would be merged along with upcoming MIOpen 1.3 release
 - integrated with rocBLAS for certain GEMM operations
+- integrated with rocRAND for RNG operations. Thoughly practically speaking it doesn't seem to be used by any TensorFlow operators.
+- intergated with hcFFT for FFT operations. Logic here will be replaced with rocFFT as hcFFT project has been deprecated.
 
+---
+## Common Runtime
+
+- **XXX** Introduced quite a few ROCm-specific changes under **tensorflow/core/commmon_runtime/gpu** directory
+- **XXX** **gpu_device.cc**
+  - force use ROCm platform
+  - rename `EigenCudaStreamDevice` to `EigenROCmStreamDevice`
+  - removed CUDA compute capabilities and use AMDGPU ISA version
+- **XXX** **gpu_init.cc**, **pool_allocator.h**, **process_state.cc**, **process_state.h**
+  - force use ROCM instead of CUDA
+- **XXX** removed dependency to CUPTI
+- **gpu_util.h**, **gpu_util.cc**
+  - added `DnnScratchAllocator` as a replacement for `CudnnScratchAllocator`
+  
 ---
 ## GPU kernel implementation
 
