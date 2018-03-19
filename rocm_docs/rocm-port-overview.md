@@ -35,6 +35,8 @@ In this port efforts were made to try ensure logic for existing CUDA / NVPTX pat
 ---
 ## StreamExecutor
 
+An ROCm backend is added to implement StreamExecutor interface. Existing CUDA backend is completely retained.
+
 - added **tensorflow/stream_executor/rocm** to contain ROCm implementation for StreamExecutor interface
 - integrated with HIP runtime APIs for stream, memory management, and copy
 - integrated with MIOpen for convolution / pooling / LRN / batch normalization operators
@@ -47,7 +49,8 @@ In this port efforts were made to try ensure logic for existing CUDA / NVPTX pat
 ---
 ## Common Runtime
 
-- **XXX** Introduced quite a few ROCm-specific changes under **tensorflow/core/commmon_runtime/gpu** directory
+**XXX** Changes under **tensorflow/core/commmon_runtime/gpu** directory are largely ROCm-specific and drops CUDA platform due to its current design.
+
 - **XXX** **gpu_device.cc**
   - force use ROCm platform
   - rename `EigenCudaStreamDevice` to `EigenROCmStreamDevice`
@@ -76,6 +79,7 @@ In this port efforts were made to try ensure logic for existing CUDA / NVPTX pat
 - added `GPU_LAUNCH_KERNEL` in **util/gpu_kernel_helper.h**
 - renamed `CudaLaunchConfig` to `GpuLaunchConfig`
 - renamed macros with perfix CUDA/Cuda to GPU/Gpu shall they are usable on ROCm platform
+- Eigen is downloaded and [patched](third_party/eigen3/eigen.patch) to support HIP and ROCm platform
 - [List of supported operators](rocm_docs/core_kernels.md)
 
 
