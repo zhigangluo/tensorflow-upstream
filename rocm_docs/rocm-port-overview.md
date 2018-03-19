@@ -79,8 +79,8 @@ An ROCm backend is added to implement StreamExecutor interface. Existing CUDA ba
 - added `GPU_LAUNCH_KERNEL` in **util/gpu_kernel_helper.h**
 - renamed `CudaLaunchConfig` to `GpuLaunchConfig`
 - renamed macros with perfix CUDA/Cuda to GPU/Gpu shall they are usable on ROCm platform
-- Eigen is downloaded and [patched](third_party/eigen3/eigen.patch) to support HIP and ROCm platform
-- [List of supported operators](rocm_docs/core_kernels.md)
+- Eigen is downloaded and [patched](https://github.com/ROCmSoftwarePlatform/tensorflow/blob/rocm-v1/third_party/eigen3/eigen.patch) to support HIP and ROCm platform
+- [List of supported operators](https://github.com/ROCmSoftwarePlatform/tensorflow/blob/rocm-v1/rocm_docs/core_kernels.md)
 
 
 ---
