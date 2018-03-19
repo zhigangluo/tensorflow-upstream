@@ -9,7 +9,7 @@ This project is based on TensorFlow 1.3.0. It has been verified to work with the
 
 A docker cotainer: **rocm/tensorflow:rocm1.7.1(https://hub.docker.com/r/rocm/tensorflow/)** is readily available to be used.
 
-http://repo.radeon.com/rocm/misc/tensorflow/tensorflow-1.3.0-cp27-cp27mu-linux_x86_64.whl
+The Wheel http://repo.radeon.com/rocm/misc/tensorflow/tensorflow-1.3.0-cp27-cp27mu-linux_x86_64.whl
 
 For details on Tensorflow ROCm port, please take a look at the [ROCm-specific README file](README.ROCm.md).
 
