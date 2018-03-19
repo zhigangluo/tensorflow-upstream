@@ -213,14 +213,13 @@ cd $HOME
 git clone https://github.com/tensorflow/benchmarks.git
 cd benchmarks
 
-# Temporary workaround to allow support for TF 1.0.1 without NCCL
-git checkout -b oct2 6a33b4a4b5bda950bb7e45faf13120115cbfdb2f
-sed -e '/FLAGS.force_gpu_compatible/ s/^#*/#/' -i ./scripts/tf_cnn_benchmarks/tf_cnn_benchmarks.py
+# Temporary workaround to allow support for TF 1.3 without NCCL
+git checkout -b oct23 f5d85aef2851881001130b28385795bc4c59fa38
 sed -i 's|from tensorflow.contrib import nccl|#from tensorflow.contrib import nccl|g' ./scripts/tf_cnn_benchmarks/variable_mgr.py
 sed -i 's|from tensorflow.contrib.all_reduce.python import all_reduce|#from tensorflow.contrib.all_reduce.python import all_reduce|g' ./scripts/tf_cnn_benchmarks/variable_mgr.py
 
 # Run the training benchmark (e.g. ResNet-50)
-python ./scripts/tf_cnn_benchmarks/tf_cnn_benchmarks.py --model=resnet50
+python ./scripts/tf_cnn_benchmarks/tf_cnn_benchmarks.py --model=resnet50 --num_gpus=1
 ```
 
 ## FAQs & tips
