@@ -2,6 +2,15 @@
   <img src="https://www.tensorflow.org/images/tf_logo_transp.png"><br><br>
 </div>
 
+
+## Tensorflow ROCm port
+
+This project is based on TensorFlow 1.3.0. It has been verified to work with the latest ROCm1.7.1 release. Please follow the instructions [here](https://github.com/RadeonOpenCompute/ROCm-docker/blob/master/quick-start.md) to set up your ROCm stack.
+
+A docker cotainer: rocm/tensorflow:rocm1.7.1 is readily available to be used.
+
+For details on Tensorflow ROCm port, please take a look at the [ROCm-specific README file](README.ROCm.md).
+
 -----------------
 
 | **`Linux CPU`** | **`Linux GPU`** | **`Mac OS CPU`** | **`Windows CPU`** | **`Android`** |
