@@ -7,7 +7,7 @@
 
 This project is based on TensorFlow 1.3.0. It has been verified to work with the latest ROCm1.7.1 release. Please follow the instructions [here](https://github.com/RadeonOpenCompute/ROCm-docker/blob/master/quick-start.md) to set up your ROCm stack.
 
-A docker cotainer: **rocm/tensorflow:rocm1.7.1(https://hub.docker.com/r/rocm/tensorflow/)** is readily available to be used.
+A docker container: **rocm/tensorflow:rocm1.7.1(https://hub.docker.com/r/rocm/tensorflow/)** is readily available to be used.
 
 The Wheel http://repo.radeon.com/rocm/misc/tensorflow/tensorflow-1.3.0-cp27-cp27mu-linux_x86_64.whl
 
