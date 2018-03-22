@@ -56,4 +56,7 @@ cd ~/tensorflow && ./configure
 
 # Build and install TensorFlow ROCm port pip package
 ./build
+
+# Build and install TensorFlow ROCm port pip3 package for Python 3-based systems
+./build_python3
 ```
