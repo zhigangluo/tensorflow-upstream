@@ -23,6 +23,25 @@ For details on installation and usage, see these links:
 
 ## Known Issues / Workarounds
 
+### X11 hangs under load
+ROCm 1.7.1 a kernel parameter `noretry` has been set to 1 to improve overall system performance. However it has been proven to bring instability to graphics driver shipped with Ubuntu. This is an ongoing issue and we are looking into it.
+
+Before that, please try apply this change by changing `noretry` bit to 0.
+
+```
+echo 0 | sudo tee /sys/module/amdkfd/parameters/noretry
+```
+
+Files under `/sys` won't be preserved after reboot so you'll need to do it every time.
+
+One way to keep `noretry=0` is to change `/etc/modprobe.d/amdkfd.conf` and make it be:
+
+```
+options amdkfd noretry=0
+```
+
+Once it's done, run `sudo update-initramfs -u`. Reboot and verify `/sys/module/amdkfd/parameters/noretry` stays as 0.
+
 ### tensorflow/benchmarks workaround for TF v1.3
 Since our current port of TF supports v1.3, we can't use some of the newest commits in `tensorflow/benchmarks`.  One specific error you could observe is a `ImportError: cannot import name batching`.  "Batching" was introduced in this [commit](https://github.com/tensorflow/benchmarks/commit/82dd0539c76afa8491e50d8f796e686b4d97b988). Also RCCL, a ROCm version of NCCL, is under implementation. Therefore we have to drop back to an earlier point in the commit history, and disable NCCL.
 
