@@ -76,9 +76,9 @@ cc_library(
 )
 
 cc_library(
-    name = "hipfft",
-    srcs = ["rocm/lib/%{hipfft_lib}"],
-    data = ["rocm/lib/%{hipfft_lib}"],
+    name = "rocfft",
+    srcs = ["rocm/lib/%{rocfft_lib}"],
+    data = ["rocm/lib/%{rocfft_lib}"],
     includes = [
         ".",
         "rocm/include",
@@ -119,7 +119,7 @@ cc_library(
         ":rocm_headers",
         ":rocmrt",
         ":hipblas",
-        ":hipfft",
+        ":rocfft",
         ":hiprand",
         ":miopen",
     ],

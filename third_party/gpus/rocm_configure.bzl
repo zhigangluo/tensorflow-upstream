@@ -125,9 +125,8 @@ def _host_compiler_includes(repository_ctx, cc):
   inc_dirs.append("/opt/rocm/rocrand/include")
   inc_dirs.append("/opt/rocm/hiprand/include")
 
-  # Add hcfft and hipfft headers
-  inc_dirs.append("/opt/rocm/hcfft/include")
-  inc_dirs.append("/opt/rocm/hipfft/include")
+  # Add rocfft headers
+  inc_dirs.append("/opt/rocm/rocfft/include")
 
   # Add hipblas headers
   inc_dirs.append("/opt/rocm/hipblas/include")
@@ -306,8 +305,8 @@ def _find_libs(repository_ctx, rocm_config):
           "hip_hcc", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path),
       "hipblas": _find_rocm_lib(
           "hipblas", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path),
-      "hipfft": _find_rocm_lib(
-          "hipfft", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path + "/hipfft"),
+      "rocfft": _find_rocm_lib(
+          "rocfft", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path + "/rocfft"),
       "hiprand": _find_rocm_lib(
           "hiprand", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path + "/hiprand"),
       "miopen": _find_rocm_lib(
@@ -529,7 +528,7 @@ def _create_local_rocm_repository(repository_ctx):
   genrules = [_symlink_genrule_for_dir(repository_ctx,
       rocm_include_path, "rocm/include", "rocm-include")]
   genrules.append(_symlink_genrule_for_dir(repository_ctx,
-      rocm_toolkit_path + "/hipfft/include", "rocm/include/hipfft", "hipfft-include"))
+      rocm_toolkit_path + "/rocfft/include", "rocm/include/rocfft", "rocfft-include"))
   genrules.append(_symlink_genrule_for_dir(repository_ctx,
       rocm_toolkit_path + "/hipblas/include", "rocm/include/hipblas", "hipblas-include"))
   genrules.append(_symlink_genrule_for_dir(repository_ctx,
@@ -561,12 +560,12 @@ def _create_local_rocm_repository(repository_ctx):
            "%{rocmrt_static_linkopt}": '',
            "%{rocmrt_lib}": rocm_libs["hip"].file_name,
            "%{hipblas_lib}": rocm_libs["hipblas"].file_name,
-           "%{hipfft_lib}": rocm_libs["hipfft"].file_name,
+           "%{rocfft_lib}": rocm_libs["rocfft"].file_name,
            "%{hiprand_lib}": rocm_libs["hiprand"].file_name,
            "%{miopen_lib}": rocm_libs["miopen"].file_name,
            "%{rocm_include_genrules}": "\n".join(genrules),
            "%{rocm_headers}": ('":rocm-include",\n' +
-                               '":hipfft-include",\n' +
+                               '":rocfft-include",\n' +
                                '":hipblas-include",\n' +
                                '":miopen-include",'),
        })

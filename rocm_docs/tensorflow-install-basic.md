@@ -94,12 +94,6 @@ sudo apt-get update && sudo apt-get install -y \
     sudo rm -rf /var/lib/apt/lists/*
 ```
 
-## Build and install hcfft
-```
-git clone https://github.com/ROCmSoftwarePlatform/hcFFT.git ~/hcfft
-cd ~/hcfft && bash build.sh && sudo dpkg -i ~/hcfft/build/*.deb
-```
-
 ## Install TensorFlow ROCm port
 
 For Python 2-based systems:

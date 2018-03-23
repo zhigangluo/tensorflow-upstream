@@ -24,7 +24,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform/port.h"
 #include "tensorflow/stream_executor/plugin_registry.h"
 #include "tensorflow/stream_executor/scratch_allocator.h"
-#include "rocm/include/hipfft/hipfft.h"
+#include "rocm/include/rocfft/hipfft.h"
 
 namespace perftools {
 namespace gputools {
@@ -35,8 +35,8 @@ namespace rocm {
 
 class ROCMExecutor;
 
-// Opaque and unique indentifier for the hipFFT plugin.
-extern const PluginId kHipFftPlugin;
+// Opaque and unique indentifier for the rocFFT plugin.
+extern const PluginId kRocFftPlugin;
 
 // ROCMFftPlan uses deferred initialization. Only a single call of
 // Initialize() is allowed to properly create hipfft plan and set member
@@ -47,7 +47,7 @@ class ROCMFftPlan : public fft::Plan {
  public:
   ROCMFftPlan()
       : parent_(nullptr),
-        plan_(-1),
+        plan_(),
         fft_type_(fft::Type::kInvalid),
         scratch_(nullptr),
         is_initialized_(false) {}

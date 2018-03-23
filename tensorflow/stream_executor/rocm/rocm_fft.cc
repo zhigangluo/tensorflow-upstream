@@ -35,7 +35,7 @@ namespace perftools {
 namespace gputools {
 namespace rocm {
 
-PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kHipFftPlugin);
+PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kRocFftPlugin);
 
 namespace wrap {
 
@@ -45,28 +45,40 @@ namespace wrap {
 // dependencies on vendor libraries which may or may not be available in the
 // deployed binary environment.
 #define PERFTOOLS_GPUTOOLS_HIPFFT_WRAP(__name)                    \
-  struct WrapperShim__##__name {                                 \
-    template <typename... Args>                                  \
+  struct WrapperShim__##__name {                                  \
+    template <typename... Args>                                   \
     hipfftResult operator()(ROCMExecutor *parent, Args... args) { \
-      rocm::ScopedActivateExecutorContext sac{parent};           \
-      return ::__name(args...);                                  \
-    }                                                            \
+      rocm::ScopedActivateExecutorContext sac{parent};            \
+      return ::__name(args...);                                   \
+    }                                                             \
   } __name;
 
-#define HIPFFT_ROUTINE_EACH(__macro)                                            \
-  __macro(hipfftDestroy) __macro(hipfftSetStream) __macro(hipfftPlan1d)           \
-      __macro(hipfftPlan2d) __macro(hipfftPlan3d) __macro(hipfftPlanMany)         \
-          __macro(hipfftExecD2Z) __macro(hipfftExecZ2D) __macro(hipfftExecC2C)    \
-              __macro(hipfftExecC2R) __macro(hipfftExecZ2Z)                      \
-                  __macro(hipfftExecR2C) __macro(hipfftCreate)                   \
-                      __macro(hipfftSetAutoAllocation)                          \
-                          __macro(hipfftSetWorkArea) __macro(hipfftGetSize1d)    \
-                              __macro(hipfftMakePlan1d) __macro(hipfftGetSize2d) \
-                                  __macro(hipfftMakePlan2d)                     \
-                                      __macro(hipfftGetSize3d)                  \
-                                          __macro(hipfftMakePlan3d)             \
-                                              __macro(hipfftGetSizeMany)        \
-                                                  __macro(hipfftMakePlanMany)
+#define HIPFFT_ROUTINE_EACH(__macro) \
+  __macro(hipfftDestroy)             \
+  __macro(hipfftSetStream)           \
+  __macro(hipfftPlan1d)              \
+  __macro(hipfftPlan2d)              \
+  __macro(hipfftPlan3d)              \
+  __macro(hipfftPlanMany)            \
+  __macro(hipfftCreate)              \
+  __macro(hipfftSetAutoAllocation)   \
+  __macro(hipfftSetWorkArea)         \
+  __macro(hipfftGetSize1d)           \
+  __macro(hipfftMakePlan1d)          \
+  __macro(hipfftGetSize2d)           \
+  __macro(hipfftMakePlan2d)          \
+  __macro(hipfftGetSize3d)           \
+  __macro(hipfftMakePlan3d)          \
+  __macro(hipfftGetSizeMany)         \
+  __macro(hipfftMakePlanMany)        \
+
+  // XXX disable before rocFFT uses proper HIP complex types
+  //__macro(hipfftExecD2Z)             \
+  //__macro(hipfftExecZ2D)             \
+  //__macro(hipfftExecC2C)             \
+  //__macro(hipfftExecC2R)             \
+  //__macro(hipfftExecZ2Z)             \
+  //__macro(hipfftExecR2C)             \
 
 HIPFFT_ROUTINE_EACH(PERFTOOLS_GPUTOOLS_HIPFFT_WRAP)
 
@@ -74,7 +86,7 @@ HIPFFT_ROUTINE_EACH(PERFTOOLS_GPUTOOLS_HIPFFT_WRAP)
 
 namespace {
 
-// A helper function transforming gpu_fft arguments into hipFFT arguments.
+// A helper function transforming gpu_fft arguments into rocFFT arguments.
 hipfftType ROCMFftType(fft::Type type) {
   switch (type) {
     case fft::Type::kC2CForward:
@@ -96,11 +108,11 @@ hipfftType ROCMFftType(fft::Type type) {
   }
 }
 
-// Associates the given stream with the given hipFFT plan.
+// Associates the given stream with the given rocFFT plan.
 bool SetStream(ROCMExecutor *parent, hipfftHandle plan, Stream *stream) {
   auto ret = wrap::hipfftSetStream(parent, plan, AsROCMStreamValue(stream));
   if (ret != HIPFFT_SUCCESS) {
-    LOG(ERROR) << "failed to run hipFFT routine hipfftSetStream: " << ret;
+    LOG(ERROR) << "failed to run rocFFT routine hipfftSetStream: " << ret;
     return false;
   }
   return true;
@@ -138,9 +150,9 @@ port::Status ROCMFftPlan::Initialize(
           ret = wrap::hipfftPlan1d(parent, &plan_, elem_count_[0],
                                   ROCMFftType(type), 1 /* = batch */);
           if (ret != HIPFFT_SUCCESS) {
-            LOG(ERROR) << "failed to create hipFFT 1d plan:" << ret;
+            LOG(ERROR) << "failed to create rocFFT 1d plan:" << ret;
             return port::Status{port::error::INTERNAL,
-                                "Failed to create hipFFT 1d plan."};
+                                "Failed to create rocFFT 1d plan."};
           }
           return port::Status::OK();
         case 2:
@@ -148,9 +160,9 @@ port::Status ROCMFftPlan::Initialize(
           ret = wrap::hipfftPlan2d(parent, &plan_, elem_count_[0],
                                   elem_count_[1], ROCMFftType(type));
           if (ret != HIPFFT_SUCCESS) {
-            LOG(ERROR) << "failed to create hipFFT 2d plan:" << ret;
+            LOG(ERROR) << "failed to create rocFFT 2d plan:" << ret;
             return port::Status{port::error::INTERNAL,
-                                "Failed to create hipFFT 2d plan."};
+                                "Failed to create rocFFT 2d plan."};
           }
           return port::Status::OK();
         case 3:
@@ -159,9 +171,9 @@ port::Status ROCMFftPlan::Initialize(
               wrap::hipfftPlan3d(parent, &plan_, elem_count_[0], elem_count_[1],
                                 elem_count_[2], ROCMFftType(type));
           if (ret != HIPFFT_SUCCESS) {
-            LOG(ERROR) << "failed to create hipFFT 3d plan:" << ret;
+            LOG(ERROR) << "failed to create rocFFT 3d plan:" << ret;
             return port::Status{port::error::INTERNAL,
-                                "Failed to create hipFFT 3d plan."};
+                                "Failed to create rocFFT 3d plan."};
           }
           return port::Status::OK();
         default:
@@ -174,15 +186,15 @@ port::Status ROCMFftPlan::Initialize(
     } else {
       ret = wrap::hipfftCreate(parent, &plan_);
       if (ret != HIPFFT_SUCCESS) {
-        LOG(ERROR) << "failed to create hipFFT plan:" << ret;
+        LOG(ERROR) << "failed to create rocFFT plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to create hipFFT plan."};
+                            "Failed to create rocFFT plan."};
       }
       ret = wrap::hipfftSetAutoAllocation(parent, plan_, 0);
       if (ret != HIPFFT_SUCCESS) {
-        LOG(ERROR) << "failed to set auto allocation for hipFFT plan:" << ret;
+        LOG(ERROR) << "failed to set auto allocation for rocFFT plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to set auto allocation for hipFFT plan."};
+                            "Failed to set auto allocation for rocFFT plan."};
       }
       size_t size_in_bytes;
       switch (rank) {
@@ -191,9 +203,9 @@ port::Status ROCMFftPlan::Initialize(
                                       ROCMFftType(type), /*batch=*/1,
                                       &size_in_bytes);
           if (ret != HIPFFT_SUCCESS) {
-            LOG(ERROR) << "failed to make hipFFT 1d plan:" << ret;
+            LOG(ERROR) << "failed to make rocFFT 1d plan:" << ret;
             return port::Status{port::error::INTERNAL,
-                                "Failed to make hipFFT 1d plan."};
+                                "Failed to make rocFFT 1d plan."};
           }
           break;
         case 2:
@@ -201,9 +213,9 @@ port::Status ROCMFftPlan::Initialize(
                                       elem_count_[1], ROCMFftType(type),
                                       &size_in_bytes);
           if (ret != HIPFFT_SUCCESS) {
-            LOG(ERROR) << "failed to make hipFFT 2d plan:" << ret;
+            LOG(ERROR) << "failed to make rocFFT 2d plan:" << ret;
             return port::Status{port::error::INTERNAL,
-                                "Failed to make hipFFT 2d plan."};
+                                "Failed to make rocFFT 2d plan."};
           }
           break;
         case 3:
@@ -211,9 +223,9 @@ port::Status ROCMFftPlan::Initialize(
                                       elem_count_[1], elem_count_[2],
                                       ROCMFftType(type), &size_in_bytes);
           if (ret != HIPFFT_SUCCESS) {
-            LOG(ERROR) << "failed to make hipFFT 3d plan:" << ret;
+            LOG(ERROR) << "failed to make rocFFT 3d plan:" << ret;
             return port::Status{port::error::INTERNAL,
-                                "Failed to make hipFFT 3d plan."};
+                                "Failed to make rocFFT 3d plan."};
           }
           break;
         default:
@@ -236,9 +248,9 @@ port::Status ROCMFftPlan::Initialize(
       // Connect work area with allocated space.
       ret = wrap::hipfftSetWorkArea(parent, plan_, scratch_.opaque());
       if (ret != HIPFFT_SUCCESS) {
-        LOG(ERROR) << "failed to set work area for hipFFT plan:" << ret;
+        LOG(ERROR) << "failed to set work area for rocFFT plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to set work area for hipFFT plan."};
+                            "Failed to set work area for rocFFT plan."};
       }
       return port::Status::OK();
     }
@@ -251,24 +263,24 @@ port::Status ROCMFftPlan::Initialize(
           output_embed ? output_embed_ : nullptr, output_stride,
           output_distance, ROCMFftType(type), batch_count);
       if (ret != HIPFFT_SUCCESS) {
-        LOG(ERROR) << "failed to create hipFFT batched plan:" << ret;
+        LOG(ERROR) << "failed to create rocFFT batched plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to create hipFFT bacthed plan."};
+                            "Failed to create rocFFT bacthed plan."};
       }
     } else {
       auto ret = wrap::hipfftCreate(parent, &plan_);
       if (ret != HIPFFT_SUCCESS) {
-        LOG(ERROR) << "failed to create hipFFT batched plan:" << ret;
+        LOG(ERROR) << "failed to create rocFFT batched plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to create hipFFT bacthed plan."};
+                            "Failed to create rocFFT bacthed plan."};
       }
       ret = wrap::hipfftSetAutoAllocation(parent, plan_, 0);
       if (ret != HIPFFT_SUCCESS) {
-        LOG(ERROR) << "failed to set auto allocation for hipFFT batched plan:"
+        LOG(ERROR) << "failed to set auto allocation for rocFFT batched plan:"
                    << ret;
         return port::Status{
             port::error::INTERNAL,
-            "Failed to set auto allocation for hipFFT bacthed plan."};
+            "Failed to set auto allocation for rocFFT bacthed plan."};
       }
       size_t size_in_bytes;
       ret = wrap::hipfftMakePlanMany(
@@ -277,9 +289,9 @@ port::Status ROCMFftPlan::Initialize(
           output_embed ? output_embed_ : nullptr, output_stride,
           output_distance, ROCMFftType(type), batch_count, &size_in_bytes);
       if (ret != HIPFFT_SUCCESS) {
-        LOG(ERROR) << "failed to make hipFFT batched plan:" << ret;
+        LOG(ERROR) << "failed to make rocFFT batched plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to make hipFFT bacthed plan."};
+                            "Failed to make rocFFT bacthed plan."};
       }
       if (size_in_bytes != 0) {
         auto allocated =
@@ -292,9 +304,9 @@ port::Status ROCMFftPlan::Initialize(
       // Connect work area with allocated space.
       ret = wrap::hipfftSetWorkArea(parent, plan_, scratch_.opaque());
       if (ret != HIPFFT_SUCCESS) {
-        LOG(ERROR) << "failed to set work area for hipFFT batched plan:" << ret;
+        LOG(ERROR) << "failed to set work area for rocFFT batched plan:" << ret;
         return port::Status{port::error::INTERNAL,
-                            "Failed to set work area for hipFFT bacthed plan."};
+                            "Failed to set work area for rocFFT bacthed plan."};
       }
     }
   }
@@ -328,7 +340,7 @@ int ROCMFftPlan::GetFftDirection() const {
       case fft::Type::kZ2ZInverse:
       case fft::Type::kC2R:
       case fft::Type::kZ2D:
-        return HIPFFT_INVERSE;
+        return HIPFFT_BACKWARD;
       default:
         LOG(FATAL) << "Invalid value of fft::Type.";
     }
@@ -480,7 +492,7 @@ bool ROCMFft::DoFftInternal(Stream *stream, fft::Plan *plan, FuncT hipfftExec,
                        ROCMComplex(ROCMMemoryMutable(output)));
 
   if (ret != HIPFFT_SUCCESS) {
-    LOG(ERROR) << "failed to run hipFFT routine: " << ret;
+    LOG(ERROR) << "failed to run rocFFT routine: " << ret;
     return false;
   }
 
@@ -508,7 +520,7 @@ bool ROCMFft::DoFftWithDirectionInternal(Stream *stream, fft::Plan *plan,
                        rocm_fft_plan->GetFftDirection());
 
   if (ret != HIPFFT_SUCCESS) {
-    LOG(ERROR) << "failed to run hipFFT routine: " << ret;
+    LOG(ERROR) << "failed to run rocFFT routine: " << ret;
     return false;
   }
 
@@ -520,20 +532,26 @@ bool ROCMFft::DoFftWithDirectionInternal(Stream *stream, fft::Plan *plan,
   bool ROCMFft::DoFft(Stream *stream, fft::Plan *plan,                       \
                       const DeviceMemory<std::complex<__type>> &input,       \
                       DeviceMemory<std::complex<__type>> *output) {          \
-    return DoFftWithDirectionInternal(                                       \
-        stream, plan, wrap::hipfftExec##__fft_type1, input, output);          \
+    /* XXX disable for now until rocFFT properly honors HIP complex types */ \
+    /* return DoFftWithDirectionInternal(                                 */ \
+    /*     stream, plan, wrap::hipfftExec##__fft_type1, input, output);   */ \
+    return false;                                                            \
   }                                                                          \
   bool ROCMFft::DoFft(Stream *stream, fft::Plan *plan,                       \
                       const DeviceMemory<__type> &input,                     \
                       DeviceMemory<std::complex<__type>> *output) {          \
-    return DoFftInternal(stream, plan, wrap::hipfftExec##__fft_type2, input,  \
-                         output);                                            \
+    /* XXX disable for now until rocFFT properly honors HIP complex types */ \
+    /* return DoFftInternal(stream, plan, wrap::hipfftExec##__fft_type2, input, */  \
+    /*                     output);                                       */ \
+    return false;                                                            \
   }                                                                          \
   bool ROCMFft::DoFft(Stream *stream, fft::Plan *plan,                       \
                       const DeviceMemory<std::complex<__type>> &input,       \
                       DeviceMemory<__type> *output) {                        \
-    return DoFftInternal(stream, plan, wrap::hipfftExec##__fft_type3, input,  \
-                         output);                                            \
+    /* XXX disable for now until rocFFT properly honors HIP complex types */ \
+    /* return DoFftInternal(stream, plan, wrap::hipfftExec##__fft_type3, input, */ \
+    /*                     output);                                       */ \
+    return false;                                                            \
   }
 
 PERFTOOLS_GPUTOOLS_ROCM_DEFINE_FFT(float, C2C, R2C, C2R)
@@ -551,14 +569,14 @@ REGISTER_MODULE_INITIALIZER(register_hipfft, {
   gpu::port::Status status =
       gpu::PluginRegistry::Instance()
           ->RegisterFactory<gpu::PluginRegistry::FftFactory>(
-              gpu::rocm::kROCmPlatformId, gpu::rocm::kHipFftPlugin, "hipFFT",
+              gpu::rocm::kROCmPlatformId, gpu::rocm::kRocFftPlugin, "rocFFT",
               [](gpu::internal::StreamExecutorInterface
                      *parent) -> gpu::fft::FftSupport * {
                 gpu::rocm::ROCMExecutor *rocm_executor =
                     dynamic_cast<gpu::rocm::ROCMExecutor *>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
-                      << "Attempting to initialize an instance of the hipFFT "
+                      << "Attempting to initialize an instance of the rocFFT "
                       << "support library with a non-ROCM StreamExecutor";
                   return nullptr;
                 }
@@ -566,11 +584,11 @@ REGISTER_MODULE_INITIALIZER(register_hipfft, {
                 return new gpu::rocm::ROCMFft(rocm_executor);
               });
   if (!status.ok()) {
-    LOG(ERROR) << "Unable to register hipFFT factory: "
+    LOG(ERROR) << "Unable to register rocFFT factory: "
                << status.error_message();
   }
 
   gpu::PluginRegistry::Instance()->SetDefaultFactory(gpu::rocm::kROCmPlatformId,
                                                      gpu::PluginKind::kFft,
-                                                     gpu::rocm::kHipFftPlugin);
+                                                     gpu::rocm::kRocFftPlugin);
 });

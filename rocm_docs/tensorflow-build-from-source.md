@@ -15,12 +15,6 @@ export HIP_PATH=/opt/rocm/hip
 export PATH=$HCC_HOME/bin:$HIP_PATH/bin:$PATH
 ```
 
-## Install hcFFT 
-```
-git clone https://github.com/ROCmSoftwarePlatform/hcFFT.git ~/hcfft
-cd ~/hcfft && bash build.sh && sudo dpkg -i ~/hcfft/build/*.deb
-```
-
 ## Install required python packages
 
 On Python 2-based systems:
