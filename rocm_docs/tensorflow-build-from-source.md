@@ -22,6 +22,8 @@ cd ~/hcfft && bash build.sh && sudo dpkg -i ~/hcfft/build/*.deb
 ```
 
 ## Install required python packages
+
+On Python 2-based systems:
 ```
 sudo apt-get update && sudo apt-get install -y \
     python-numpy \
@@ -32,6 +34,21 @@ sudo apt-get update && sudo apt-get install -y \
     python-pip \
     python-yaml \
     python-setuptools && \
+    sudo apt-get clean && \
+    sudo rm -rf /var/lib/apt/lists/*
+```
+
+On Python 3-based systems:
+```
+sudo apt-get update && sudo apt-get install -y \
+    python3-numpy \
+    python3-dev \
+    python3-wheel \
+    python3-mock \
+    python3-future \
+    python3-pip \
+    python3-yaml \
+    python3-setuptools && \
     sudo apt-get clean && \
     sudo rm -rf /var/lib/apt/lists/*
 ```
