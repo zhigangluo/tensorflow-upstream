@@ -151,7 +151,9 @@ XlaLocalLaunchOp::XlaLocalLaunchOp(OpKernelConstruction* ctx)
   if (device_type_ == DeviceType(DEVICE_CPU)) {
     platform_id_ = gpu::host::kHostPlatformId;
   } else if (device_type_ == DeviceType(DEVICE_GPU)) {
-    platform_id_ = gpu::cuda::kCudaPlatformId;
+    // XXX FIXME devise a way to cope with multiple platforms
+    //platform_id_ = gpu::cuda::kCudaPlatformId;
+    platform_id_ = gpu::rocm::kROCmPlatformId;
   } else {
     ctx->SetStatus(
         errors::InvalidArgument("Unknown device type for local _XlaLaunch"));
