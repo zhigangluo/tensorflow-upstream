@@ -102,6 +102,11 @@ sudo apt-get update && sudo apt-get install -y \
 
 ## Install TensorFlow ROCm port
 
+Uninstall any previously-installed tensorflow whl packages:  
+```
+pip list | grep tensorflow && pip uninstall -y tensorflow
+```
+
 For Python 2-based systems:
 ```
 # wget the TensorFlow ROCm port whl package
