@@ -62,6 +62,12 @@ sudo apt-get update && \
     miopen-hip miopengemm
 ```
 
+Add username to 'video' group and reboot:  
+```
+sudo adduser $LOGNAME video
+sudo reboot
+```
+
 ## Install required python packages
 
 On Python 2-based systems:
