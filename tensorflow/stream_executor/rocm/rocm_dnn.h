@@ -31,7 +31,9 @@ namespace gputools {
 namespace rocm {
 
 class ROCMExecutor;
-
+class MIOpenRnnDescriptor;
+class MIOpenRnnSequenceTensorDescriptor;
+class MIOpenRnnStateTensorDescriptor;
 // Opaque and unique identifier for the MIOpen plugin.
 extern const PluginId kMIOpenPlugin;
 
@@ -567,6 +569,48 @@ class MIOpenSupport : public dnn::DnnSupport {
                                   const DeviceMemory<T>& input_data,
                                   const dnn::BatchDescriptor& bias_descriptor,
                                   DeviceMemory<T>* backward_bias_data);
+
+  template <class T>
+  bool DoRnnForwardImpl(Stream* stream, const MIOpenRnnDescriptor& rnn_desc,
+                        const MIOpenRnnSequenceTensorDescriptor& input_desc,
+                        const DeviceMemory<T>& input_data,
+                        const MIOpenRnnStateTensorDescriptor& input_h_desc,
+                        const DeviceMemory<T>& input_h_data,
+                        const MIOpenRnnStateTensorDescriptor& input_c_desc,
+                        const DeviceMemory<T>& input_c_data,
+                        const DeviceMemory<T>& params,
+                        const MIOpenRnnSequenceTensorDescriptor& output_desc,
+                        DeviceMemory<T>* output_data,
+                        const MIOpenRnnStateTensorDescriptor& output_h_desc,
+                        DeviceMemory<T>* output_h_data,
+                        const MIOpenRnnStateTensorDescriptor& output_c_desc,
+                        DeviceMemory<T>* output_c_data, bool is_training,
+                        ScratchAllocator* reserve_space_allocator,
+                        ScratchAllocator* workspace_allocator);
+  template <class T>
+  bool DoRnnBackwardImpl(Stream* stream, const MIOpenRnnDescriptor& rnn_desc,
+                         const MIOpenRnnSequenceTensorDescriptor& input_desc,
+                         const DeviceMemory<T>& input_data,
+                         const MIOpenRnnStateTensorDescriptor& input_h_desc,
+                         const DeviceMemory<T>& input_h_data,
+                         const MIOpenRnnStateTensorDescriptor& input_c_desc,
+                         const DeviceMemory<T>& input_c_data,
+                         const DeviceMemory<T>& params,
+                         const MIOpenRnnSequenceTensorDescriptor& output_desc,
+                         const DeviceMemory<T>& output_data,
+                         const MIOpenRnnStateTensorDescriptor& output_h_desc,
+                         const DeviceMemory<T>& output_h_data,
+                         const MIOpenRnnStateTensorDescriptor& output_c_desc,
+                         const DeviceMemory<T>& output_c_data,
+                         const DeviceMemory<float>& output_backprop_data,
+                         const DeviceMemory<float>& output_h_backprop_data,
+                         const DeviceMemory<float>& output_c_backprop_data,
+                         DeviceMemory<float>* input_backprop_data,
+                         DeviceMemory<float>* input_h_backprop_data,
+                         DeviceMemory<float>* input_c_backprop_data,
+                         DeviceMemory<float>* params_backprop_data,
+                         DeviceMemory<uint8>* reserve_space_data,
+                         ScratchAllocator* workspace_allocator);
 
   SE_DISALLOW_COPY_AND_ASSIGN(MIOpenSupport);
 };

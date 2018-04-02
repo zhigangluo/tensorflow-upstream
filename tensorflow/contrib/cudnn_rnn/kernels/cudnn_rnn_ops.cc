@@ -42,7 +42,7 @@ limitations under the License.
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/util/env_var.h"
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/platform/stream_executor.h"
 #include "tensorflow/core/util/stream_executor_util.h"
 #endif  // GOOGLE_CUDA
@@ -73,7 +73,7 @@ namespace tensorflow {
 
 using CPUDevice = Eigen::ThreadPoolDevice;
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 using GPUDevice = Eigen::GpuDevice;
 
@@ -724,7 +724,7 @@ class CudnnRNNCanonicalToParams<GPUDevice, T> : public CudnnRNNKernelCommon {
                      stream);
   }
 };
-
+    
 REGISTER_KERNEL_BUILDER(Name("CudnnRNNCanonicalToParams")
                             .Device(DEVICE_GPU)
                             .HostMemory("num_layers")
@@ -1095,6 +1095,6 @@ REGISTER_KERNEL_BUILDER(
 // TODO(zhengxq): Add the conversion of Cudnn RNN Params from and to
 // its canonical form.
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow
