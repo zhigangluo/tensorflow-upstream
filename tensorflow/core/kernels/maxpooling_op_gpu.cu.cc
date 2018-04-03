@@ -444,7 +444,7 @@ typedef Eigen::GpuDevice GPUDevice;
   template struct MaxPoolGradBackwardWithArgmax<T>;    \
   template struct MaxPoolGradBackwardNoMask<T>;
 
-TF_CALL_GPU_NUMBER_TYPES(DEFINE_GPU_KERNELS);
+TF_CALL_GPU_NUMBER_TYPES_NO_HALF(DEFINE_GPU_KERNELS);
 
 #undef DEFINE_GPU_KERNELS
 

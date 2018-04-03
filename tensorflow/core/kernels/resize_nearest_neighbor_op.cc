@@ -261,7 +261,7 @@ TF_CALL_REAL_NUMBER_TYPES(REGISTER_KERNEL);
                               .HostMemory("size"),                \
                           ResizeNearestNeighborOpGrad<GPUDevice, T>);
 
-TF_CALL_GPU_NUMBER_TYPES(REGISTER_KERNEL);
+TF_CALL_GPU_NUMBER_TYPES_NO_HALF(REGISTER_KERNEL);
 
 #undef REGISTER_KERNEL
 
