@@ -482,7 +482,7 @@ TF_CALL_REAL_NUMBER_TYPES(REGISTER);
                               .TypeConstraint<T>("T"),              \
                           DilationBackpropFilterOp<GPUDevice, T>);
 
-TF_CALL_GPU_NUMBER_TYPES(REGISTER);
+TF_CALL_GPU_NUMBER_TYPES_NO_HALF(REGISTER);
 
 #undef REGISTER
 
