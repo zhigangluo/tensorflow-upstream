@@ -22,7 +22,9 @@ limitations under the License.
 namespace tensorflow {
 
 bool IsGoogleCudaEnabled() {
-#if GOOGLE_CUDA
+// XXX return true even in case TENSORFLOW_USE_ROCM is defined
+// need to figure out a better interface in both C++ and Python layer
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
   return true;
 #else
   return false;
