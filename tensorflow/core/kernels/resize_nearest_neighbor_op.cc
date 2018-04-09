@@ -247,9 +247,7 @@ TF_CALL_REAL_NUMBER_TYPES(REGISTER_KERNEL);
 
 #undef REGISTER_KERNEL
 
-// XXX temporarily disable resize nearest neighbor op on ROCm
-//#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define REGISTER_KERNEL(T)                                        \
   REGISTER_KERNEL_BUILDER(Name("ResizeNearestNeighbor")           \
