@@ -306,8 +306,8 @@ Kernels under tensorflow/core/kernels
 | O | reshape_op.cc
 | O | resize_bilinear_op.cc
 | O | resize_bilinear_op_gpu.cu.cc
-| O | resize_nearest_neighbor_op.cc
-| O | resize_nearest_neighbor_op_gpu.cu.cc
+| X | resize_nearest_neighbor_op.cc
+| X | resize_nearest_neighbor_op_gpu.cu.cc
 | O | resource_variable_ops.cc
 | O | reverse_op.cc
 | O | reverse_op_gpu.cu.cc
