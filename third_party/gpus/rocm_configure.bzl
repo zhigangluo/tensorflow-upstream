@@ -427,8 +427,6 @@ def _execute(repository_ctx, cmdline, error_msg=None, error_details=None,
   Return:
     the result of repository_ctx.execute(cmdline)
   """
-  print(cmdline)
-  print("XXXXX")
   result = repository_ctx.execute(cmdline)
   if result.stderr or not (empty_stdout_fine or result.stdout):
     auto_configure_fail(
