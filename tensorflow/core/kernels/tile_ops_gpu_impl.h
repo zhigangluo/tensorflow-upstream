@@ -34,9 +34,6 @@ limitations under the License.
 
 #define EIGEN_USE_GPU
 
-#if TENSORFLOW_USE_ROCM
-#define EIGEN_USE_HIP
-#endif
 
 #include <stdio.h>
 #include "tensorflow/core/framework/numeric_types.h"
