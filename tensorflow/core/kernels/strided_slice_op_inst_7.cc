@@ -18,9 +18,6 @@ limitations under the License.
 #define EIGEN_USE_GPU
 #endif
 
-#if TENSORFLOW_USE_ROCM
-#define EIGEN_USE_HIP
-#endif
 
 #define STRIDED_SLICE_INSTANTIATE_DIM 7
 #include "tensorflow/core/kernels/strided_slice_op_impl.h"

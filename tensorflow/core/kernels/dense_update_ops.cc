@@ -19,9 +19,6 @@ limitations under the License.
 #define EIGEN_USE_GPU
 #endif
 
-#if TENSORFLOW_USE_ROCM
-#define EIGEN_USE_HIP
-#endif
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/op_kernel.h"

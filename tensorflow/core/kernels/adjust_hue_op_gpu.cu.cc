@@ -16,9 +16,6 @@ limitations under the License.
 
 #define EIGEN_USE_GPU
 
-#if TENSORFLOW_USE_ROCM
-#define EIGEN_USE_HIP
-#endif
 
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/kernels/adjust_hue_op.h"
