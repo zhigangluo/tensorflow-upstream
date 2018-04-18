@@ -1,6 +1,6 @@
 diff -Naur eigen-eigen-429aa5254200/Eigen/Core eigen-work/Eigen/Core
 --- eigen-eigen-429aa5254200/Eigen/Core	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/Eigen/Core	2018-04-10 20:38:38.550861104 +0000
++++ eigen-work/Eigen/Core	2018-04-16 18:02:48.344537767 +0000
 @@ -31,8 +31,8 @@
  #define EIGEN_CUDACC_VER 0
  #endif
@@ -51,9 +51,254 @@ diff -Naur eigen-eigen-429aa5254200/Eigen/Core eigen-work/Eigen/Core
    #define EIGEN_EXCEPTIONS
  #endif
  
+diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/MathFunctions.h eigen-work/Eigen/src/Core/MathFunctions.h
+--- eigen-eigen-429aa5254200/Eigen/src/Core/MathFunctions.h	2017-09-20 08:22:23.000000000 +0000
++++ eigen-work/Eigen/src/Core/MathFunctions.h	2018-04-16 18:02:48.380537157 +0000
+@@ -10,6 +10,10 @@
+ #ifndef EIGEN_MATHFUNCTIONS_H
+ #define EIGEN_MATHFUNCTIONS_H
+ 
++#if defined(__HIP_DEVICE_COMPILE__) && defined(__HIP_PLATFORM_HCC__)
++#include <hip/math_functions.h>
++#endif
++
+ // source: http://www.geom.uiuc.edu/~huberty/math5337/groupe/digits.html
+ // TODO this should better be moved to NumTraits
+ #define EIGEN_PI 3.141592653589793238462643383279502884197169399375105820974944592307816406L
+@@ -96,7 +100,7 @@
+ 
+ template<typename Scalar> struct real_impl : real_default_impl<Scalar> {};
+ 
+-#ifdef EIGEN_CUDA_ARCH
++#if defined(EIGEN_CUDA_ARCH) || defined(__HIP_DEVICE_COMPILE__)
+ template<typename T>
+ struct real_impl<std::complex<T> >
+ {
+@@ -144,7 +148,7 @@
+ 
+ template<typename Scalar> struct imag_impl : imag_default_impl<Scalar> {};
+ 
+-#ifdef EIGEN_CUDA_ARCH
++#if defined(EIGEN_CUDA_ARCH) || defined(__HIP_DEVICE_COMPILE__)
+ template<typename T>
+ struct imag_impl<std::complex<T> >
+ {
+@@ -445,7 +449,11 @@
+   struct arg_impl {
+     static inline Scalar run(const Scalar& x)
+     {
++      #ifdef __HCC__
++      using std::arg;
++      #else
+       EIGEN_USING_STD_MATH(arg);
++      #endif
+       return arg(x);
+     }
+   };
+@@ -778,7 +786,9 @@
+ typename internal::enable_if<(!internal::is_integral<T>::value)&&(!NumTraits<T>::IsComplex),bool>::type
+ isfinite_impl(const T& x)
+ {
+-  #ifdef EIGEN_CUDA_ARCH
++  #if defined(__HIP_DEVICE_COMPILE__)
++    return isfinite(x);
++  #elif defined(EIGEN_CUDA_ARCH)
+     return (::isfinite)(x);
+   #elif EIGEN_USE_STD_FPCLASSIFY
+     using std::isfinite;
+@@ -793,7 +803,9 @@
+ typename internal::enable_if<(!internal::is_integral<T>::value)&&(!NumTraits<T>::IsComplex),bool>::type
+ isinf_impl(const T& x)
+ {
+-  #ifdef EIGEN_CUDA_ARCH
++  #if defined(__HIP_DEVICE_COMPILE__)
++    return isinf(x);
++  #elif defined(EIGEN_CUDA_ARCH)
+     return (::isinf)(x);
+   #elif EIGEN_USE_STD_FPCLASSIFY
+     using std::isinf;
+@@ -808,7 +820,9 @@
+ typename internal::enable_if<(!internal::is_integral<T>::value)&&(!NumTraits<T>::IsComplex),bool>::type
+ isnan_impl(const T& x)
+ {
+-  #ifdef EIGEN_CUDA_ARCH
++  #if defined(__HIP_DEVICE_COMPILE__)
++    return isnan(x);
++  #elif defined(EIGEN_CUDA_ARCH)
+     return (::isnan)(x);
+   #elif EIGEN_USE_STD_FPCLASSIFY
+     using std::isnan;
+@@ -874,7 +888,7 @@
+ 
+ namespace numext {
+ 
+-#if !defined(EIGEN_CUDA_ARCH) && !defined(__SYCL_DEVICE_ONLY__)
++#if !defined(EIGEN_CUDA_ARCH) && !defined(__SYCL_DEVICE_ONLY__) && !defined(__HIP_DEVICE_COMPILE__)
+ template<typename T>
+ EIGEN_DEVICE_FUNC
+ EIGEN_ALWAYS_INLINE T mini(const T& x, const T& y)
+@@ -1088,7 +1102,7 @@
+ EIGEN_ALWAYS_INLINE double  log1p(double x) { return cl::sycl::log1p(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float log1p(const float &x) { return ::log1pf(x); }
+ 
+@@ -1146,7 +1160,7 @@
+ EIGEN_ALWAYS_INLINE double  floor(double x) { return cl::sycl::floor(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float floor(const float &x) { return ::floorf(x); }
+ 
+@@ -1167,7 +1181,7 @@
+ EIGEN_ALWAYS_INLINE double  ceil(double x) { return cl::sycl::ceil(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float ceil(const float &x) { return ::ceilf(x); }
+ 
+@@ -1225,7 +1239,7 @@
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float log(const float &x) { return ::logf(x); }
+ 
+@@ -1253,7 +1267,7 @@
+ EIGEN_ALWAYS_INLINE double  abs(double x) { return cl::sycl::fabs(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float abs(const float &x) { return ::fabsf(x); }
+ 
+@@ -1283,7 +1297,7 @@
+ EIGEN_ALWAYS_INLINE double  exp(double x) { return cl::sycl::exp(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float exp(const float &x) { return ::expf(x); }
+ 
+@@ -1303,7 +1317,7 @@
+ EIGEN_ALWAYS_INLINE double  expm1(double x) { return cl::sycl::expm1(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float expm1(const float &x) { return ::expm1f(x); }
+ 
+@@ -1323,7 +1337,7 @@
+ EIGEN_ALWAYS_INLINE double  cos(double x) { return cl::sycl::cos(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float cos(const float &x) { return ::cosf(x); }
+ 
+@@ -1343,7 +1357,7 @@
+ EIGEN_ALWAYS_INLINE double  sin(double x) { return cl::sycl::sin(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float sin(const float &x) { return ::sinf(x); }
+ 
+@@ -1363,7 +1377,7 @@
+ EIGEN_ALWAYS_INLINE double  tan(double x) { return cl::sycl::tan(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float tan(const float &x) { return ::tanf(x); }
+ 
+@@ -1394,7 +1408,7 @@
+ EIGEN_ALWAYS_INLINE double  acosh(double x) { return cl::sycl::acosh(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float acos(const float &x) { return ::acosf(x); }
+ 
+@@ -1425,7 +1439,7 @@
+ EIGEN_ALWAYS_INLINE double  asinh(double x) { return cl::sycl::asinh(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float asin(const float &x) { return ::asinf(x); }
+ 
+@@ -1456,7 +1470,7 @@
+ EIGEN_ALWAYS_INLINE double  atanh(double x) { return cl::sycl::atanh(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float atan(const float &x) { return ::atanf(x); }
+ 
+@@ -1477,7 +1491,7 @@
+ EIGEN_ALWAYS_INLINE double  cosh(double x) { return cl::sycl::cosh(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float cosh(const float &x) { return ::coshf(x); }
+ 
+@@ -1497,7 +1511,7 @@
+ EIGEN_ALWAYS_INLINE double  sinh(double x) { return cl::sycl::sinh(x); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float sinh(const float &x) { return ::sinhf(x); }
+ 
+@@ -1515,12 +1529,12 @@
+ #if defined(__SYCL_DEVICE_ONLY__)
+ EIGEN_ALWAYS_INLINE float   tanh(float x) { return cl::sycl::tanh(x); }
+ EIGEN_ALWAYS_INLINE double  tanh(double x) { return cl::sycl::tanh(x); }
+-#elif (!defined(EIGEN_CUDACC)) && EIGEN_FAST_MATH
++#elif (!defined(EIGEN_CUDACC)) && (!defined(__HIPCC__)) && EIGEN_FAST_MATH
+ EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float tanh(float x) { return internal::generic_fast_tanh_float(x); }
+ #endif
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float tanh(const float &x) { return ::tanhf(x); }
+ 
+@@ -1540,7 +1554,7 @@
+ EIGEN_ALWAYS_INLINE double  fmod(double x, double y) { return cl::sycl::fmod(x, y); }
+ #endif // defined(__SYCL_DEVICE_ONLY__)
+ 
+-#ifdef EIGEN_CUDACC
++#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
+ template <>
+ EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
+ float fmod(const float& a, const float& b) {
 diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/Half.h eigen-work/Eigen/src/Core/arch/HIP/hcc/Half.h
 --- eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/Half.h	1970-01-01 00:00:00.000000000 +0000
-+++ eigen-work/Eigen/src/Core/arch/HIP/hcc/Half.h	2018-04-10 20:38:38.553861092 +0000
++++ eigen-work/Eigen/src/Core/arch/HIP/hcc/Half.h	2018-04-16 18:02:48.348537700 +0000
 @@ -0,0 +1,619 @@
 +// This file is part of Eigen, a lightweight C++ template library
 +// for linear algebra.
@@ -674,598 +919,9 @@ diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/Half.h eigen-wor
 +#endif
 +
 +#endif // EIGEN_HALF_HIP_H
-diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/intrinsics.h eigen-work/Eigen/src/Core/arch/HIP/hcc/intrinsics.h
---- eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/intrinsics.h	1970-01-01 00:00:00.000000000 +0000
-+++ eigen-work/Eigen/src/Core/arch/HIP/hcc/intrinsics.h	2018-04-10 20:38:38.556861081 +0000
-@@ -0,0 +1,585 @@
-+/* 
-+** Alternates for CUDA intrinsics
-+*/
-+#ifndef INTRINSICS_H
-+#define INTRINSICS_H
-+
-+#ifdef __HCC__        // For HC backend
-+    #define WARP_SIZE 64
-+#else                  // For NVCC backend
-+    #define WARP_SIZE 32
-+#endif
-+
-+#define __HIP_FP16_DECL_PREFIX__ __device__
-+
-+/*-----------------------HIPRT NUMBERS-----------------------*/
-+__HIP_FP16_DECL_PREFIX__ inline float __hip_int_as_float(int a) {
-+  union {
-+    int a;
-+    float b;
-+  }u;
-+  u.a = a;
-+  return u.b;
-+}
-+
-+// HILO INT 2 DOUBLE
-+// Combine two 32 bit integer into a 64 bit double
-+__HIP_FP16_DECL_PREFIX__  inline double __hip_hiloint2double(int hi, int lo) {
-+   union {
-+      long longType;
-+      double doubleType;
-+   }u;
-+
-+   long mostSignificantBits = (long)hi & 0xFFFFFFFF;
-+   long leastSignificantBits = (long)lo & 0xFFFFFFFF;
-+   /* Store the hi as 32 MSB and lo as 32 LSB of double */
-+   u.longType = (mostSignificantBits << 32) | leastSignificantBits;
-+   /* Return the equivalent double type */
-+   return u.doubleType;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline double __hip_longlong_as_double(const long long x) {
-+   union {
-+      long long a;
-+      double b;
-+   }u;
-+
-+   u.a = x;
-+   return u.b;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline long long __hip_double_as_longlong(const double x) {
-+   union {
-+      long long a;
-+      double b;
-+   }u;
-+
-+   u.b = x;
-+   return u.a;
-+}
-+
-+// Single Precision Macros
-+#define HIPRT_INF_F        __hip_int_as_float(0x7f800000)
-+#define HIPRT_NAN_F        __hip_int_as_float(0x7fffffff)
-+#define HIPRT_MAX_NORMAL_F __hip_int_as_float(0x7f7fffff)
-+#define HIPRT_MIN_DENORM_F __hip_int_as_float(0x00000001)
-+#define HIPRT_NEG_ZERO_F   __hip_int_as_float(0x80000000)
-+#define HIPRT_ZERO_F       0.0f
-+#define HIPRT_ONE_F        1.0f
-+
-+
-+// Double Precision Macros
-+#define HIPRT_INF          __hip_hiloint2double(0x7ff00000, 0x00000000)
-+#define HIPRT_NAN          __hip_hiloint2double(0xfff80000, 0x00000000)
-+
-+/*-----------------------HIPRT NUMBERS-----------------------*/
-+
-+
-+/*------------------HALF PRECISION BASIC INTRINSICS------------------*/
-+union SP_FP32
-+{
-+    unsigned int u;
-+    float f;
-+};
-+
-+struct __hip_half {
-+    __HIP_FP16_DECL_PREFIX__ __hip_half() {}
-+    __HIP_FP16_DECL_PREFIX__ __hip_half(unsigned short raw) : x(raw) {}
-+    unsigned short x;
-+};
-+
-+struct __hip_half2 {
-+    __HIP_FP16_DECL_PREFIX__ __hip_half2() {}
-+    __HIP_FP16_DECL_PREFIX__ __hip_half2(unsigned int raw) : x(raw) {}
-+    unsigned int x;
-+};
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_low2half(const __hip_half2 h)
-+{
-+    __hip_half ret;
-+    ret.x = h.x & 0xFFFF;
-+    return ret;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_high2half(const __hip_half2 h)
-+{
-+    __hip_half ret;
-+    ret.x = (h.x >> 16) & 0xFFFF;
-+    return ret;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_halves2half2(const __hip_half l, const __hip_half h)
-+{
-+    __hip_half2 ret;
-+    ret.x = (h.x << 16) | (l.x & 0xFFFF);
-+    return ret;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_half2half2(const __hip_half hl)
-+{
-+    __hip_half2 ret;
-+    ret.x = (hl.x << 16) | (hl.x & 0xFFFF);
-+    return ret;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline float __hip_half2float(const __hip_half h)
-+{
-+    const SP_FP32 magic = { 113 << 23 };
-+    const unsigned int shifted_exp = 0x7c00 << 13; // exponent mask after shift
-+    SP_FP32 o;
-+
-+    o.u = (h.x & 0x7fff) << 13;             // exponent/mantissa bits
-+    unsigned int exp = shifted_exp & o.u;   // just the exponent
-+    o.u += (127 - 15) << 23;                // exponent adjust
-+
-+    // handle exponent special cases
-+    if (exp == shifted_exp) {     // Inf/NaN?
-+        o.u += (128 - 16) << 23;    // extra exp adjust
-+    } else if (exp == 0) {        // Zero/Denormal?
-+    o.u += 1 << 23;             // extra exp adjust
-+    o.f -= magic.f;             // renormalize
-+    }
-+
-+    o.u |= (h.x & 0x8000) << 16;    // sign bit
-+    return o.f;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline float __hip_low2float(const __hip_half2 l)
-+{
-+    __hip_half t1 = __hip_low2half(l);
-+    float ret = __hip_half2float(t1);
-+    return ret;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline float __hip_high2float(const __hip_half2 h)
-+{
-+    __hip_half t1 = __hip_high2half(h);
-+    float ret = __hip_half2float(t1);
-+    return ret;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_float2half(const float h)
-+{
-+    SP_FP32 f; f.f = h;
-+
-+    const SP_FP32 f32infty = { 255 << 23 };
-+    const SP_FP32 f16max = { (127 + 16) << 23 };
-+    const SP_FP32 denorm_magic = { ((127 - 15) + (23 - 10) + 1) << 23 };
-+    unsigned int sign_mask = 0x80000000u;
-+    __hip_half o;
-+    o.x = static_cast<unsigned short>(0x0u);
-+
-+    unsigned int sign = f.u & sign_mask;
-+    f.u ^= sign;
-+
-+    // NOTE all the integer compares in this function can be safely
-+    // compiled into signed compares since all operands are below
-+    // 0x80000000. Important if you want fast straight SSE2 code
-+    // (since there's no unsigned PCMPGTD).
-+
-+    if (f.u >= f16max.u) {  // result is Inf or NaN (all exponent bits set)
-+        o.x = (f.u > f32infty.u) ? 0x7e00 : 0x7c00; // NaN->qNaN and Inf->Inf
-+    } else {  // (De)normalized number or zero
-+        if (f.u < (113 << 23)) {  // resulting FP16 is subnormal or zero
-+            // use a magic value to align our 10 mantissa bits at the bottom of
-+            // the float. as long as FP addition is round-to-nearest-even this
-+            // just works.
-+            f.f += denorm_magic.f;
-+
-+            // and one integer subtract of the bias later, we have our final float!
-+            o.x = static_cast<unsigned short>(f.u - denorm_magic.u);
-+         } else {
-+            unsigned int mant_odd = (f.u >> 13) & 1; // resulting mantissa is odd
-+            // update exponent, rounding bias part 1
-+            f.u += ((unsigned int)(15 - 127) << 23) + 0xfff;
-+            // rounding bias part 2
-+            f.u += mant_odd;
-+            // take the bits!
-+            o.x = static_cast<unsigned short>(f.u >> 13);
-+         }
-+     }
-+     o.x |= static_cast<unsigned short>(sign >> 16);
-+     return o;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_float2half2_rn(const float f)
-+{
-+    __hip_half h = __hip_float2half(f);
-+    __hip_half2 res = __hip_half2half2(h);
-+    return res;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_floats2half2_rn(const float f1, const float f2)
-+{
-+    __hip_half low = __hip_float2half(f1);
-+    __hip_half high = __hip_float2half(f2);
-+    __hip_half2 res = __hip_halves2half2(low, high);
-+    return res;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ float2 __hip_make_float2(float x, float y);
-+
-+__HIP_FP16_DECL_PREFIX__ inline float2 __hip_half22float2(const __hip_half2 l)
-+{
-+    float hi_float = __hip_low2float(l);
-+    float low_float = __hip_high2float(l);
-+
-+    float2 res = __hip_make_float2(low_float, hi_float);
-+    return res;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_shfl_xor(__hip_half var, int lanemask, int width=WARP_SIZE)
-+{
-+    __hip_half dummy = (unsigned short) 0x0000;
-+    __hip_half2 input = __hip_halves2half2(dummy, var);
-+    __hip_half2 output = (unsigned int)(__shfl_xor((int)input.x, lanemask, width));
-+    __hip_half ret = __hip_low2half(output);
-+    return ret;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_shfl_xor(__hip_half2 var, int lanemask, int width=WARP_SIZE)
-+{
-+    __hip_half2 ret = (unsigned int)(__shfl_xor((int)var.x, lanemask, width));
-+    return ret;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline int __hip_shfl_xor(int var, int lanemask, int width=WARP_SIZE)
-+{
-+    return __shfl_xor(var, lanemask, width);
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline float __hip_shfl_xor(float var, int lanemask, int width=WARP_SIZE)
-+{
-+    return __shfl_xor(var, lanemask, width);
-+}
-+
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_shfl_down(__hip_half var, unsigned int lanemask, int width=WARP_SIZE)
-+{
-+    __hip_half dummy = (unsigned short) 0x0000;
-+    __hip_half2 input = __hip_halves2half2(dummy, var);
-+    __hip_half2 output = (unsigned int)(__shfl_down((int)input.x, lanemask, width));
-+    __hip_half ret = __hip_low2half(output);
-+    return ret;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_shfl_down(__hip_half2 var, unsigned int lanemask, int width=WARP_SIZE)
-+{
-+    __hip_half2 ret = (unsigned int)(__shfl_down((int)var.x, lanemask, width));
-+    return ret;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline int __hip_shfl_down(int var, unsigned int lanemask, int width=WARP_SIZE)
-+{
-+    return __shfl_down(var, lanemask, width);
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline float __hip_shfl_down(float var, unsigned int lanemask, int width=WARP_SIZE)
-+{
-+    return __shfl_down(var, lanemask, width);
-+}
-+
-+/*------------------HALF PRECISION BASIC INTRINSICS------------------*/
-+
-+/*------------------HALF PRECISION ARITHMETIC INTRINSICS------------------*/
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_hadd(const __hip_half a, const __hip_half b)
-+{
-+    __hip_half res = a.x + b.x;
-+    return res;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_hsub(const __hip_half a, const __hip_half b)
-+{
-+    __hip_half res = a.x - b.x;
-+    return res;
-+}
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_hmul(const __hip_half a, const __hip_half b)
-+{
-+    __hip_half res = a.x * b.x;
-+    return res;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_hadd2(const __hip_half2 a, const __hip_half2 b)
-+{
-+    unsigned int in1_a = (unsigned int)(a.x & 0xFFFF);
-+    unsigned int in2_a = (unsigned int)((a.x >> 16) & 0xFFFF);
-+    unsigned int in1_b = (unsigned int)(b.x & 0xFFFF);
-+    unsigned int in2_b = (unsigned int)((b.x >> 16) & 0xFFFF);
-+
-+    unsigned int out1 = in1_a + in1_b;
-+    unsigned int out2 = in2_a + in2_b;
-+
-+    __hip_half2 res = (out1 & 0xFFFF) | ((out2 & 0xFFFF) << 16);
-+    return res;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_hsub2(const __hip_half2 a, const __hip_half2 b)
-+{
-+    unsigned int in1_a = (unsigned int)(a.x & 0xFFFF);
-+    unsigned int in2_a = (unsigned int)((a.x >> 16) & 0xFFFF);
-+    unsigned int in1_b = (unsigned int)(b.x & 0xFFFF);
-+    unsigned int in2_b = (unsigned int)((b.x >> 16) & 0xFFFF);
-+
-+    unsigned int out1 = in1_a - in1_b;
-+    unsigned int out2 = in2_a - in2_b;
-+
-+    __hip_half2 res = (out1 & 0xFFFF) | ((out2 & 0xFFFF) << 16);
-+    return res;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_hmul2(const __hip_half2 a, const __hip_half2 b)
-+{
-+    unsigned int in1_a = (unsigned int)(a.x & 0xFFFF);
-+    unsigned int in2_a = (unsigned int)((a.x >> 16) & 0xFFFF);
-+    unsigned int in1_b = (unsigned int)(b.x & 0xFFFF);
-+    unsigned int in2_b = (unsigned int)((b.x >> 16) & 0xFFFF);
-+
-+    unsigned int out1 = in1_a * in1_b;
-+    unsigned int out2 = in2_a * in2_b;
-+
-+    __hip_half2 res = (out1 & 0xFFFF) | ((out2 & 0xFFFF) << 16);
-+    return res;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_hfma(const __hip_half a, const __hip_half b, const __hip_half c)
-+{
-+    unsigned int out = ((unsigned int)a.x * (unsigned int)b.x) + (unsigned int)c.x;
-+    __hip_half res = (unsigned short)(out & 0xFFFF);
-+    return res;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_hfma2(const __hip_half2 a, const __hip_half2 b, const __hip_half2 c)
-+{
-+    unsigned int in1_a = (unsigned int)(a.x & 0xFFFF);
-+    unsigned int in2_a = (unsigned int)((a.x >> 16) & 0xFFFF);
-+    unsigned int in1_b = (unsigned int)(b.x & 0xFFFF);
-+    unsigned int in2_b = (unsigned int)((b.x >> 16) & 0xFFFF);
-+    unsigned int in1_c = (unsigned int)(c.x & 0xFFFF);
-+    unsigned int in2_c = (unsigned int)((c.x >> 16) & 0xFFFF);
-+
-+    unsigned long out1 = ((unsigned long)in1_a * (unsigned long)in1_b) + (unsigned long)in1_c;
-+    unsigned long out2 = ((unsigned long)in2_a * (unsigned long)in2_b) + (unsigned long)in2_c;
-+
-+    __hip_half2 res = (unsigned int)(((out1 & 0xFFFF) | ((out2 & 0xFFFF) << 16)) & 0xFFFFFFFF);
-+    return res;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_hneg(const __hip_half a)
-+{
-+    __hip_half zero = 0x0000;
-+    return __hip_hsub(zero, a);
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_hneg2(const __hip_half2 a)
-+{
-+    __hip_half2 zero = 0x0000;
-+    return __hip_hsub2(zero, a);
-+}
-+
-+/*------------------HALF PRECISION ARITHMETIC INTRINSICS------------------*/
-+
-+/*------------------HALF PRECISION COMPARISON INTRINSICS------------------*/
-+
-+__HIP_FP16_DECL_PREFIX__ inline bool __hip_hisnan(const __hip_half a)
-+{
-+    return (a.x == a.x) ? false : true;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline int __hip_hisinf(const __hip_half a)
-+{
-+    if (a.x == 0xFC00) return -1;
-+    if (a.x == 0x7C00) return 1;
-+    return 0;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline bool __hip_heq(const __hip_half a, const __hip_half b)
-+{
-+    if (__hip_hisnan(a) || __hip_hisnan(b)) return false;
-+
-+    if (!(__hip_hisinf(a) || __hip_hisinf(b)))
-+        return (a.x == b.x);
-+
-+    if (__hip_hisinf(a) == __hip_hisinf(b)) return true;
-+    return false;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline bool __hip_hne(const __hip_half a, const __hip_half b)
-+{
-+    if (__hip_hisnan(a) || __hip_hisnan(b)) return false;
-+
-+    if (!( __hip_hisinf(a) || __hip_hisinf(b)))
-+        return (a.x != b.x);
-+
-+    if (__hip_hisinf(a) == __hip_hisinf(b)) return false;
-+    return true;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline bool __hip_hlt(const __hip_half a, const __hip_half b)
-+{
-+    if (__hip_hisnan(a) || __hip_hisnan(b)) return false;
-+
-+    if (!( __hip_hisinf(a) || __hip_hisinf(b)))
-+        return (a.x < b.x);
-+
-+    if ((__hip_hisinf(a) == 1) || (__hip_hisinf(b) == -1)) return false;
-+    return true;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline bool __hip_hle(const __hip_half a, const __hip_half b)
-+{
-+    if (__hip_hisnan(a) || __hip_hisnan(b)) return false;
-+
-+    if (!( __hip_hisinf(a) || __hip_hisinf(b)))
-+        return (a.x <= b.x);
-+
-+    if ((__hip_hisinf(a) == -1) || (__hip_hisinf(b) == 1)) return true;
-+    return false;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline bool __hip_hgt(const __hip_half a, const __hip_half b)
-+{
-+    if (__hip_hisnan(a) || __hip_hisnan(b)) return false;
-+
-+    if (!( __hip_hisinf(a) || __hip_hisinf(b)))
-+        return (a.x > b.x);
-+
-+    if ((__hip_hisinf(a) == -1) || (__hip_hisinf(b) == 1)) return false;
-+    return true;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline bool __hip_hge(const __hip_half a, const __hip_half b)
-+{
-+    if (__hip_hisnan(a) || __hip_hisnan(b)) return false;
-+
-+    if (!( __hip_hisinf(a) || __hip_hisinf(b)))
-+        return (a.x >= b.x);
-+
-+    if ((__hip_hisinf(a) == 1) || (__hip_hisinf(b) == -1)) return true;
-+    return false;
-+}
-+
-+/*------------------HALF PRECISION COMPARISON INTRINSICS------------------*/
-+
-+/*--------------------BIT MANIPULATION INTRINSICS--------------------*/
-+
-+__HIP_FP16_DECL_PREFIX__ inline int __hip_clz(int x)
-+{
-+    int count = 0;
-+    int input = x;
-+    for (int i = 0; i < 32; i++)
-+    {
-+        if (input % 2 == 0) count++;
-+        else count = 0;
-+        input = input / 2;
-+    }
-+    return count;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline int __hip_clzll(long long x)
-+{
-+    int count = 0;
-+    long long input = x;
-+    for (int i = 0; i < 64; i++)
-+    {
-+        if (input % 2 == 0) count++;
-+        else count = 0;
-+        input = input / 2;
-+    }
-+    return count;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline unsigned int __hip_umulhi(unsigned int x, unsigned int y)
-+{
-+    unsigned long out = ((unsigned long)x) * ((unsigned long)y);
-+    unsigned int res = (unsigned int)(out >> 32);
-+    return res;
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ inline unsigned long long __hip_umul64hi(unsigned long long x, unsigned long long y)
-+{
-+    unsigned long long lo = 0x00000000FFFFFFFF;
-+    unsigned long long hi = 0xFFFFFFFF00000000;
-+
-+    // Seperate 32-bit LSBs & MSBs of 64-bit inputs
-+    unsigned long long in1_lo = x & lo;
-+    unsigned long long in1_hi = (x & hi) >> 32;
-+    unsigned long long in2_lo = y & lo;
-+    unsigned long long in2_hi = (y & hi) >> 32;
-+
-+    // Multiply each part of input and store
-+    unsigned long long out[4];
-+    out[0] = in1_lo * in2_lo;
-+    out[1] = in1_lo * in2_hi;
-+    out[2] = in1_hi * in2_lo;
-+    out[3] = in1_hi * in2_hi;
-+
-+    unsigned long long carry;
-+    unsigned long long res;
-+    unsigned long long part[4];
-+
-+    // Store the result of x*y in a vector that can hold 128 bit result
-+    part[0] = out[0] & lo;
-+    res = ((out[0] & hi) >> 32) + (out[1] & lo) + (out[2] & lo);
-+    part[1] = res & lo;
-+    carry = (res & hi) >> 32;
-+    res = carry + ((out[1] & hi) >> 32) + ((out[2] & hi) >> 32) + (out[3] & lo);
-+    part[2] = res & lo;
-+    carry = (res & hi) >> 32;
-+    part[3] = carry + ((out[3] & hi) >> 32);
-+
-+    // Get the 64-bit MSB's of x*y
-+    res = (((part[3] << 32) & hi) | (part[2] & lo));
-+
-+    return res;
-+}
-+
-+/*--------------------BIT MANIPULATION INTRINSICS--------------------*/
-+
-+
-+/*------------------DUMMY SUPPORT FOR UNSUPPORTED INTRINSICS------------------*/
-+
-+//TODO: Replace them once supported by HC
-+#ifdef __HCC__        // For HC backend
-+    #define __hip_threadfence() hc_barrier(CLK_LOCAL_MEM_FENCE)
-+    #define __hip_threadfence_block() hc_barrier(CLK_LOCAL_MEM_FENCE)
-+
-+    template <typename T>
-+    __HIP_FP16_DECL_PREFIX__ T __hip_ldg(const T* ptr) { return *ptr; }
-+
-+    #define __hip_pld(ADDR) __builtin_prefetch(ADDR)
-+#endif
-+
-+/*------------------DUMMY SUPPORT FOR UNSUPPORTED INTRINSICS------------------*/
-+
-+
-+/*------------------SHORT VECTOR TYPE FOR FLOAT------------------*/
-+
-+/*__HIP_FP16_DECL_PREFIX__ float_2 __hip_make_float2(float x, float y)
-+{
-+    float_2 var;
-+    var.x = x;
-+    var.y = y;
-+    return var; 
-+}
-+
-+__HIP_FP16_DECL_PREFIX__ float_4 __hip_make_float4(float x, float y, float z, float w)
-+{
-+    float_4 var;
-+    var.x = x;
-+    var.y = y;
-+    var.z = z;
-+    var.w = w;
-+    return var;
-+}
-+
-+ 
-+__HIP_FP16_DECL_PREFIX__ float_4 __hip_pset1(const float& from)
-+{
-+    return __hip_make_float4(from, from, from, from);
-+}*/
-+
-+/*------------------SHORT VECTOR TYPE FOR FLOAT------------------*/
-+
-+#endif
-+
 diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/MathFunctions.h eigen-work/Eigen/src/Core/arch/HIP/hcc/MathFunctions.h
 --- eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/MathFunctions.h	1970-01-01 00:00:00.000000000 +0000
-+++ eigen-work/Eigen/src/Core/arch/HIP/hcc/MathFunctions.h	2018-04-10 20:38:38.553861092 +0000
++++ eigen-work/Eigen/src/Core/arch/HIP/hcc/MathFunctions.h	2018-04-16 18:02:48.352537633 +0000
 @@ -0,0 +1,91 @@
 +// This file is part of Eigen, a lightweight C++ template library
 +// for linear algebra.
@@ -1360,7 +1016,7 @@ diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/MathFunctions.h 
 +#endif // EIGEN_MATH_FUNCTIONS_HIP_H
 diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/PacketMath.h eigen-work/Eigen/src/Core/arch/HIP/hcc/PacketMath.h
 --- eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/PacketMath.h	1970-01-01 00:00:00.000000000 +0000
-+++ eigen-work/Eigen/src/Core/arch/HIP/hcc/PacketMath.h	2018-04-10 20:38:38.554861088 +0000
++++ eigen-work/Eigen/src/Core/arch/HIP/hcc/PacketMath.h	2018-04-16 18:02:48.364537428 +0000
 @@ -0,0 +1,305 @@
 +// This file is part of Eigen, a lightweight C++ template library
 +// for linear algebra.
@@ -1669,7 +1325,7 @@ diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/PacketMath.h eig
 +#endif // EIGEN_PACKET_MATH_HIP_H
 diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/PacketMathHalf.h eigen-work/Eigen/src/Core/arch/HIP/hcc/PacketMathHalf.h
 --- eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/PacketMathHalf.h	1970-01-01 00:00:00.000000000 +0000
-+++ eigen-work/Eigen/src/Core/arch/HIP/hcc/PacketMathHalf.h	2018-04-10 20:38:38.555861085 +0000
++++ eigen-work/Eigen/src/Core/arch/HIP/hcc/PacketMathHalf.h	2018-04-16 18:02:48.368537361 +0000
 @@ -0,0 +1,743 @@
 +// This file is part of Eigen, a lightweight C++ template library
 +// for linear algebra.
@@ -2416,7 +2072,7 @@ diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/PacketMathHalf.h
 +#endif // EIGEN_PACKET_MATH_HALF_HIP_H
 diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/TypeCasting.h eigen-work/Eigen/src/Core/arch/HIP/hcc/TypeCasting.h
 --- eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/TypeCasting.h	1970-01-01 00:00:00.000000000 +0000
-+++ eigen-work/Eigen/src/Core/arch/HIP/hcc/TypeCasting.h	2018-04-10 20:38:38.555861085 +0000
++++ eigen-work/Eigen/src/Core/arch/HIP/hcc/TypeCasting.h	2018-04-16 18:02:48.372537294 +0000
 @@ -0,0 +1,193 @@
 +// This file is part of Eigen, a lightweight C++ template library
 +// for linear algebra.
@@ -2611,9 +2267,598 @@ diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/TypeCasting.h ei
 +} // end namespace Eigen
 +
 +#endif // EIGEN_TYPE_CASTING_HIP_H
+diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/intrinsics.h eigen-work/Eigen/src/Core/arch/HIP/hcc/intrinsics.h
+--- eigen-eigen-429aa5254200/Eigen/src/Core/arch/HIP/hcc/intrinsics.h	1970-01-01 00:00:00.000000000 +0000
++++ eigen-work/Eigen/src/Core/arch/HIP/hcc/intrinsics.h	2018-04-16 18:02:48.352537633 +0000
+@@ -0,0 +1,585 @@
++/* 
++** Alternates for CUDA intrinsics
++*/
++#ifndef INTRINSICS_H
++#define INTRINSICS_H
++
++#ifdef __HCC__        // For HC backend
++    #define WARP_SIZE 64
++#else                  // For NVCC backend
++    #define WARP_SIZE 32
++#endif
++
++#define __HIP_FP16_DECL_PREFIX__ __device__
++
++/*-----------------------HIPRT NUMBERS-----------------------*/
++__HIP_FP16_DECL_PREFIX__ inline float __hip_int_as_float(int a) {
++  union {
++    int a;
++    float b;
++  }u;
++  u.a = a;
++  return u.b;
++}
++
++// HILO INT 2 DOUBLE
++// Combine two 32 bit integer into a 64 bit double
++__HIP_FP16_DECL_PREFIX__  inline double __hip_hiloint2double(int hi, int lo) {
++   union {
++      long longType;
++      double doubleType;
++   }u;
++
++   long mostSignificantBits = (long)hi & 0xFFFFFFFF;
++   long leastSignificantBits = (long)lo & 0xFFFFFFFF;
++   /* Store the hi as 32 MSB and lo as 32 LSB of double */
++   u.longType = (mostSignificantBits << 32) | leastSignificantBits;
++   /* Return the equivalent double type */
++   return u.doubleType;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline double __hip_longlong_as_double(const long long x) {
++   union {
++      long long a;
++      double b;
++   }u;
++
++   u.a = x;
++   return u.b;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline long long __hip_double_as_longlong(const double x) {
++   union {
++      long long a;
++      double b;
++   }u;
++
++   u.b = x;
++   return u.a;
++}
++
++// Single Precision Macros
++#define HIPRT_INF_F        __hip_int_as_float(0x7f800000)
++#define HIPRT_NAN_F        __hip_int_as_float(0x7fffffff)
++#define HIPRT_MAX_NORMAL_F __hip_int_as_float(0x7f7fffff)
++#define HIPRT_MIN_DENORM_F __hip_int_as_float(0x00000001)
++#define HIPRT_NEG_ZERO_F   __hip_int_as_float(0x80000000)
++#define HIPRT_ZERO_F       0.0f
++#define HIPRT_ONE_F        1.0f
++
++
++// Double Precision Macros
++#define HIPRT_INF          __hip_hiloint2double(0x7ff00000, 0x00000000)
++#define HIPRT_NAN          __hip_hiloint2double(0xfff80000, 0x00000000)
++
++/*-----------------------HIPRT NUMBERS-----------------------*/
++
++
++/*------------------HALF PRECISION BASIC INTRINSICS------------------*/
++union SP_FP32
++{
++    unsigned int u;
++    float f;
++};
++
++struct __hip_half {
++    __HIP_FP16_DECL_PREFIX__ __hip_half() {}
++    __HIP_FP16_DECL_PREFIX__ __hip_half(unsigned short raw) : x(raw) {}
++    unsigned short x;
++};
++
++struct __hip_half2 {
++    __HIP_FP16_DECL_PREFIX__ __hip_half2() {}
++    __HIP_FP16_DECL_PREFIX__ __hip_half2(unsigned int raw) : x(raw) {}
++    unsigned int x;
++};
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_low2half(const __hip_half2 h)
++{
++    __hip_half ret;
++    ret.x = h.x & 0xFFFF;
++    return ret;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_high2half(const __hip_half2 h)
++{
++    __hip_half ret;
++    ret.x = (h.x >> 16) & 0xFFFF;
++    return ret;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_halves2half2(const __hip_half l, const __hip_half h)
++{
++    __hip_half2 ret;
++    ret.x = (h.x << 16) | (l.x & 0xFFFF);
++    return ret;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_half2half2(const __hip_half hl)
++{
++    __hip_half2 ret;
++    ret.x = (hl.x << 16) | (hl.x & 0xFFFF);
++    return ret;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline float __hip_half2float(const __hip_half h)
++{
++    const SP_FP32 magic = { 113 << 23 };
++    const unsigned int shifted_exp = 0x7c00 << 13; // exponent mask after shift
++    SP_FP32 o;
++
++    o.u = (h.x & 0x7fff) << 13;             // exponent/mantissa bits
++    unsigned int exp = shifted_exp & o.u;   // just the exponent
++    o.u += (127 - 15) << 23;                // exponent adjust
++
++    // handle exponent special cases
++    if (exp == shifted_exp) {     // Inf/NaN?
++        o.u += (128 - 16) << 23;    // extra exp adjust
++    } else if (exp == 0) {        // Zero/Denormal?
++    o.u += 1 << 23;             // extra exp adjust
++    o.f -= magic.f;             // renormalize
++    }
++
++    o.u |= (h.x & 0x8000) << 16;    // sign bit
++    return o.f;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline float __hip_low2float(const __hip_half2 l)
++{
++    __hip_half t1 = __hip_low2half(l);
++    float ret = __hip_half2float(t1);
++    return ret;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline float __hip_high2float(const __hip_half2 h)
++{
++    __hip_half t1 = __hip_high2half(h);
++    float ret = __hip_half2float(t1);
++    return ret;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_float2half(const float h)
++{
++    SP_FP32 f; f.f = h;
++
++    const SP_FP32 f32infty = { 255 << 23 };
++    const SP_FP32 f16max = { (127 + 16) << 23 };
++    const SP_FP32 denorm_magic = { ((127 - 15) + (23 - 10) + 1) << 23 };
++    unsigned int sign_mask = 0x80000000u;
++    __hip_half o;
++    o.x = static_cast<unsigned short>(0x0u);
++
++    unsigned int sign = f.u & sign_mask;
++    f.u ^= sign;
++
++    // NOTE all the integer compares in this function can be safely
++    // compiled into signed compares since all operands are below
++    // 0x80000000. Important if you want fast straight SSE2 code
++    // (since there's no unsigned PCMPGTD).
++
++    if (f.u >= f16max.u) {  // result is Inf or NaN (all exponent bits set)
++        o.x = (f.u > f32infty.u) ? 0x7e00 : 0x7c00; // NaN->qNaN and Inf->Inf
++    } else {  // (De)normalized number or zero
++        if (f.u < (113 << 23)) {  // resulting FP16 is subnormal or zero
++            // use a magic value to align our 10 mantissa bits at the bottom of
++            // the float. as long as FP addition is round-to-nearest-even this
++            // just works.
++            f.f += denorm_magic.f;
++
++            // and one integer subtract of the bias later, we have our final float!
++            o.x = static_cast<unsigned short>(f.u - denorm_magic.u);
++         } else {
++            unsigned int mant_odd = (f.u >> 13) & 1; // resulting mantissa is odd
++            // update exponent, rounding bias part 1
++            f.u += ((unsigned int)(15 - 127) << 23) + 0xfff;
++            // rounding bias part 2
++            f.u += mant_odd;
++            // take the bits!
++            o.x = static_cast<unsigned short>(f.u >> 13);
++         }
++     }
++     o.x |= static_cast<unsigned short>(sign >> 16);
++     return o;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_float2half2_rn(const float f)
++{
++    __hip_half h = __hip_float2half(f);
++    __hip_half2 res = __hip_half2half2(h);
++    return res;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_floats2half2_rn(const float f1, const float f2)
++{
++    __hip_half low = __hip_float2half(f1);
++    __hip_half high = __hip_float2half(f2);
++    __hip_half2 res = __hip_halves2half2(low, high);
++    return res;
++}
++
++__HIP_FP16_DECL_PREFIX__ float2 __hip_make_float2(float x, float y);
++
++__HIP_FP16_DECL_PREFIX__ inline float2 __hip_half22float2(const __hip_half2 l)
++{
++    float hi_float = __hip_low2float(l);
++    float low_float = __hip_high2float(l);
++
++    float2 res = __hip_make_float2(low_float, hi_float);
++    return res;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_shfl_xor(__hip_half var, int lanemask, int width=WARP_SIZE)
++{
++    __hip_half dummy = (unsigned short) 0x0000;
++    __hip_half2 input = __hip_halves2half2(dummy, var);
++    __hip_half2 output = (unsigned int)(__shfl_xor((int)input.x, lanemask, width));
++    __hip_half ret = __hip_low2half(output);
++    return ret;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_shfl_xor(__hip_half2 var, int lanemask, int width=WARP_SIZE)
++{
++    __hip_half2 ret = (unsigned int)(__shfl_xor((int)var.x, lanemask, width));
++    return ret;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline int __hip_shfl_xor(int var, int lanemask, int width=WARP_SIZE)
++{
++    return __shfl_xor(var, lanemask, width);
++}
++
++__HIP_FP16_DECL_PREFIX__ inline float __hip_shfl_xor(float var, int lanemask, int width=WARP_SIZE)
++{
++    return __shfl_xor(var, lanemask, width);
++}
++
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_shfl_down(__hip_half var, unsigned int lanemask, int width=WARP_SIZE)
++{
++    __hip_half dummy = (unsigned short) 0x0000;
++    __hip_half2 input = __hip_halves2half2(dummy, var);
++    __hip_half2 output = (unsigned int)(__shfl_down((int)input.x, lanemask, width));
++    __hip_half ret = __hip_low2half(output);
++    return ret;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_shfl_down(__hip_half2 var, unsigned int lanemask, int width=WARP_SIZE)
++{
++    __hip_half2 ret = (unsigned int)(__shfl_down((int)var.x, lanemask, width));
++    return ret;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline int __hip_shfl_down(int var, unsigned int lanemask, int width=WARP_SIZE)
++{
++    return __shfl_down(var, lanemask, width);
++}
++
++__HIP_FP16_DECL_PREFIX__ inline float __hip_shfl_down(float var, unsigned int lanemask, int width=WARP_SIZE)
++{
++    return __shfl_down(var, lanemask, width);
++}
++
++/*------------------HALF PRECISION BASIC INTRINSICS------------------*/
++
++/*------------------HALF PRECISION ARITHMETIC INTRINSICS------------------*/
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_hadd(const __hip_half a, const __hip_half b)
++{
++    __hip_half res = a.x + b.x;
++    return res;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_hsub(const __hip_half a, const __hip_half b)
++{
++    __hip_half res = a.x - b.x;
++    return res;
++}
++__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_hmul(const __hip_half a, const __hip_half b)
++{
++    __hip_half res = a.x * b.x;
++    return res;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_hadd2(const __hip_half2 a, const __hip_half2 b)
++{
++    unsigned int in1_a = (unsigned int)(a.x & 0xFFFF);
++    unsigned int in2_a = (unsigned int)((a.x >> 16) & 0xFFFF);
++    unsigned int in1_b = (unsigned int)(b.x & 0xFFFF);
++    unsigned int in2_b = (unsigned int)((b.x >> 16) & 0xFFFF);
++
++    unsigned int out1 = in1_a + in1_b;
++    unsigned int out2 = in2_a + in2_b;
++
++    __hip_half2 res = (out1 & 0xFFFF) | ((out2 & 0xFFFF) << 16);
++    return res;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_hsub2(const __hip_half2 a, const __hip_half2 b)
++{
++    unsigned int in1_a = (unsigned int)(a.x & 0xFFFF);
++    unsigned int in2_a = (unsigned int)((a.x >> 16) & 0xFFFF);
++    unsigned int in1_b = (unsigned int)(b.x & 0xFFFF);
++    unsigned int in2_b = (unsigned int)((b.x >> 16) & 0xFFFF);
++
++    unsigned int out1 = in1_a - in1_b;
++    unsigned int out2 = in2_a - in2_b;
++
++    __hip_half2 res = (out1 & 0xFFFF) | ((out2 & 0xFFFF) << 16);
++    return res;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_hmul2(const __hip_half2 a, const __hip_half2 b)
++{
++    unsigned int in1_a = (unsigned int)(a.x & 0xFFFF);
++    unsigned int in2_a = (unsigned int)((a.x >> 16) & 0xFFFF);
++    unsigned int in1_b = (unsigned int)(b.x & 0xFFFF);
++    unsigned int in2_b = (unsigned int)((b.x >> 16) & 0xFFFF);
++
++    unsigned int out1 = in1_a * in1_b;
++    unsigned int out2 = in2_a * in2_b;
++
++    __hip_half2 res = (out1 & 0xFFFF) | ((out2 & 0xFFFF) << 16);
++    return res;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_hfma(const __hip_half a, const __hip_half b, const __hip_half c)
++{
++    unsigned int out = ((unsigned int)a.x * (unsigned int)b.x) + (unsigned int)c.x;
++    __hip_half res = (unsigned short)(out & 0xFFFF);
++    return res;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_hfma2(const __hip_half2 a, const __hip_half2 b, const __hip_half2 c)
++{
++    unsigned int in1_a = (unsigned int)(a.x & 0xFFFF);
++    unsigned int in2_a = (unsigned int)((a.x >> 16) & 0xFFFF);
++    unsigned int in1_b = (unsigned int)(b.x & 0xFFFF);
++    unsigned int in2_b = (unsigned int)((b.x >> 16) & 0xFFFF);
++    unsigned int in1_c = (unsigned int)(c.x & 0xFFFF);
++    unsigned int in2_c = (unsigned int)((c.x >> 16) & 0xFFFF);
++
++    unsigned long out1 = ((unsigned long)in1_a * (unsigned long)in1_b) + (unsigned long)in1_c;
++    unsigned long out2 = ((unsigned long)in2_a * (unsigned long)in2_b) + (unsigned long)in2_c;
++
++    __hip_half2 res = (unsigned int)(((out1 & 0xFFFF) | ((out2 & 0xFFFF) << 16)) & 0xFFFFFFFF);
++    return res;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half __hip_hneg(const __hip_half a)
++{
++    __hip_half zero = 0x0000;
++    return __hip_hsub(zero, a);
++}
++
++__HIP_FP16_DECL_PREFIX__ inline __hip_half2 __hip_hneg2(const __hip_half2 a)
++{
++    __hip_half2 zero = 0x0000;
++    return __hip_hsub2(zero, a);
++}
++
++/*------------------HALF PRECISION ARITHMETIC INTRINSICS------------------*/
++
++/*------------------HALF PRECISION COMPARISON INTRINSICS------------------*/
++
++__HIP_FP16_DECL_PREFIX__ inline bool __hip_hisnan(const __hip_half a)
++{
++    return (a.x == a.x) ? false : true;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline int __hip_hisinf(const __hip_half a)
++{
++    if (a.x == 0xFC00) return -1;
++    if (a.x == 0x7C00) return 1;
++    return 0;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline bool __hip_heq(const __hip_half a, const __hip_half b)
++{
++    if (__hip_hisnan(a) || __hip_hisnan(b)) return false;
++
++    if (!(__hip_hisinf(a) || __hip_hisinf(b)))
++        return (a.x == b.x);
++
++    if (__hip_hisinf(a) == __hip_hisinf(b)) return true;
++    return false;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline bool __hip_hne(const __hip_half a, const __hip_half b)
++{
++    if (__hip_hisnan(a) || __hip_hisnan(b)) return false;
++
++    if (!( __hip_hisinf(a) || __hip_hisinf(b)))
++        return (a.x != b.x);
++
++    if (__hip_hisinf(a) == __hip_hisinf(b)) return false;
++    return true;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline bool __hip_hlt(const __hip_half a, const __hip_half b)
++{
++    if (__hip_hisnan(a) || __hip_hisnan(b)) return false;
++
++    if (!( __hip_hisinf(a) || __hip_hisinf(b)))
++        return (a.x < b.x);
++
++    if ((__hip_hisinf(a) == 1) || (__hip_hisinf(b) == -1)) return false;
++    return true;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline bool __hip_hle(const __hip_half a, const __hip_half b)
++{
++    if (__hip_hisnan(a) || __hip_hisnan(b)) return false;
++
++    if (!( __hip_hisinf(a) || __hip_hisinf(b)))
++        return (a.x <= b.x);
++
++    if ((__hip_hisinf(a) == -1) || (__hip_hisinf(b) == 1)) return true;
++    return false;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline bool __hip_hgt(const __hip_half a, const __hip_half b)
++{
++    if (__hip_hisnan(a) || __hip_hisnan(b)) return false;
++
++    if (!( __hip_hisinf(a) || __hip_hisinf(b)))
++        return (a.x > b.x);
++
++    if ((__hip_hisinf(a) == -1) || (__hip_hisinf(b) == 1)) return false;
++    return true;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline bool __hip_hge(const __hip_half a, const __hip_half b)
++{
++    if (__hip_hisnan(a) || __hip_hisnan(b)) return false;
++
++    if (!( __hip_hisinf(a) || __hip_hisinf(b)))
++        return (a.x >= b.x);
++
++    if ((__hip_hisinf(a) == 1) || (__hip_hisinf(b) == -1)) return true;
++    return false;
++}
++
++/*------------------HALF PRECISION COMPARISON INTRINSICS------------------*/
++
++/*--------------------BIT MANIPULATION INTRINSICS--------------------*/
++
++__HIP_FP16_DECL_PREFIX__ inline int __hip_clz(int x)
++{
++    int count = 0;
++    int input = x;
++    for (int i = 0; i < 32; i++)
++    {
++        if (input % 2 == 0) count++;
++        else count = 0;
++        input = input / 2;
++    }
++    return count;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline int __hip_clzll(long long x)
++{
++    int count = 0;
++    long long input = x;
++    for (int i = 0; i < 64; i++)
++    {
++        if (input % 2 == 0) count++;
++        else count = 0;
++        input = input / 2;
++    }
++    return count;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline unsigned int __hip_umulhi(unsigned int x, unsigned int y)
++{
++    unsigned long out = ((unsigned long)x) * ((unsigned long)y);
++    unsigned int res = (unsigned int)(out >> 32);
++    return res;
++}
++
++__HIP_FP16_DECL_PREFIX__ inline unsigned long long __hip_umul64hi(unsigned long long x, unsigned long long y)
++{
++    unsigned long long lo = 0x00000000FFFFFFFF;
++    unsigned long long hi = 0xFFFFFFFF00000000;
++
++    // Seperate 32-bit LSBs & MSBs of 64-bit inputs
++    unsigned long long in1_lo = x & lo;
++    unsigned long long in1_hi = (x & hi) >> 32;
++    unsigned long long in2_lo = y & lo;
++    unsigned long long in2_hi = (y & hi) >> 32;
++
++    // Multiply each part of input and store
++    unsigned long long out[4];
++    out[0] = in1_lo * in2_lo;
++    out[1] = in1_lo * in2_hi;
++    out[2] = in1_hi * in2_lo;
++    out[3] = in1_hi * in2_hi;
++
++    unsigned long long carry;
++    unsigned long long res;
++    unsigned long long part[4];
++
++    // Store the result of x*y in a vector that can hold 128 bit result
++    part[0] = out[0] & lo;
++    res = ((out[0] & hi) >> 32) + (out[1] & lo) + (out[2] & lo);
++    part[1] = res & lo;
++    carry = (res & hi) >> 32;
++    res = carry + ((out[1] & hi) >> 32) + ((out[2] & hi) >> 32) + (out[3] & lo);
++    part[2] = res & lo;
++    carry = (res & hi) >> 32;
++    part[3] = carry + ((out[3] & hi) >> 32);
++
++    // Get the 64-bit MSB's of x*y
++    res = (((part[3] << 32) & hi) | (part[2] & lo));
++
++    return res;
++}
++
++/*--------------------BIT MANIPULATION INTRINSICS--------------------*/
++
++
++/*------------------DUMMY SUPPORT FOR UNSUPPORTED INTRINSICS------------------*/
++
++//TODO: Replace them once supported by HC
++#ifdef __HCC__        // For HC backend
++    #define __hip_threadfence() hc_barrier(CLK_LOCAL_MEM_FENCE)
++    #define __hip_threadfence_block() hc_barrier(CLK_LOCAL_MEM_FENCE)
++
++    template <typename T>
++    __HIP_FP16_DECL_PREFIX__ T __hip_ldg(const T* ptr) { return *ptr; }
++
++    #define __hip_pld(ADDR) __builtin_prefetch(ADDR)
++#endif
++
++/*------------------DUMMY SUPPORT FOR UNSUPPORTED INTRINSICS------------------*/
++
++
++/*------------------SHORT VECTOR TYPE FOR FLOAT------------------*/
++
++/*__HIP_FP16_DECL_PREFIX__ float_2 __hip_make_float2(float x, float y)
++{
++    float_2 var;
++    var.x = x;
++    var.y = y;
++    return var; 
++}
++
++__HIP_FP16_DECL_PREFIX__ float_4 __hip_make_float4(float x, float y, float z, float w)
++{
++    float_4 var;
++    var.x = x;
++    var.y = y;
++    var.z = z;
++    var.w = w;
++    return var;
++}
++
++ 
++__HIP_FP16_DECL_PREFIX__ float_4 __hip_pset1(const float& from)
++{
++    return __hip_make_float4(from, from, from, from);
++}*/
++
++/*------------------SHORT VECTOR TYPE FOR FLOAT------------------*/
++
++#endif
++
 diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/functors/BinaryFunctors.h eigen-work/Eigen/src/Core/functors/BinaryFunctors.h
 --- eigen-eigen-429aa5254200/Eigen/src/Core/functors/BinaryFunctors.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/Eigen/src/Core/functors/BinaryFunctors.h	2018-04-10 20:38:38.556861081 +0000
++++ eigen-work/Eigen/src/Core/functors/BinaryFunctors.h	2018-04-16 18:02:48.376537224 +0000
 @@ -462,6 +462,10 @@
    typedef typename BinaryOp::second_argument_type second_argument_type;
    typedef typename BinaryOp::result_type          result_type;
@@ -2625,254 +2870,9 @@ diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/functors/BinaryFunctors.h eig
    bind2nd_op(const second_argument_type &val) : m_value(val) {}
  
    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const result_type operator() (const first_argument_type& a) const { return BinaryOp::operator()(a,m_value); }
-diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/MathFunctions.h eigen-work/Eigen/src/Core/MathFunctions.h
---- eigen-eigen-429aa5254200/Eigen/src/Core/MathFunctions.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/Eigen/src/Core/MathFunctions.h	2018-04-10 20:38:38.551861100 +0000
-@@ -10,6 +10,10 @@
- #ifndef EIGEN_MATHFUNCTIONS_H
- #define EIGEN_MATHFUNCTIONS_H
- 
-+#if defined(__HIP_DEVICE_COMPILE__) && defined(__HIP_PLATFORM_HCC__)
-+#include <hip/math_functions.h>
-+#endif
-+
- // source: http://www.geom.uiuc.edu/~huberty/math5337/groupe/digits.html
- // TODO this should better be moved to NumTraits
- #define EIGEN_PI 3.141592653589793238462643383279502884197169399375105820974944592307816406L
-@@ -96,7 +100,7 @@
- 
- template<typename Scalar> struct real_impl : real_default_impl<Scalar> {};
- 
--#ifdef EIGEN_CUDA_ARCH
-+#if defined(EIGEN_CUDA_ARCH) || defined(__HIP_DEVICE_COMPILE__)
- template<typename T>
- struct real_impl<std::complex<T> >
- {
-@@ -144,7 +148,7 @@
- 
- template<typename Scalar> struct imag_impl : imag_default_impl<Scalar> {};
- 
--#ifdef EIGEN_CUDA_ARCH
-+#if defined(EIGEN_CUDA_ARCH) || defined(__HIP_DEVICE_COMPILE__)
- template<typename T>
- struct imag_impl<std::complex<T> >
- {
-@@ -445,7 +449,11 @@
-   struct arg_impl {
-     static inline Scalar run(const Scalar& x)
-     {
-+      #ifdef __HCC__
-+      using std::arg;
-+      #else
-       EIGEN_USING_STD_MATH(arg);
-+      #endif
-       return arg(x);
-     }
-   };
-@@ -778,7 +786,9 @@
- typename internal::enable_if<(!internal::is_integral<T>::value)&&(!NumTraits<T>::IsComplex),bool>::type
- isfinite_impl(const T& x)
- {
--  #ifdef EIGEN_CUDA_ARCH
-+  #if defined(__HIP_DEVICE_COMPILE__)
-+    return isfinite(x);
-+  #elif defined(EIGEN_CUDA_ARCH)
-     return (::isfinite)(x);
-   #elif EIGEN_USE_STD_FPCLASSIFY
-     using std::isfinite;
-@@ -793,7 +803,9 @@
- typename internal::enable_if<(!internal::is_integral<T>::value)&&(!NumTraits<T>::IsComplex),bool>::type
- isinf_impl(const T& x)
- {
--  #ifdef EIGEN_CUDA_ARCH
-+  #if defined(__HIP_DEVICE_COMPILE__)
-+    return isinf(x);
-+  #elif defined(EIGEN_CUDA_ARCH)
-     return (::isinf)(x);
-   #elif EIGEN_USE_STD_FPCLASSIFY
-     using std::isinf;
-@@ -808,7 +820,9 @@
- typename internal::enable_if<(!internal::is_integral<T>::value)&&(!NumTraits<T>::IsComplex),bool>::type
- isnan_impl(const T& x)
- {
--  #ifdef EIGEN_CUDA_ARCH
-+  #if defined(__HIP_DEVICE_COMPILE__)
-+    return isnan(x);
-+  #elif defined(EIGEN_CUDA_ARCH)
-     return (::isnan)(x);
-   #elif EIGEN_USE_STD_FPCLASSIFY
-     using std::isnan;
-@@ -874,7 +888,7 @@
- 
- namespace numext {
- 
--#if !defined(EIGEN_CUDA_ARCH) && !defined(__SYCL_DEVICE_ONLY__)
-+#if !defined(EIGEN_CUDA_ARCH) && !defined(__SYCL_DEVICE_ONLY__) && !defined(__HIP_DEVICE_COMPILE__)
- template<typename T>
- EIGEN_DEVICE_FUNC
- EIGEN_ALWAYS_INLINE T mini(const T& x, const T& y)
-@@ -1088,7 +1102,7 @@
- EIGEN_ALWAYS_INLINE double  log1p(double x) { return cl::sycl::log1p(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float log1p(const float &x) { return ::log1pf(x); }
- 
-@@ -1146,7 +1160,7 @@
- EIGEN_ALWAYS_INLINE double  floor(double x) { return cl::sycl::floor(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float floor(const float &x) { return ::floorf(x); }
- 
-@@ -1167,7 +1181,7 @@
- EIGEN_ALWAYS_INLINE double  ceil(double x) { return cl::sycl::ceil(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float ceil(const float &x) { return ::ceilf(x); }
- 
-@@ -1225,7 +1239,7 @@
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float log(const float &x) { return ::logf(x); }
- 
-@@ -1253,7 +1267,7 @@
- EIGEN_ALWAYS_INLINE double  abs(double x) { return cl::sycl::fabs(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float abs(const float &x) { return ::fabsf(x); }
- 
-@@ -1283,7 +1297,7 @@
- EIGEN_ALWAYS_INLINE double  exp(double x) { return cl::sycl::exp(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float exp(const float &x) { return ::expf(x); }
- 
-@@ -1303,7 +1317,7 @@
- EIGEN_ALWAYS_INLINE double  expm1(double x) { return cl::sycl::expm1(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float expm1(const float &x) { return ::expm1f(x); }
- 
-@@ -1323,7 +1337,7 @@
- EIGEN_ALWAYS_INLINE double  cos(double x) { return cl::sycl::cos(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float cos(const float &x) { return ::cosf(x); }
- 
-@@ -1343,7 +1357,7 @@
- EIGEN_ALWAYS_INLINE double  sin(double x) { return cl::sycl::sin(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float sin(const float &x) { return ::sinf(x); }
- 
-@@ -1363,7 +1377,7 @@
- EIGEN_ALWAYS_INLINE double  tan(double x) { return cl::sycl::tan(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float tan(const float &x) { return ::tanf(x); }
- 
-@@ -1394,7 +1408,7 @@
- EIGEN_ALWAYS_INLINE double  acosh(double x) { return cl::sycl::acosh(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float acos(const float &x) { return ::acosf(x); }
- 
-@@ -1425,7 +1439,7 @@
- EIGEN_ALWAYS_INLINE double  asinh(double x) { return cl::sycl::asinh(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float asin(const float &x) { return ::asinf(x); }
- 
-@@ -1456,7 +1470,7 @@
- EIGEN_ALWAYS_INLINE double  atanh(double x) { return cl::sycl::atanh(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float atan(const float &x) { return ::atanf(x); }
- 
-@@ -1477,7 +1491,7 @@
- EIGEN_ALWAYS_INLINE double  cosh(double x) { return cl::sycl::cosh(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float cosh(const float &x) { return ::coshf(x); }
- 
-@@ -1497,7 +1511,7 @@
- EIGEN_ALWAYS_INLINE double  sinh(double x) { return cl::sycl::sinh(x); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float sinh(const float &x) { return ::sinhf(x); }
- 
-@@ -1515,12 +1529,12 @@
- #if defined(__SYCL_DEVICE_ONLY__)
- EIGEN_ALWAYS_INLINE float   tanh(float x) { return cl::sycl::tanh(x); }
- EIGEN_ALWAYS_INLINE double  tanh(double x) { return cl::sycl::tanh(x); }
--#elif (!defined(EIGEN_CUDACC)) && EIGEN_FAST_MATH
-+#elif (!defined(EIGEN_CUDACC)) && (!defined(__HIPCC__)) && EIGEN_FAST_MATH
- EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float tanh(float x) { return internal::generic_fast_tanh_float(x); }
- #endif
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template<> EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float tanh(const float &x) { return ::tanhf(x); }
- 
-@@ -1540,7 +1554,7 @@
- EIGEN_ALWAYS_INLINE double  fmod(double x, double y) { return cl::sycl::fmod(x, y); }
- #endif // defined(__SYCL_DEVICE_ONLY__)
- 
--#ifdef EIGEN_CUDACC
-+#if defined(EIGEN_CUDACC) || defined(__HIPCC__)
- template <>
- EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE
- float fmod(const float& a, const float& b) {
 diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/util/Macros.h eigen-work/Eigen/src/Core/util/Macros.h
 --- eigen-eigen-429aa5254200/Eigen/src/Core/util/Macros.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/Eigen/src/Core/util/Macros.h	2018-04-10 20:38:38.557861077 +0000
++++ eigen-work/Eigen/src/Core/util/Macros.h	2018-04-16 18:02:48.388537022 +0000
 @@ -1001,9 +1001,12 @@
  #  define EIGEN_TRY try
  #  define EIGEN_CATCH(X) catch (X)
@@ -2889,7 +2889,7 @@ diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/util/Macros.h eigen-work/Eige
  #    define EIGEN_THROW std::abort()
 diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/util/Memory.h eigen-work/Eigen/src/Core/util/Memory.h
 --- eigen-eigen-429aa5254200/Eigen/src/Core/util/Memory.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/Eigen/src/Core/util/Memory.h	2018-04-10 20:38:38.558861074 +0000
++++ eigen-work/Eigen/src/Core/util/Memory.h	2018-04-16 18:02:48.392536953 +0000
 @@ -156,7 +156,11 @@
  
    void *result;
@@ -2941,7 +2941,7 @@ diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/util/Memory.h eigen-work/Eige
  template<bool Align> inline void* conditional_aligned_realloc(void* ptr, std::size_t new_size, std::size_t old_size)
 diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/util/Meta.h eigen-work/Eigen/src/Core/util/Meta.h
 --- eigen-eigen-429aa5254200/Eigen/src/Core/util/Meta.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/Eigen/src/Core/util/Meta.h	2018-04-10 20:38:38.559861070 +0000
++++ eigen-work/Eigen/src/Core/util/Meta.h	2018-04-16 18:02:48.400536818 +0000
 @@ -16,6 +16,11 @@
  #include <math_constants.h>
  #endif
@@ -3038,9 +3038,67 @@ diff -Naur eigen-eigen-429aa5254200/Eigen/src/Core/util/Meta.h eigen-work/Eigen/
  using internal::device::numeric_limits;
  #else
  using std::numeric_limits;
+diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/Tensor eigen-work/unsupported/Eigen/CXX11/Tensor
+--- eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/Tensor	2017-09-20 08:22:23.000000000 +0000
++++ eigen-work/unsupported/Eigen/CXX11/Tensor	2018-04-16 18:02:48.440536140 +0000
+@@ -81,7 +81,13 @@
+ 
+ #ifdef EIGEN_USE_GPU
+ #include <iostream>
++
++#ifdef EIGEN_USE_HIP
++#include <hip/hip_runtime.h>
++#else
+ #include <cuda_runtime.h>
++#endif
++
+ #if __cplusplus >= 201103L
+ #include <atomic>
+ #include <unistd.h>
+@@ -95,7 +101,13 @@
+ #include "src/Tensor/TensorCostModel.h"
+ #include "src/Tensor/TensorDeviceDefault.h"
+ #include "src/Tensor/TensorDeviceThreadPool.h"
++
++#ifdef EIGEN_USE_HIP
++#include "src/Tensor/TensorDeviceHip.h"
++#else
+ #include "src/Tensor/TensorDeviceCuda.h"
++#endif
++
+ #include "src/Tensor/TensorDeviceSycl.h"
+ #include "src/Tensor/TensorIndexList.h"
+ #include "src/Tensor/TensorDimensionList.h"
+@@ -112,14 +124,26 @@
+ #include "src/Tensor/TensorEvaluator.h"
+ #include "src/Tensor/TensorExpr.h"
+ #include "src/Tensor/TensorReduction.h"
++
++#ifdef EIGEN_USE_HIP
++#include "src/Tensor/TensorReductionHip.h"
++#else
+ #include "src/Tensor/TensorReductionCuda.h"
++#endif
++
+ #include "src/Tensor/TensorArgMax.h"
+ #include "src/Tensor/TensorConcatenation.h"
+ #include "src/Tensor/TensorContractionMapper.h"
+ #include "src/Tensor/TensorContractionBlocking.h"
+ #include "src/Tensor/TensorContraction.h"
+ #include "src/Tensor/TensorContractionThreadPool.h"
++
++#ifdef EIGEN_USE_HIP
++#include "src/Tensor/TensorContractionHip.h"
++#else
+ #include "src/Tensor/TensorContractionCuda.h"
++#endif
++
+ #include "src/Tensor/TensorConversion.h"
+ #include "src/Tensor/TensorConvolution.h"
+ #include "src/Tensor/TensorFFT.h"
 diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorContractionHip.h eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorContractionHip.h
 --- eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorContractionHip.h	1970-01-01 00:00:00.000000000 +0000
-+++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorContractionHip.h	2018-04-10 20:38:38.562861059 +0000
++++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorContractionHip.h	2018-04-16 18:02:48.404536751 +0000
 @@ -0,0 +1,1528 @@
 +//#include "hip/hip_runtime.h"
 +// This file is part of Eigen, a lightweight C++ template library
@@ -4572,7 +4630,7 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorCon
 +#endif // EIGEN_CXX11_TENSOR_TENSOR_CONTRACTION_HIP_H
 diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorDeviceDefault.h eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorDeviceDefault.h
 --- eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorDeviceDefault.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorDeviceDefault.h	2018-04-10 20:38:38.563861055 +0000
++++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorDeviceDefault.h	2018-04-16 18:02:48.408536682 +0000
 @@ -35,17 +35,22 @@
    }
  
@@ -4633,7 +4691,7 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorDev
  };
 diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorDeviceHip.h eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorDeviceHip.h
 --- eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorDeviceHip.h	1970-01-01 00:00:00.000000000 +0000
-+++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorDeviceHip.h	2018-04-10 20:38:38.564861051 +0000
++++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorDeviceHip.h	2018-04-16 18:02:48.412536614 +0000
 @@ -0,0 +1,352 @@
 +// This file is part of Eigen, a lightweight C++ template library
 +// for linear algebra.
@@ -4989,7 +5047,7 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorDev
 +#endif  // EIGEN_CXX11_TENSOR_TENSOR_DEVICE_HIP_H
 diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorExecutor.h eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorExecutor.h
 --- eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorExecutor.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorExecutor.h	2018-04-10 20:38:38.564861051 +0000
++++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorExecutor.h	2018-04-16 18:02:48.412536614 +0000
 @@ -201,7 +201,7 @@
  };
  
@@ -5036,7 +5094,7 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorExe
  // SYCL Executor policy
 diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorForcedEval.h eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorForcedEval.h
 --- eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorForcedEval.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorForcedEval.h	2018-04-10 20:38:38.565861047 +0000
++++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorForcedEval.h	2018-04-16 18:02:48.416536546 +0000
 @@ -109,7 +109,10 @@
  
    EIGEN_DEVICE_FUNC const Dimensions& dimensions() const { return m_impl.dimensions(); }
@@ -5051,7 +5109,7 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorFor
      // Should initialize the memory in case we're dealing with non POD types.
 diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorMacros.h eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorMacros.h
 --- eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorMacros.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorMacros.h	2018-04-10 20:38:38.565861047 +0000
++++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorMacros.h	2018-04-16 18:02:48.420536479 +0000
 @@ -27,7 +27,7 @@
   */
  
@@ -5063,7 +5121,7 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorMac
    #ifdef EIGEN_COMP_GNUC
 diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorMorphing.h eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorMorphing.h
 --- eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorMorphing.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorMorphing.h	2018-04-10 20:38:38.566861044 +0000
++++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorMorphing.h	2018-04-16 18:02:48.424536412 +0000
 @@ -859,7 +859,12 @@
      return inputIndex;
    }
@@ -5080,7 +5138,7 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorMor
  #else
 diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorReduction.h eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorReduction.h
 --- eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorReduction.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorReduction.h	2018-04-10 20:38:38.567861040 +0000
++++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorReduction.h	2018-04-16 18:02:48.424536412 +0000
 @@ -334,7 +334,7 @@
  };
  
@@ -5146,8 +5204,8 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorRed
  #elif defined(EIGEN_USE_SYCL)
 diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorReductionHip.h eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorReductionHip.h
 --- eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorReductionHip.h	1970-01-01 00:00:00.000000000 +0000
-+++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorReductionHip.h	2018-04-10 20:38:38.569861033 +0000
-@@ -0,0 +1,780 @@
++++ eigen-work/unsupported/Eigen/CXX11/src/Tensor/TensorReductionHip.h	2018-04-16 18:03:54.431425161 +0000
+@@ -0,0 +1,811 @@
 +//#include "hip/hip_runtime.h"
 +// This file is part of Eigen, a lightweight C++ template library
 +// for linear algebra.
@@ -5351,7 +5409,9 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorRed
 +  if (hipGridDim_x > 1 && hipThreadIdx_x == 0) {
 +    // Let the last block reset the semaphore
 +    atomicInc(semaphore, hipGridDim_x + 1);
++    __threadfence_system();
 +  }
++
 +#else
 +  assert(0 && "Shouldn't be called on unsupported device");
 +#endif
@@ -5450,6 +5510,10 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorRed
 +  }
 +};
 +
++namespace {
++  std::mutex __eigen_reduction_hip_mutex;
++}
++
 +// Specialization for float and double
 +template <typename Self, typename Op, typename OutputType, bool PacketAccess>
 +struct FullReductionLauncher<
@@ -5459,6 +5523,10 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorRed
 +      internal::is_same<double, OutputType>::value,
 +    void>::type> {
 +  static void run(const Self& self, Op& reducer, const GpuDevice& device, OutputType* output, typename Self::Index num_coeffs) {
++    // guard FullReductionLauncher with a mutex so only 1 FullReductionKernel
++    // is dispatched at a time
++    std::lock_guard<std::mutex> lock(__eigen_reduction_hip_mutex);
++
 +    typedef typename Self::Index Index;
 +    typedef typename Self::CoeffReturnType Scalar;
 +    const int block_size = 256;
@@ -5468,6 +5536,27 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorRed
 +    unsigned int* semaphore = NULL;
 +    if (num_blocks > 1) {
 +      semaphore = device.semaphore();
++
++      unsigned int semaphore_host = 0xFF;
++      hipMemcpy(&semaphore_host, semaphore, sizeof(unsigned int), hipMemcpyDeviceToHost);
++      if (semaphore_host != 0) {
++        std::cerr << "[WARN][EIGEN][FullReductionLauncher] incorrect semaphore value: "
++                  << semaphore_host << "\n";
++        // wait for all commands on the device to complete so semaphore value
++        // is reset to 0
++        hipDeviceSynchronize();
++
++        // read again
++        hipMemcpy(&semaphore_host, semaphore, sizeof(unsigned int), hipMemcpyDeviceToHost);
++        if (semaphore_host != 0) {
++          std::cerr << "[ERROR][EIGEN][FullReductionLauncher] CRITICAL incorrect semaphore value: "
++                    << semaphore_host << ", apply manual override to 0\n";
++
++          // force set semaphore value to be 0
++          semaphore_host = 0;
++          hipMemcpy(semaphore, &semaphore_host, sizeof(unsigned int), hipMemcpyHostToDevice);
++        }
++      }
 +    }
 +
 +    hipLaunchKernelGGL(HIP_KERNEL_NAME(FullReductionKernel<block_size, num_per_thread, Self, Op, Index>),
@@ -5930,7 +6019,7 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/Tensor/TensorRed
 +#endif // EIGEN_CXX11_TENSOR_TENSOR_REDUCTION_HIP_H
 diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/util/CXX11Meta.h eigen-work/unsupported/Eigen/CXX11/src/util/CXX11Meta.h
 --- eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/util/CXX11Meta.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/unsupported/Eigen/CXX11/src/util/CXX11Meta.h	2018-04-10 20:38:38.569861033 +0000
++++ eigen-work/unsupported/Eigen/CXX11/src/util/CXX11Meta.h	2018-04-16 18:02:48.440536140 +0000
 @@ -268,6 +268,7 @@
    typename Reducer
  > struct reduce<Reducer>
@@ -5963,67 +6052,9 @@ diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/src/util/CXX11Meta.h
  constexpr inline decltype(reduce<product_op, Ts...>::run((*((Ts*)0))...)) arg_prod(Ts... ts)
  {
    return reduce<product_op, Ts...>::run(ts...);
-diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/Tensor eigen-work/unsupported/Eigen/CXX11/Tensor
---- eigen-eigen-429aa5254200/unsupported/Eigen/CXX11/Tensor	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/unsupported/Eigen/CXX11/Tensor	2018-04-10 20:38:38.560861066 +0000
-@@ -81,7 +81,13 @@
- 
- #ifdef EIGEN_USE_GPU
- #include <iostream>
-+
-+#ifdef EIGEN_USE_HIP
-+#include <hip/hip_runtime.h>
-+#else
- #include <cuda_runtime.h>
-+#endif
-+
- #if __cplusplus >= 201103L
- #include <atomic>
- #include <unistd.h>
-@@ -95,7 +101,13 @@
- #include "src/Tensor/TensorCostModel.h"
- #include "src/Tensor/TensorDeviceDefault.h"
- #include "src/Tensor/TensorDeviceThreadPool.h"
-+
-+#ifdef EIGEN_USE_HIP
-+#include "src/Tensor/TensorDeviceHip.h"
-+#else
- #include "src/Tensor/TensorDeviceCuda.h"
-+#endif
-+
- #include "src/Tensor/TensorDeviceSycl.h"
- #include "src/Tensor/TensorIndexList.h"
- #include "src/Tensor/TensorDimensionList.h"
-@@ -112,14 +124,26 @@
- #include "src/Tensor/TensorEvaluator.h"
- #include "src/Tensor/TensorExpr.h"
- #include "src/Tensor/TensorReduction.h"
-+
-+#ifdef EIGEN_USE_HIP
-+#include "src/Tensor/TensorReductionHip.h"
-+#else
- #include "src/Tensor/TensorReductionCuda.h"
-+#endif
-+
- #include "src/Tensor/TensorArgMax.h"
- #include "src/Tensor/TensorConcatenation.h"
- #include "src/Tensor/TensorContractionMapper.h"
- #include "src/Tensor/TensorContractionBlocking.h"
- #include "src/Tensor/TensorContraction.h"
- #include "src/Tensor/TensorContractionThreadPool.h"
-+
-+#ifdef EIGEN_USE_HIP
-+#include "src/Tensor/TensorContractionHip.h"
-+#else
- #include "src/Tensor/TensorContractionCuda.h"
-+#endif
-+
- #include "src/Tensor/TensorConversion.h"
- #include "src/Tensor/TensorConvolution.h"
- #include "src/Tensor/TensorFFT.h"
 diff -Naur eigen-eigen-429aa5254200/unsupported/Eigen/src/SpecialFunctions/SpecialFunctionsImpl.h eigen-work/unsupported/Eigen/src/SpecialFunctions/SpecialFunctionsImpl.h
 --- eigen-eigen-429aa5254200/unsupported/Eigen/src/SpecialFunctions/SpecialFunctionsImpl.h	2017-09-20 08:22:23.000000000 +0000
-+++ eigen-work/unsupported/Eigen/src/SpecialFunctions/SpecialFunctionsImpl.h	2018-04-10 20:41:07.032309440 +0000
++++ eigen-work/unsupported/Eigen/src/SpecialFunctions/SpecialFunctionsImpl.h	2018-04-16 18:02:48.444536071 +0000
 @@ -121,7 +121,7 @@
  struct lgamma_impl<float> {
    EIGEN_DEVICE_FUNC
