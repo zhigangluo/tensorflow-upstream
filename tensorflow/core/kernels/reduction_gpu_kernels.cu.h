@@ -364,7 +364,6 @@ __global__ void ColumnReduceKernel(
 
   // 1D array necessary due to bug in CUDA 9 compiler.
   // TODO(nluehr) revert to 2D array when compiler is ready.
-  __shared__ storage_type<value_type> partial_sums[32 * 33];
 #if GOOGLE_CUDA
   __shared__ storage_type<value_type> partial_sums[32 * 33];
 #elif TENSORFLOW_USE_ROCM
