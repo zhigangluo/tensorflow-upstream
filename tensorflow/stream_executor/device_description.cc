@@ -21,8 +21,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/mathutil.h"
 #include "tensorflow/stream_executor/lib/strcat.h"
 
-namespace perftools {
-namespace gputools {
+namespace stream_executor {
 
 static const uint64 kUninitializedUint64 = -1ULL;
 /* static */ const char *DeviceDescription::kUndefinedString = "<undefined>";
@@ -56,6 +55,7 @@ DeviceDescription::DeviceDescription()
       clock_rate_ghz_(-1.0),
       cuda_compute_capability_major_(-1),
       cuda_compute_capability_minor_(-1),
+      rocm_amdgpu_isa_version_(0),
       numa_node_(-1),
       core_count_(-1),
       ecc_enabled_(false) {}
@@ -116,6 +116,11 @@ bool DeviceDescription::cuda_compute_capability(int *major, int *minor) const {
   *major = cuda_compute_capability_major_;
   *minor = cuda_compute_capability_minor_;
   return cuda_compute_capability_major_ != 0;
+}
+
+bool DeviceDescription::rocm_amdgpu_isa_version(int *version) const {
+  *version = rocm_amdgpu_isa_version_;
+  return rocm_amdgpu_isa_version_ != 0;
 }
 
 bool ThreadDimOk(const DeviceDescription &device_description,
@@ -234,6 +239,4 @@ uint64 CalculateRegisterLimitForTargetOccupancy(
   return 0;
 }
 
-
-}  // namespace gputools
-}  // namespace perftools
+}  // namespace stream_executor

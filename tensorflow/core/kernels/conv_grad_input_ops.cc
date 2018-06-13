@@ -43,10 +43,10 @@ limitations under the License.
 #include "tensorflow/core/util/use_cudnn.h"
 #include "tensorflow/core/util/work_sharder.h"
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/kernels/conv_ops_gpu.h"
 #include "tensorflow/core/platform/stream_executor.h"
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace {
 
@@ -596,7 +596,7 @@ TF_CALL_double(REGISTER_CPU_KERNELS);
 #undef REGISTER_CPU_KERNELS
 
 // GPU definitions.
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 // The slow version (but compiles for GPU)
 
 // A dummy type to group forward backward data autotune results together.
@@ -604,7 +604,7 @@ struct ConvBackwardDataAutoTuneGroup {
   static string name() { return "ConvBwdData"; }
 };
 typedef AutoTuneSingleton<ConvBackwardDataAutoTuneGroup, ConvParameters,
-                          perftools::gputools::dnn::AlgorithmConfig>
+                          se::dnn::AlgorithmConfig>
     AutoTuneConvBwdData;
 
 // Backprop for input.
@@ -705,9 +705,9 @@ void LaunchConv2DBackpropInputOp<GPUDevice, T>::operator()(
     const Tensor& out_backprop, const Tensor& filter, int row_dilation,
     int col_dilation, int row_stride, int col_stride, const Padding& padding,
     Tensor* in_backprop, TensorFormat data_format) {
-  using perftools::gputools::dnn::AlgorithmConfig;
-  using perftools::gputools::dnn::AlgorithmDesc;
-  using perftools::gputools::dnn::ProfileResult;
+  using se::dnn::AlgorithmConfig;
+  using se::dnn::AlgorithmDesc;
+  using se::dnn::ProfileResult;
 
   std::vector<int32> strides(4, 1);
   std::vector<int32> dilations(4, 1);
@@ -778,8 +778,8 @@ void LaunchConv2DBackpropInputOp<GPUDevice, T>::operator()(
     auto c_ptr = AsDeviceMemory(in_backprop->template flat<T>().data(),
                                 in_backprop->template flat<T>().size());
 
-    auto transpose = perftools::gputools::blas::Transpose::kTranspose;
-    auto no_transpose = perftools::gputools::blas::Transpose::kNoTranspose;
+    auto transpose = se::blas::Transpose::kTranspose;
+    auto no_transpose = se::blas::Transpose::kNoTranspose;
 
     bool blas_launch_status =
         stream
@@ -810,8 +810,8 @@ void LaunchConv2DBackpropInputOp<GPUDevice, T>::operator()(
     auto c_ptr = AsDeviceMemory(in_backprop->template flat<T>().data(),
                                 in_backprop->template flat<T>().size());
 
-    auto transpose = perftools::gputools::blas::Transpose::kTranspose;
-    auto no_transpose = perftools::gputools::blas::Transpose::kNoTranspose;
+    auto transpose = se::blas::Transpose::kTranspose;
+    auto no_transpose = se::blas::Transpose::kNoTranspose;
 
     bool blas_launch_status =
         stream
@@ -841,24 +841,24 @@ void LaunchConv2DBackpropInputOp<GPUDevice, T>::operator()(
   CHECK(padding_rows >= 0 && padding_cols >= 0)
       << "Negative row or col paddings: (" << padding_rows << ", "
       << padding_cols << ")";
-  perftools::gputools::dnn::BatchDescriptor input_desc;
+  se::dnn::BatchDescriptor input_desc;
   input_desc.set_count(dims.batch_size)
       .set_height(GetTensorDim(compatible_input_shape, data_format, 'H'))
       .set_width(GetTensorDim(compatible_input_shape, data_format, 'W'))
       .set_feature_map_count(dims.in_depth)
-      .set_layout(perftools::gputools::dnn::DataLayout::kBatchDepthYX);
-  perftools::gputools::dnn::BatchDescriptor output_desc;
+      .set_layout(se::dnn::DataLayout::kBatchDepthYX);
+  se::dnn::BatchDescriptor output_desc;
   output_desc.set_count(dims.batch_size)
       .set_height(dims.spatial_dims[0].output_size)
       .set_width(dims.spatial_dims[1].output_size)
       .set_feature_map_count(dims.out_depth)
-      .set_layout(perftools::gputools::dnn::DataLayout::kBatchDepthYX);
-  perftools::gputools::dnn::FilterDescriptor filter_desc;
+      .set_layout(se::dnn::DataLayout::kBatchDepthYX);
+  se::dnn::FilterDescriptor filter_desc;
   filter_desc.set_input_filter_height(dims.spatial_dims[0].filter_size)
       .set_input_filter_width(dims.spatial_dims[1].filter_size)
       .set_input_feature_map_count(dims.in_depth)
       .set_output_feature_map_count(dims.out_depth);
-  perftools::gputools::dnn::ConvolutionDescriptor conv_desc;
+  se::dnn::ConvolutionDescriptor conv_desc;
   conv_desc.set_vertical_dilation_rate(dims.spatial_dims[0].dilation)
       .set_horizontal_dilation_rate(dims.spatial_dims[1].dilation)
       .set_vertical_filter_stride(dims.spatial_dims[0].stride)
@@ -933,10 +933,10 @@ void LaunchConv2DBackpropInputOp<GPUDevice, T>::operator()(
       AsDeviceMemory(pre_transformed_in_backprop.template flat<T>().data(),
                      pre_transformed_in_backprop.template flat<T>().size());
 
-  static int64 ConvolveBackwardDataScratchSize = GetCudnnWorkspaceLimit(
+  static int64 ConvolveBackwardDataScratchSize = GetDnnWorkspaceLimit(
       "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32  // 4GB by default
   );
-  CudnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize, ctx);
+  DnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize, ctx);
   int device_id = stream->parent()->device_ordinal();
   DataType dtype = out_backprop.dtype();
   ConvParameters conv_parameters = {
@@ -959,15 +959,17 @@ void LaunchConv2DBackpropInputOp<GPUDevice, T>::operator()(
   AlgorithmConfig algorithm_config;
   if (cudnn_use_autotune && !AutoTuneConvBwdData::GetInstance()->Find(
                                 conv_parameters, &algorithm_config)) {
+#if GOOGLE_CUDA
     std::vector<AlgorithmDesc> algorithms;
     CHECK(stream->parent()->GetConvolveBackwardDataAlgorithms(
-        conv_parameters.ShouldIncludeWinogradNonfusedAlgo<T>(), &algorithms));
+        conv_parameters.ShouldIncludeWinogradNonfusedAlgo<T>(stream->parent()),
+        &algorithms));
     ProfileResult best_result;
     ProfileResult best_result_no_scratch;
     for (auto profile_algorithm : algorithms) {
       // TODO(zhengxq): profile each algorithm multiple times to better
       // accuracy.
-      CudnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
+      DnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
                                               ctx);
       ProfileResult profile_result;
       bool cudnn_launch_status =
@@ -1001,6 +1003,30 @@ void LaunchConv2DBackpropInputOp<GPUDevice, T>::operator()(
       algorithm_config.set_algorithm_no_scratch(
           best_result_no_scratch.algorithm());
     }
+#elif TENSORFLOW_USE_ROCM
+    LOG(INFO) << "running auto-tune for Backward-Data";
+    ProfileResult profile_result;
+    // MIOpen has its own Find and autotuner so use it here, passing
+    // default AlgorithmConfig to force a search
+    DnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
+                                              ctx);
+    bool miopen_find_status =
+      stream
+          ->ThenConvolveBackwardDataWithAlgorithm(
+              filter_desc, filter_ptr, output_desc, out_backprop_ptr,
+              conv_desc, input_desc, &in_backprop_ptr, &scratch_allocator,
+              AlgorithmConfig(), &profile_result)
+          .ok();
+    OP_REQUIRES(ctx, miopen_find_status && profile_result.is_valid() &&
+                           !profile_result.algorithm().is_default(),
+                errors::NotFound("Failed to find backwards-data algorithm!"));
+
+
+    algorithm_config.set_algorithm(profile_result.algorithm());
+    algorithm_config.set_algorithm_scratch_size(profile_result.scratch_size());
+    // TODO - Add support for no-scratch algorithm
+    algorithm_config.set_algorithm_no_scratch(AlgorithmDesc());
+#endif
     AutoTuneConvBwdData::GetInstance()->Insert(conv_parameters,
                                                algorithm_config);
   }
@@ -1112,6 +1138,6 @@ REGISTER_KERNEL_BUILDER(Name("Conv2DBackpropInput")
                             .TypeConstraint<Eigen::half>("T")
                             .HostMemory("input_sizes"),
                         Conv2DSlowBackpropInputOp<GPUDevice, Eigen::half>);
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow

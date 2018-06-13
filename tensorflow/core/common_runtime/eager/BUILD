@@ -10,10 +10,10 @@ licenses(["notice"])  # Apache 2.0
 load(
     "//tensorflow:tensorflow.bzl",
     "tf_cc_test",
-    "tf_cuda_library",
+    "tf_gpu_library",
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "eager_executor",
     srcs = [
         "eager_executor.cc",
@@ -32,7 +32,7 @@ tf_cuda_library(
     ],
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "context",
     srcs = [
         "context.cc",
@@ -54,7 +54,23 @@ tf_cuda_library(
     ],
 )
 
-tf_cuda_library(
+tf_gpu_library(
+    name = "eager_operation",
+    srcs = [
+        "eager_operation.cc",
+    ],
+    hdrs = [
+        "eager_operation.h",
+    ],
+    visibility = ["//tensorflow:internal"],
+    deps = [
+        ":context",
+        ":tensor_handle",
+        "//tensorflow/c/eager:runtime",
+    ],
+)
+
+tf_gpu_library(
     name = "tensor_handle",
     srcs = [
         "tensor_handle.cc",
@@ -77,7 +93,7 @@ tf_cuda_library(
     ],
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "copy_to_device_node",
     hdrs = [
         "copy_to_device_node.h",
@@ -97,7 +113,7 @@ tf_cuda_library(
     ],
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "kernel_and_device",
     srcs = [
         "kernel_and_device.cc",
@@ -138,26 +154,15 @@ tf_cc_test(
 cc_library(
     name = "execute",
     srcs = ["execute.cc"],
-    hdrs = ["execute.h"],
+    hdrs = [
+        "execute.h",
+        "execute_node.h",
+    ],
     deps = [
         ":context",
         ":copy_to_device_node",
-        ":kernel_and_device",
-        ":tensor_handle",
-        "//tensorflow/core:core_cpu_lib",
-        "//tensorflow/core:framework",
-        "//tensorflow/core:lib",
-        "//tensorflow/core:protos_all_cc",
-    ],
-)
-
-cc_library(
-    name = "execute_node",
-    hdrs = ["execute_node.h"],
-    deps = [
-        ":context",
         ":eager_executor",
-        ":execute",
+        ":eager_operation",
         ":kernel_and_device",
         ":tensor_handle",
         "//tensorflow/core:core_cpu_lib",

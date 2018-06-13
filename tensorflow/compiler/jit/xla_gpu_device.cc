@@ -14,7 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 // Registers the XLA_GPU device, which is an XlaDevice instantiation that runs
-// operators using XLA via the XLA "CUDA" (GPU) backend.
+// operators using XLA via the XLA "CUDA" or "ROCM" (GPU) backend.
 
 #include "tensorflow/compiler/jit/kernels/xla_launch_op.h"
 #include "tensorflow/compiler/jit/xla_device.h"
@@ -46,6 +46,8 @@ Status XlaGpuDeviceFactory::CreateDevices(const SessionOptions& options,
 
   std::unique_ptr<XlaDevice> device;
   Status status =
+      // XXX FIXME devise a way to cope with multiple platforms
+      //XlaDevice::Create("CUDA", DEVICE_XLA_GPU, 0, DEVICE_GPU_XLA_JIT, options,
       XlaDevice::Create("CUDA", DEVICE_XLA_GPU, 0, DEVICE_GPU_XLA_JIT, options,
                         name_prefix, registration,
                         /*transfer_as_literal=*/false, &device);
@@ -54,6 +56,15 @@ Status XlaGpuDeviceFactory::CreateDevices(const SessionOptions& options,
     VLOG(1) << "Failed to create XLA_GPU device: " << status;
     return Status::OK();
   }
+
+  // TODO(b/78468222): Uncomment after fixing this bug
+  // status = device->CreateAndSetGpuDeviceInfo();
+  // if (!status.ok()) {
+  //  errors::AppendToMessage(&status, "while setting up ", DEVICE_GPU_XLA_JIT,
+  //                          " device");
+  //  return status;
+  // }
+
   devices->push_back(device.release());
   return Status::OK();
 }

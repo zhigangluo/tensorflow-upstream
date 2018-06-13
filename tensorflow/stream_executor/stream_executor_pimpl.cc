@@ -39,8 +39,7 @@ namespace {
 bool FLAGS_check_device_leaks = false;
 }  // namespace
 
-namespace perftools {
-namespace gputools {
+namespace stream_executor {
 namespace {
 
 string StackTraceIfVLOG10() {
@@ -72,6 +71,9 @@ internal::StreamExecutorInterface *StreamExecutorImplementationFromPlatformKind(
       break;
     case PlatformKind::kOpenCL:
       factory = *internal::MakeOpenCLExecutorImplementation();
+      break;
+    case PlatformKind::kROCm:
+      factory = *internal::MakeROCMExecutorImplementation();
       break;
     case PlatformKind::kHost:
       factory = internal::MakeHostExecutorImplementation;
@@ -176,6 +178,8 @@ StreamExecutor::StreamExecutor(
       tracing_enabled_(false) {
   if (port::Lowercase(platform_->Name()) == "cuda") {
     platform_kind_ = PlatformKind::kCuda;
+  } else if (port::Lowercase(platform_->Name()) == "rocm") {
+    platform_kind_ = PlatformKind::kROCm;
   } else if (port::Lowercase(platform_->Name()) == "opencl") {
     platform_kind_ = PlatformKind::kOpenCL;
   } else if (port::Lowercase(platform_->Name()) == "host") {
@@ -351,7 +355,7 @@ bool StreamExecutor::GetBlasGemmAlgorithms(
 
 port::StatusOr<std::unique_ptr<dnn::RnnDescriptor>>
 StreamExecutor::createRnnDescriptor(
-    int num_layers, int hidden_size, int input_size,
+    int num_layers, int hidden_size, int input_size, int batch_size,
     dnn::RnnInputMode input_mode, dnn::RnnDirectionMode direction_mode,
     dnn::RnnMode rnn_mode, dnn::DataType data_type,
     const dnn::AlgorithmConfig &algorithm_config, float dropout, uint64 seed,
@@ -362,8 +366,9 @@ StreamExecutor::createRnnDescriptor(
                         "Fail to find the dnn implementation.");
   }
   return dnn_support->createRnnDescriptor(
-      num_layers, hidden_size, input_size, input_mode, direction_mode, rnn_mode,
-      data_type, algorithm_config, dropout, seed, state_allocator);
+      num_layers, hidden_size, input_size, batch_size, input_mode,
+      direction_mode, rnn_mode, data_type, algorithm_config, dropout, seed,
+      state_allocator);
 }
 
 port::StatusOr<std::unique_ptr<dnn::RnnSequenceTensorDescriptor>>
@@ -788,5 +793,4 @@ internal::StreamExecutorInterface *StreamExecutor::implementation() {
   return implementation_->GetUnderlyingExecutor();
 }
 
-}  // namespace gputools
-}  // namespace perftools
+}  // namespace stream_executor

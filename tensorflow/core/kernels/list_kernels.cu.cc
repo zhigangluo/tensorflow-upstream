@@ -16,7 +16,7 @@ limitations under the License.
 #include <limits>
 
 #define EIGEN_USE_THREADS
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define EIGEN_USE_GPU
 
 #include "tensorflow/core/kernels/list_kernels.h"
@@ -51,6 +51,21 @@ REGISTER_TENSOR_LIST_STACK_GPU(bool);
 
 #undef REGISTER_TENSOR_LIST_STACK_GPU
 
+#define REGISTER_TENSOR_LIST_PUSH_BACK_BATCH_GPU(T)               \
+  REGISTER_KERNEL_BUILDER(Name("TensorListPushBackBatch")         \
+                              .TypeConstraint<T>("element_dtype") \
+                              .Device(DEVICE_GPU),                \
+                          TensorListPushBackBatch<GPUDevice, T>)
+
+TF_CALL_GPU_NUMBER_TYPES(REGISTER_TENSOR_LIST_PUSH_BACK_BATCH_GPU);
+REGISTER_TENSOR_LIST_PUSH_BACK_BATCH_GPU(bfloat16);
+TF_CALL_complex64(REGISTER_TENSOR_LIST_PUSH_BACK_BATCH_GPU);
+TF_CALL_complex128(REGISTER_TENSOR_LIST_PUSH_BACK_BATCH_GPU);
+TF_CALL_int64(REGISTER_TENSOR_LIST_PUSH_BACK_BATCH_GPU);
+REGISTER_TENSOR_LIST_PUSH_BACK_BATCH_GPU(bool);
+
+#undef REGISTER_TENSOR_LIST_PUSH_BACK_BATCH_GPU
+
 #define REGISTER_TENSOR_LIST_FROM_TENSOR_GPU(T)                   \
   REGISTER_KERNEL_BUILDER(Name("TensorListFromTensor")            \
                               .TypeConstraint<T>("element_dtype") \
@@ -76,4 +91,4 @@ REGISTER_UNARY_VARIANT_UNARY_OP_FUNCTION(ZEROS_LIKE_VARIANT_UNARY_OP,
                                          TensorListZerosLike<GPUDevice>);
 
 }  // namespace tensorflow
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

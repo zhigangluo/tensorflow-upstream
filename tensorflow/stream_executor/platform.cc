@@ -22,13 +22,14 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform/logging.h"
 #include "tensorflow/stream_executor/stream_executor_pimpl.h"
 
-namespace perftools {
-namespace gputools {
+namespace stream_executor {
 
 string PlatformKindString(PlatformKind kind) {
   switch (kind) {
     case PlatformKind::kCuda:
       return "CUDA";
+    case PlatformKind::kROCm:
+      return "ROCm";
     case PlatformKind::kOpenCL:
       return "OpenCL";
     case PlatformKind::kHost:
@@ -53,6 +54,7 @@ PlatformKind PlatformKindFromString(string kind) {
 bool PlatformIsRunnable(PlatformKind kind) {
   switch (kind) {
     case PlatformKind::kCuda:
+    case PlatformKind::kROCm:
     case PlatformKind::kOpenCL:
     case PlatformKind::kHost:
       return true;
@@ -64,6 +66,7 @@ bool PlatformIsRunnable(PlatformKind kind) {
 bool PlatformIsRunnableOnDevice(PlatformKind kind) {
   switch (kind) {
     case PlatformKind::kCuda:
+    case PlatformKind::kROCm:
     case PlatformKind::kOpenCL:
       return true;
     default:
@@ -135,5 +138,4 @@ port::Status Platform::EnablePeerAccess() {
   return port::Status::OK();
 }
 
-}  // namespace gputools
-}  // namespace perftools
+}  // namespace stream_executor

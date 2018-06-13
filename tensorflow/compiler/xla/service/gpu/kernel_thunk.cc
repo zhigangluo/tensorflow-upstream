@@ -23,17 +23,17 @@ limitations under the License.
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/stream_executor_no_cuda.h"
 
-namespace se = ::perftools::gputools;
-
 namespace xla {
 namespace gpu {
 
 KernelThunk::KernelThunk(
     tensorflow::gtl::ArraySlice<const BufferAllocation*> args,
-    const string& kernel_name, const HloInstruction* hlo_instruction)
+    const string& kernel_name, const HloInstruction* hlo_instruction,
+    int unroll_factor)
     : Thunk(Kind::kKernel, hlo_instruction),
       args_(args.begin(), args.end()),
-      kernel_name_(kernel_name) {}
+      kernel_name_(kernel_name),
+      unroll_factor_(unroll_factor) {}
 
 tensorflow::Status KernelThunk::Initialize(const GpuExecutable& executable) {
   tensorflow::mutex_lock lock(mutex_);
@@ -43,16 +43,19 @@ tensorflow::Status KernelThunk::Initialize(const GpuExecutable& executable) {
   }
 
   loader_spec_.reset(new se::MultiKernelLoaderSpec(args_.size()));
-  tensorflow::StringPiece ptx = executable.ptx();
+  tensorflow::StringPiece text = executable.text();
   // Convert tensorflow::StringPiece to se::port::StringPiece because
   // StreamExecutor uses the latter.
   loader_spec_->AddCudaPtxInMemory(
-      se::port::StringPiece(ptx.data(), ptx.size()), kernel_name_);
+      se::port::StringPiece(text.data(), text.size()), kernel_name_);
 
+  // XXX figure out how to cope with both CUDA and ROCm platforms
+#if GOOGLE_CUDA
   if (!executable.cubin().empty()) {
     loader_spec_->AddCudaCubinInMemory(
         reinterpret_cast<const char*>(executable.cubin().data()), kernel_name_);
   }
+#endif
 
   return tensorflow::Status::OK();
 }

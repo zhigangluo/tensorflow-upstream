@@ -23,6 +23,7 @@ package(
 )
 
 load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda_is_configured")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm_is_configured")
 load("//tensorflow/compiler/xla:xla.bzl", "xla_proto_library")
 
 cc_library(
@@ -140,6 +141,8 @@ cc_library(
         "xla_resource.cc",
         "xla_cpu_backend.cc",
     ] + if_cuda_is_configured([
+        "xla_gpu_backend.cc",
+    ]) + if_rocm_is_configured([
         "xla_gpu_backend.cc",
     ]),
     hdrs = [
@@ -412,10 +415,9 @@ cc_library(
     hdrs = ["functionalize_control_flow.h"],
     deps = [
         ":tf2xla_util",
-        "//tensorflow/compiler/jit:graph_to_functiondef",
         "//tensorflow/compiler/jit:union_find",
         "//tensorflow/compiler/tf2xla:dump_graph",
-        "//tensorflow/compiler/tf2xla/ops:functional_ops",
+        "//tensorflow/compiler/tf2xla/ops:xla_ops",
         "//tensorflow/compiler/xla:status_macros",
         "//tensorflow/compiler/xla:util",
         "//tensorflow/core:core_cpu",
@@ -437,7 +439,7 @@ tf_cc_test(
         "//tensorflow/cc:function_ops",
         "//tensorflow/cc:ops",
         "//tensorflow/cc:resource_variable_ops",
-        "//tensorflow/compiler/tf2xla/cc:functional_ops",
+        "//tensorflow/compiler/tf2xla/cc:xla_ops",
         "//tensorflow/compiler/xla:status_macros",
         "//tensorflow/core:core_cpu",
         "//tensorflow/core:core_cpu_internal",

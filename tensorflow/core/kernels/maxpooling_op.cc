@@ -28,6 +28,7 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_slice.h"
+#include "tensorflow/core/kernels/bounds_check.h"
 #include "tensorflow/core/kernels/conv_2d.h"
 #include "tensorflow/core/kernels/eigen_pooling.h"
 #include "tensorflow/core/kernels/ops_util.h"
@@ -38,13 +39,12 @@ limitations under the License.
 #include "tensorflow/core/util/padding.h"
 #include "tensorflow/core/util/tensor_format.h"
 #include "tensorflow/core/util/use_cudnn.h"
-#include "tensorflow/core/kernels/bounds_check.h"
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/kernels/maxpooling_op_gpu.h"
 #include "tensorflow/core/kernels/pooling_ops_common_gpu.h"
 #include "tensorflow/core/platform/stream_executor.h"
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace tensorflow {
 
@@ -174,7 +174,8 @@ static void SpatialMaxPoolWithArgMaxHelper(
         // Although this check is in the inner loop, it is worth its value
         // so we don't end up with memory corruptions. Our benchmark shows that
         // the performance impact is quite small
-        //CHECK(input_backprop_index >= in_start && input_backprop_index < in_end)
+        // CHECK(input_backprop_index >= in_start && input_backprop_index <
+        // in_end)
         FastBoundsCheck(input_backprop_index - in_start, in_end - in_start);
         input_backprop_flat(input_backprop_index) += out_backprop_flat(index);
       }
@@ -303,7 +304,7 @@ class MaxPoolingGradOp : public OpKernel {
   TensorFormat data_format_;
 };
 
-#ifdef GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename T>
 static void MaxPoolingBackwardCustomKernel(
@@ -403,10 +404,10 @@ class MaxPoolingGradOp<Eigen::GpuDevice, T> : public OpKernel {
                     "Pooling is not yet supported on the batch dimension."));
 
     if (use_dnn_) {
-      DnnPoolingGradOp<T>::Compute(
-          context, perftools::gputools::dnn::PoolingMode::kMaximum, ksize,
-          stride, padding_, data_format_, &tensor_in, &tensor_out, out_backprop,
-          output_shape, propagate_nans_);
+      DnnPoolingGradOp<T>::Compute(context, se::dnn::PoolingMode::kMaximum,
+                                   ksize, stride, padding_, data_format_,
+                                   &tensor_in, &tensor_out, out_backprop,
+                                   output_shape, propagate_nans_);
     } else {
       CHECK(data_format_ == FORMAT_NHWC)
           << "Non-Cudnn MaxPoolGrad only supports NHWC format";
@@ -424,7 +425,7 @@ class MaxPoolingGradOp<Eigen::GpuDevice, T> : public OpKernel {
   bool propagate_nans_;
 };
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 // The operation to compute gradient of MaxPool gradients.
 // It takes three inputs:
@@ -633,7 +634,7 @@ class MaxPoolingGradGradOp : public OpKernel {
   TensorFormat data_format_;
 };
 
-#ifdef GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <class T>
 class MaxPoolingGradGradOp<Eigen::GpuDevice, T> : public OpKernel {
@@ -730,7 +731,7 @@ class MaxPoolingGradGradOp<Eigen::GpuDevice, T> : public OpKernel {
   bool use_dnn_;
 };
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 template <typename Device, typename T>
 struct LaunchMaxPoolingNoMask;
@@ -873,7 +874,7 @@ template <typename T>
 struct LaunchMaxPoolingWithArgmax<CPUDevice, T> {
   static void launch(OpKernelContext* context, const PoolParameters& params,
                      const Tensor& input, Tensor* output, Tensor* argmax,
-                     bool propogate_nans) {
+                     bool propagate_nans) {
     Tensor unused;
     SpatialMaxPoolWithArgMaxHelper<CPUDevice, T>(
         context, output, argmax, nullptr, input, unused, params);
@@ -1083,7 +1084,7 @@ class MaxPoolingGradGradWithArgmaxOp : public OpKernel {
   Padding padding_;
 };
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 template <typename T>
 class MaxPoolingNoMaskOp<GPUDevice, T> : public OpKernel {
  public:
@@ -1135,10 +1136,9 @@ class MaxPoolingNoMaskOp<GPUDevice, T> : public OpKernel {
 
     // These is_int8x4 checks avoid linker errors for missing qint8 kernels.
     if (!is_int8x4 && use_dnn_ && data_format_ == FORMAT_NCHW) {
-      DnnPoolingOp<T>::Compute(context,
-                               perftools::gputools::dnn::PoolingMode::kMaximum,
-                               ksize_, stride_, padding_, data_format_,
-                               tensor_in, out_shape, propagate_nans_);
+      DnnPoolingOp<T>::Compute(context, se::dnn::PoolingMode::kMaximum, ksize_,
+                               stride_, padding_, data_format_, tensor_in,
+                               out_shape, propagate_nans_);
     } else {
       Tensor* output = nullptr;
       OP_REQUIRES_OK(context, context->allocate_output(0, out_shape, &output));
@@ -1239,9 +1239,8 @@ class MaxPoolingNoMaskV2Op<GPUDevice, T> : public OpKernel {
         ShapeFromFormat(data_format_, params.tensor_in_batch, params.out_height,
                         params.out_width, params.depth);
     if (use_dnn_ && data_format_ == FORMAT_NCHW) {
-      DnnPoolingOp<T>::Compute(context,
-                               perftools::gputools::dnn::PoolingMode::kMaximum,
-                               ksize, stride, padding_, data_format_, tensor_in,
+      DnnPoolingOp<T>::Compute(context, se::dnn::PoolingMode::kMaximum, ksize,
+                               stride, padding_, data_format_, tensor_in,
                                out_shape, propagate_nans_);
     } else {
       CHECK(data_format_ == FORMAT_NHWC)
@@ -1347,7 +1346,7 @@ struct LaunchMaxPoolingGradGradWithArgmax<Eigen::GpuDevice, T> {
   }
 };
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define REGISTER_MAX_POOL_KERNELS(D, T)                                  \
   REGISTER_KERNEL_BUILDER(                                               \
@@ -1394,7 +1393,7 @@ TF_CALL_REAL_NUMBER_TYPES(REGISTER_CPU_ONLY_POOL_KERNELS);
 TF_CALL_REAL_NUMBER_TYPES(REGISTER_CPU_MAX_POOL_KERNELS);
 #undef REGISTER_CPU_KERNELS
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 // Forward declarations for the functor specializations for GPU.
 namespace functor {
@@ -1473,7 +1472,7 @@ REGISTER_KERNEL_BUILDER(Name("MaxPoolV2")
 
 #undef REGISTER_GPU_ONLY_POOL_KERNELS
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #undef REGISTER_MAX_POOL_KERNELS
 

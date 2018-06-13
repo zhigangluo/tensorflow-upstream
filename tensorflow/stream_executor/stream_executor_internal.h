@@ -45,8 +45,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/trace_listener.h"
 #include "tensorflow/stream_executor/lib/inlined_vector.h"
 
-namespace perftools {
-namespace gputools {
+namespace stream_executor {
 
 class Stream;
 class Timer;
@@ -101,19 +100,20 @@ class StreamInterface {
   // Default destructor for the abstract interface.
   virtual ~StreamInterface() {}
 
-  // Returns the CUDA stream associated with this platform's stream
+  // Returns the GPU stream associated with this platform's stream
   // implementation.
   //
-  // WARNING: checks that the underlying platform is, in fact, CUDA, causing a
-  // fatal error if it is not. This hack is made available solely for use from
-  // distbelief code, which temporarily has strong ties to CUDA as a platform.
-  virtual void *CudaStreamHack() { return nullptr; }
+  // WARNING: checks that the underlying platform is, in fact, CUDA or ROCm,
+  // causing a fatal error if it is not. This hack is made available solely for
+  // use from distbelief code, which temporarily has strong ties to CUDA or
+  // ROCm as a platform.
+  virtual void *GPUStreamHack() { return nullptr; }
 
-  // See the above comment on CudaStreamHack -- this further breaks abstraction
-  // for Eigen within distbelief, which has strong ties to CUDA as a platform,
-  // and a historical attachment to a programming model which takes a
+  // See the above comment on GPUStreamHack -- this further breaks abstraction
+  // for Eigen within distbelief, which has strong ties to CUDA or ROCm as a
+  // platform, and a historical attachment to a programming model which takes a
   // stream-slot rather than a stream-value.
-  virtual void **CudaStreamMemberHack() { return nullptr; }
+  virtual void **GPUStreamMemberHack() { return nullptr; }
 
  private:
   SE_DISALLOW_COPY_AND_ASSIGN(StreamInterface);
@@ -316,13 +316,14 @@ class StreamExecutorInterface {
   virtual std::unique_ptr<StreamInterface> GetStreamImplementation() = 0;
   virtual std::unique_ptr<TimerInterface> GetTimerImplementation() = 0;
 
-  // Returns the CUDA context associated with this StreamExecutor platform
-  // implementation.
+  // Returns the CUDA or ROCm context associated with this StreamExecutor
+  // platform implementation.
   //
-  // WARNING: checks that the underlying platform is, in fact, CUDA, causing a
-  // fatal error if it is not. This hack is made available solely for use from
-  // distbelief code, which temporarily has strong ties to CUDA as a platform.
-  virtual void *CudaContextHack() { return nullptr; }
+  // WARNING: checks that the underlying platform is, in fact, CUDA or ROCm,
+  // causing a fatal error if it is not. This hack is made available solely for
+  // use from distbelief code, which temporarily has strong ties to CUDA or ROCm
+  // as a platform.
+  virtual void *GPUContextHack() { return nullptr; }
 
  private:
   SE_DISALLOW_COPY_AND_ASSIGN(StreamExecutorInterface);
@@ -337,13 +338,14 @@ using KernelFactory = std::function<KernelInterface*()>;
 
 StreamExecutorFactory* MakeCUDAExecutorImplementation();
 
+StreamExecutorFactory* MakeROCMExecutorImplementation();
+
 StreamExecutorFactory* MakeOpenCLExecutorImplementation();
 
 extern StreamExecutorFactory MakeHostExecutorImplementation;
 
 
 }  // namespace internal
-}  // namespace gputools
-}  // namespace perftools
+}  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_STREAM_EXECUTOR_INTERNAL_H_

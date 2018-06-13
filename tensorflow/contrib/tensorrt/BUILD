@@ -11,15 +11,16 @@ exports_files(["LICENSE"])
 
 load(
     "//tensorflow:tensorflow.bzl",
+    "py_test",
     "tf_cc_test",
     "tf_copts",
-    "tf_cuda_library",
+    "tf_gpu_library",
     "tf_custom_op_library",
     "tf_custom_op_library_additional_deps",
     "tf_gen_op_libs",
     "tf_gen_op_wrapper_py",
 )
-load("//tensorflow:tensorflow.bzl", "tf_cuda_cc_test")
+load("//tensorflow:tensorflow.bzl", "tf_gpu_cc_test")
 load("//tensorflow:tensorflow.bzl", "tf_custom_op_py_library")
 load("//tensorflow:tensorflow.bzl", "tf_py_wrap_cc")
 load(
@@ -27,7 +28,7 @@ load(
     "if_tensorrt",
 )
 
-tf_cuda_cc_test(
+tf_gpu_cc_test(
     name = "tensorrt_test_cc",
     size = "small",
     srcs = ["tensorrt_test.cc"],
@@ -59,7 +60,7 @@ tf_custom_op_library(
     ]),
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "trt_shape_function",
     srcs = ["shape_fn/trt_shfn.cc"],
     hdrs = ["shape_fn/trt_shfn.h"],
@@ -106,7 +107,7 @@ tf_gen_op_libs(
     ]),
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "trt_logging",
     srcs = ["log/trt_logger.cc"],
     hdrs = ["log/trt_logger.h"],
@@ -139,6 +140,7 @@ tf_custom_op_py_library(
     ]),
     srcs_version = "PY2AND3",
     deps = [
+        "//tensorflow/contrib/util:util_py",
         "//tensorflow/python:framework_for_generated_wrappers",
         "//tensorflow/python:resources",
     ],
@@ -173,6 +175,7 @@ py_library(
     srcs_version = "PY2AND3",
     deps = [
         ":wrap_conversion",
+        "//tensorflow/python:tf_optimizer",
     ],
 )
 
@@ -188,7 +191,7 @@ tf_py_wrap_cc(
     ],
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "trt_resources",
     srcs = [
         "resources/trt_int8_calibrator.cc",
@@ -210,7 +213,7 @@ tf_cuda_library(
 )
 
 # Library for the node-level conversion portion of TensorRT operation creation
-tf_cuda_library(
+tf_gpu_library(
     name = "trt_conversion",
     srcs = [
         "convert/convert_graph.cc",
@@ -270,5 +273,21 @@ tf_cc_test(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
+    ],
+)
+
+py_test(
+    name = "tf_trt_integration_test",
+    srcs = ["test/tf_trt_integration_test.py"],
+    main = "test/tf_trt_integration_test.py",
+    srcs_version = "PY2AND3",
+    tags = [
+        "manual",
+        "notap",
+    ],
+    deps = [
+        ":init_py",
+        "//tensorflow/python:client_testlib",
+        "//tensorflow/python:framework_test_lib",
     ],
 )

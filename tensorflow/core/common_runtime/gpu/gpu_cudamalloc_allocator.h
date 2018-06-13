@@ -32,7 +32,7 @@ namespace tensorflow {
 class GPUcudaMallocAllocator : public VisitableAllocator {
  public:
   explicit GPUcudaMallocAllocator(VisitableAllocator* allocator,
-                                  CudaGpuId cuda_gpu_id);
+                                  PhysicalGpuId physical_gpu_id);
   ~GPUcudaMallocAllocator() override;
   string Name() override { return "gpu_debug"; }
   void* AllocateRaw(size_t alignment, size_t num_bytes) override;
@@ -44,7 +44,7 @@ class GPUcudaMallocAllocator : public VisitableAllocator {
  private:
   VisitableAllocator* base_allocator_ = nullptr;  // owned
 
-  perftools::gputools::StreamExecutor* stream_exec_;  // Not owned.
+  se::StreamExecutor* stream_exec_;  // Not owned.
 
   TF_DISALLOW_COPY_AND_ASSIGN(GPUcudaMallocAllocator);
 };

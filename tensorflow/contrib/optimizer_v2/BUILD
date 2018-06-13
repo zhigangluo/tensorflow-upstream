@@ -9,7 +9,7 @@ licenses(["notice"])  # Apache 2.0
 exports_files(["LICENSE"])
 
 load("//tensorflow:tensorflow.bzl", "py_test")
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
+load("//tensorflow:tensorflow.bzl", "gpu_py_test")
 
 filegroup(
     name = "all_files",
@@ -48,6 +48,7 @@ py_library(
     srcs_version = "PY2AND3",
     deps = [
         "//tensorflow/python:control_flow_ops",
+        "//tensorflow/python:distribute",
         "//tensorflow/python:framework",
         "//tensorflow/python:math_ops",
         "//tensorflow/python:resource_variable_ops",
@@ -58,7 +59,7 @@ py_library(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "adadelta_test",
     size = "medium",
     srcs = ["adadelta_test.py"],
@@ -76,7 +77,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "adagrad_test",
     size = "small",
     srcs = ["adagrad_test.py"],
@@ -92,7 +93,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "adam_test",
     size = "small",
     srcs = ["adam_test.py"],
@@ -108,13 +109,12 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "checkpointable_utils_test",
     srcs = ["checkpointable_utils_test.py"],
     additional_deps = [
         ":training",
         "@six_archive//:six",
-        "//tensorflow/contrib/eager/python:checkpointable_utils",
         "//tensorflow/python:constant_op",
         "//tensorflow/python:dtypes",
         "//tensorflow/python:framework_ops",
@@ -134,7 +134,7 @@ cuda_py_test(
     tags = ["notsan"],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "gradient_descent_test",
     size = "medium",
     srcs = ["gradient_descent_test.py"],
@@ -151,7 +151,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "momentum_test",
     size = "medium",
     srcs = ["momentum_test.py"],
@@ -169,7 +169,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "optimizer_v2_test",
     size = "medium",
     srcs = ["optimizer_v2_test.py"],
@@ -187,7 +187,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "rmsprop_test",
     size = "small",
     srcs = ["rmsprop_test.py"],
@@ -202,4 +202,5 @@ cuda_py_test(
         "//tensorflow/python:client_testlib",
         "//third_party/py/numpy",
     ],
+    tags = ["optonly"],
 )

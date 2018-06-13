@@ -31,9 +31,9 @@ limitations under the License.
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/util/work_sharder.h"
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/platform/stream_executor.h"
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace tensorflow {
 
@@ -241,39 +241,39 @@ struct LaunchBatchMatMul<CPUDevice, Scalar> {
   }
 };
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace {
 template <typename T>
-perftools::gputools::DeviceMemory<T> AsDeviceMemory(const T* cuda_memory) {
-  perftools::gputools::DeviceMemoryBase wrapped(const_cast<T*>(cuda_memory));
-  perftools::gputools::DeviceMemory<T> typed(wrapped);
+se::DeviceMemory<T> AsDeviceMemory(const T* gpu_memory) {
+  se::DeviceMemoryBase wrapped(const_cast<T*>(gpu_memory));
+  se::DeviceMemory<T> typed(wrapped);
   return typed;
 }
 
-class CublasScratchAllocator : public perftools::gputools::ScratchAllocator {
+class BlasScratchAllocator : public se::ScratchAllocator {
  public:
-  using Stream = ::perftools::gputools::Stream;
-  using DeviceMemoryBytes = ::perftools::gputools::DeviceMemory<uint8>;
+  using Stream = se::Stream;
+  using DeviceMemoryBytes = se::DeviceMemory<uint8>;
 
-  CublasScratchAllocator(OpKernelContext* context) : context_(context) {}
+  BlasScratchAllocator(OpKernelContext* context) : context_(context) {}
 
   int64 GetMemoryLimitInBytes(Stream* stream) override { return -1; }
 
-  perftools::gputools::port::StatusOr<DeviceMemoryBytes> AllocateBytes(
+  se::port::StatusOr<DeviceMemoryBytes> AllocateBytes(
       Stream* stream, int64 byte_size) override {
     Tensor temporary_memory;
 
     Status allocation_status(context_->allocate_temp(
         DT_UINT8, TensorShape({byte_size}), &temporary_memory));
     if (!allocation_status.ok()) {
-      return perftools::gputools::port::StatusOr<DeviceMemoryBytes>(
+      return se::port::StatusOr<DeviceMemoryBytes>(
           DeviceMemoryBytes::MakeFromByteSize(nullptr, 0));
     }
     // Hold the reference of the allocated tensors until the end of the
     // allocator.
     allocated_tensors_.push_back(temporary_memory);
-    return perftools::gputools::port::StatusOr<DeviceMemoryBytes>(
+    return se::port::StatusOr<DeviceMemoryBytes>(
         DeviceMemoryBytes::MakeFromByteSize(
             temporary_memory.flat<uint8>().data(),
             temporary_memory.flat<uint8>().size()));
@@ -289,12 +289,11 @@ template <typename Scalar>
 struct LaunchBatchMatMul<GPUDevice, Scalar> {
   static void Launch(OpKernelContext* context, const Tensor& in_x,
                      const Tensor& in_y, bool adj_x, bool adj_y, Tensor* out) {
-    constexpr perftools::gputools::blas::Transpose kTranspose =
-        is_complex<Scalar>::value
-            ? perftools::gputools::blas::Transpose::kConjugateTranspose
-            : perftools::gputools::blas::Transpose::kTranspose;
-    perftools::gputools::blas::Transpose trans[] = {
-        perftools::gputools::blas::Transpose::kNoTranspose, kTranspose};
+    constexpr se::blas::Transpose kTranspose =
+        is_complex<Scalar>::value ? se::blas::Transpose::kConjugateTranspose
+                                  : se::blas::Transpose::kTranspose;
+    se::blas::Transpose trans[] = {se::blas::Transpose::kNoTranspose,
+                                   kTranspose};
     const uint64 m = in_x.dim_size(adj_x ? 2 : 1);
     const uint64 k = in_x.dim_size(adj_x ? 1 : 2);
     const uint64 n = in_y.dim_size(adj_y ? 1 : 2);
@@ -305,7 +304,7 @@ struct LaunchBatchMatMul<GPUDevice, Scalar> {
     auto* stream = context->op_device_context()->stream();
     OP_REQUIRES(context, stream, errors::Internal("No GPU stream available."));
 
-    typedef perftools::gputools::DeviceMemory<Scalar> DeviceMemoryType;
+    typedef se::DeviceMemory<Scalar> DeviceMemoryType;
     std::vector<DeviceMemoryType> a_device_memory;
     std::vector<DeviceMemoryType> b_device_memory;
     std::vector<DeviceMemoryType> c_device_memory;
@@ -330,7 +329,7 @@ struct LaunchBatchMatMul<GPUDevice, Scalar> {
       c_ptrs.push_back(&c_device_memory.back());
     }
 
-    // Cublas does
+    // Blas does
     // C = A x B
     // where A, B and C are assumed to be in column major.
     // We want the output to be in row-major, so we can compute
@@ -340,19 +339,16 @@ struct LaunchBatchMatMul<GPUDevice, Scalar> {
       // This is a regular matrix*matrix or matrix*vector multiply. Avoid the
       // overhead of the scratch allocator and the batch interface.
       if (n == 1 &&
-          blas_transpose_b !=
-              perftools::gputools::blas::Transpose::kConjugateTranspose &&
-          blas_transpose_a !=
-              perftools::gputools::blas::Transpose::kConjugateTranspose) {
+          blas_transpose_b != se::blas::Transpose::kConjugateTranspose &&
+          blas_transpose_a != se::blas::Transpose::kConjugateTranspose) {
         // This is a matrix*vector multiply so use GEMV to compute A * b.
         // Here we are multiplying in the natural order, so we have to flip
         // the transposition flag to compensate for the tensor being stored
         // row-major. Since GEMV doesn't provide a way to just conjugate an
         // argument, we have to defer those cases to GEMM below.
-        auto gemv_trans_a =
-            blas_transpose_a == perftools::gputools::blas::Transpose::kTranspose
-                ? perftools::gputools::blas::Transpose::kNoTranspose
-                : perftools::gputools::blas::Transpose::kTranspose;
+        auto gemv_trans_a = blas_transpose_a == se::blas::Transpose::kTranspose
+                                ? se::blas::Transpose::kNoTranspose
+                                : se::blas::Transpose::kTranspose;
         bool blas_launch_status =
             stream
                 ->ThenBlasGemv(gemv_trans_a, adj_x ? m : k, adj_x ? k : m,
@@ -382,7 +378,7 @@ struct LaunchBatchMatMul<GPUDevice, Scalar> {
         }
       }
     } else {
-      CublasScratchAllocator scratch_allocator(context);
+      BlasScratchAllocator scratch_allocator(context);
       bool blas_launch_status =
           stream
               ->ThenBlasGemmBatchedWithScratch(
@@ -402,7 +398,7 @@ struct LaunchBatchMatMul<GPUDevice, Scalar> {
   }
 };
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #ifdef TENSORFLOW_USE_SYCL
 template <typename Scalar>

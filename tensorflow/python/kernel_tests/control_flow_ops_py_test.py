@@ -664,6 +664,23 @@ class ControlFlowTest(test.TestCase):
       self.assertAllEqual(42.0, grad.eval(feed_dict={c: 1}))
       self.assertAllEqual(3.0, grad.eval(feed_dict={c: 3}))
 
+  def testCondGrad_3(self):
+    with self.test_session():
+      c = array_ops.placeholder(dtypes.int32, shape=[])
+      ox = constant_op.constant(10.0)
+      pred = math_ops.less(c, 2)
+
+      def fn1(x):
+        m = x * x
+        return gradients_impl.gradients(m, [ox])[0]
+
+      fn2 = lambda: math_ops.multiply(ox, 3.0)
+      y = math_ops.multiply(7.0, ox)
+      r = control_flow_ops.cond(pred, lambda: fn1(y), fn2)
+
+      self.assertAllEqual(980.0, r.eval(feed_dict={c: 1}))
+      self.assertAllEqual(30.0, r.eval(feed_dict={c: 3}))
+
   def testNestedCond_Simple(self):
     with self.test_session():
       x = constant_op.constant(0., name="X")
@@ -1118,11 +1135,10 @@ class ControlFlowTest(test.TestCase):
 
       with self.assertRaisesRegexp(
           ValueError,
-          r"The shape for while_1/Merge_1:0 is not an invariant for the loop. "
-          r"It enters the loop with shape \(2, 2\), but has shape \(4, 2\) "
-          r"after one iteration. Provide shape invariants using either the "
-          r"`shape_invariants` argument of tf.while_loop or set_shape\(\) on "
-          r"the loop variables."):
+          r"Input tensor 'ones:0' enters the loop with shape \(2, 2\), but has "
+          r"shape \(4, 2\) after one iteration. To allow the shape to vary "
+          r"across iterations, use the `shape_invariants` argument of "
+          r"tf.while_loop to specify a less-specific shape."):
         r = control_flow_ops.while_loop(c, b, [i, m])
 
   def testWhileShapeInferenceSparseTensor(self):

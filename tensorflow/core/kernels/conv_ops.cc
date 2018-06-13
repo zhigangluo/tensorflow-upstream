@@ -45,10 +45,10 @@ limitations under the License.
 #include "tensorflow/core/util/tensor_format.h"
 #include "tensorflow/core/util/use_cudnn.h"
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/kernels/conv_ops_gpu.h"
 #include "tensorflow/core/platform/stream_executor.h"
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace tensorflow {
 
@@ -452,8 +452,8 @@ TF_CALL_double(REGISTER_CPU);
 // To be used inside depthwise_conv_op.cc.
 template struct LaunchConv2DOp<CPUDevice, float>;
 
-#if GOOGLE_CUDA
-int64 GetCudnnWorkspaceLimit(const string& envvar_in_mb,
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+int64 GetDnnWorkspaceLimit(const string& envvar_in_mb,
                              int64 default_value_in_bytes) {
   const char* workspace_limit_in_mb_str = getenv(envvar_in_mb.c_str());
   if (workspace_limit_in_mb_str != nullptr &&
@@ -475,7 +475,7 @@ struct ConvAutoTuneGroup {
   static string name() { return "Conv"; }
 };
 typedef AutoTuneSingleton<ConvAutoTuneGroup, ConvParameters,
-                          perftools::gputools::dnn::AlgorithmConfig>
+                          se::dnn::AlgorithmConfig>
     AutoTuneConv;
 
 template <typename T>
@@ -484,9 +484,9 @@ void LaunchConv2DOp<GPUDevice, T>::operator()(
     const Tensor& input_param, const Tensor& filter, int row_dilation,
     int col_dilation, int row_stride, int col_stride, const Padding& padding,
     Tensor* output, TensorFormat data_format) {
-  using perftools::gputools::dnn::AlgorithmConfig;
-  using perftools::gputools::dnn::AlgorithmDesc;
-  using perftools::gputools::dnn::ProfileResult;
+  using se::dnn::AlgorithmConfig;
+  using se::dnn::AlgorithmDesc;
+  using se::dnn::ProfileResult;
   auto* stream = ctx->op_device_context()->stream();
   OP_REQUIRES(ctx, stream, errors::Internal("No GPU stream available."));
 
@@ -514,7 +514,7 @@ void LaunchConv2DOp<GPUDevice, T>::operator()(
     auto c_ptr = AsDeviceMemory(output->template flat<T>().data(),
                                 output->template flat<T>().size());
 
-    auto no_transpose = perftools::gputools::blas::Transpose::kNoTranspose;
+    auto no_transpose = se::blas::Transpose::kNoTranspose;
     bool blas_launch_status =
         stream
             ->ThenBlasGemm(no_transpose, no_transpose, n, m, k, 1.0f, b_ptr, n,
@@ -543,7 +543,7 @@ void LaunchConv2DOp<GPUDevice, T>::operator()(
     auto c_ptr = AsDeviceMemory(output->template flat<T>().data(),
                                 output->template flat<T>().size());
 
-    auto no_transpose = perftools::gputools::blas::Transpose::kNoTranspose;
+    auto no_transpose = se::blas::Transpose::kNoTranspose;
     bool blas_launch_status =
         stream
             ->ThenBlasGemm(no_transpose, no_transpose, n, m, k, 1.0f, b_ptr, n,
@@ -629,24 +629,24 @@ void LaunchConv2DOp<GPUDevice, T>::operator()(
   CHECK(padding_rows >= 0 && padding_cols >= 0)
       << "Negative row or col paddings: (" << padding_rows << ", "
       << padding_cols << ")";
-  perftools::gputools::dnn::BatchDescriptor input_desc;
+  se::dnn::BatchDescriptor input_desc;
   input_desc.set_count(in_batch)
       .set_feature_map_count(in_depths)
       .set_height(in_rows)
       .set_width(in_cols)
-      .set_layout(perftools::gputools::dnn::DataLayout::kBatchDepthYX);
-  perftools::gputools::dnn::BatchDescriptor output_desc;
+      .set_layout(se::dnn::DataLayout::kBatchDepthYX);
+  se::dnn::BatchDescriptor output_desc;
   output_desc.set_count(out_batch)
       .set_height(out_rows)
       .set_width(out_cols)
       .set_feature_map_count(out_depths)
-      .set_layout(perftools::gputools::dnn::DataLayout::kBatchDepthYX);
-  perftools::gputools::dnn::FilterDescriptor filter_desc;
+      .set_layout(se::dnn::DataLayout::kBatchDepthYX);
+  se::dnn::FilterDescriptor filter_desc;
   filter_desc.set_input_filter_height(filter.dim_size(0))
       .set_input_filter_width(filter.dim_size(1))
       .set_input_feature_map_count(filter.dim_size(2))
       .set_output_feature_map_count(filter.dim_size(3));
-  perftools::gputools::dnn::ConvolutionDescriptor conv_desc;
+  se::dnn::ConvolutionDescriptor conv_desc;
   conv_desc.set_vertical_dilation_rate(row_dilation)
       .set_horizontal_dilation_rate(col_dilation)
       .set_vertical_filter_stride(row_stride)
@@ -681,7 +681,7 @@ void LaunchConv2DOp<GPUDevice, T>::operator()(
       AsDeviceMemory(transformed_output.template flat<T>().data(),
                      transformed_output.template flat<T>().size());
 
-  static int64 ConvolveScratchSize = GetCudnnWorkspaceLimit(
+  static int64 ConvolveScratchSize = GetDnnWorkspaceLimit(
       // default value is in bytes despite the name of the environment variable
       "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32  // 4GB
   );
@@ -708,15 +708,17 @@ void LaunchConv2DOp<GPUDevice, T>::operator()(
   AlgorithmConfig algorithm_config;
   if (cudnn_use_autotune &&
       !AutoTuneConv::GetInstance()->Find(conv_parameters, &algorithm_config)) {
+#if GOOGLE_CUDA
     std::vector<AlgorithmDesc> algorithms;
     CHECK(stream->parent()->GetConvolveAlgorithms(
-        conv_parameters.ShouldIncludeWinogradNonfusedAlgo<T>(), &algorithms));
+        conv_parameters.ShouldIncludeWinogradNonfusedAlgo<T>(stream->parent()),
+        &algorithms));
     ProfileResult best_result;
     ProfileResult best_result_no_scratch;
     for (auto profile_algorithm : algorithms) {
       // TODO(zhengxq): profile each algorithm multiple times to better
       // accuracy.
-      CudnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
+      DnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
       ProfileResult profile_result;
       bool cudnn_launch_status =
           stream
@@ -751,10 +753,32 @@ void LaunchConv2DOp<GPUDevice, T>::operator()(
       algorithm_config.set_algorithm_no_scratch(
           best_result_no_scratch.algorithm());
     }
+#elif TENSORFLOW_USE_ROCM
+    ProfileResult profile_result;
+    // MIOpen has its own Find and autotuner so use it here, passing
+    // default AlgorithmConfig to force a search
+    DnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
+    bool miopen_find_status =
+      stream
+          ->ThenConvolveWithAlgorithm(
+              input_desc, input_ptr, filter_desc, filter_ptr, conv_desc,
+              output_desc, &output_ptr, &scratch_allocator,
+              AlgorithmConfig(), &profile_result)
+          .ok();
+
+    OP_REQUIRES(ctx, miopen_find_status && profile_result.is_valid() &&
+                         !profile_result.algorithm().is_default(),
+                errors::NotFound("Failed to find conv algorithm!"));
+
+    algorithm_config.set_algorithm(profile_result.algorithm());
+    algorithm_config.set_algorithm_scratch_size(profile_result.scratch_size());
+    // TODO - Add support for no-scratch algorithm
+    algorithm_config.set_algorithm_no_scratch(AlgorithmDesc());
+#endif
     AutoTuneConv::GetInstance()->Insert(conv_parameters, algorithm_config);
   }
 
-  CudnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
+  DnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
   bool cudnn_launch_status =
       stream
           ->ThenConvolveWithAlgorithm(input_desc, input_ptr, filter_desc,
@@ -831,6 +855,6 @@ REGISTER_KERNEL_BUILDER(
 // To be used inside depthwise_conv_op.cc.
 template class LaunchConv2DOp<GPUDevice, float>;
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow

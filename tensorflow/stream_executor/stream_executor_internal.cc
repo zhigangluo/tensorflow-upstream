@@ -15,8 +15,7 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 
-namespace perftools {
-namespace gputools {
+namespace stream_executor {
 namespace internal {
 
 // -- CUDA
@@ -33,10 +32,16 @@ StreamExecutorFactory* MakeOpenCLExecutorImplementation() {
   return &instance;
 }
 
+// -- ROCm
+
+StreamExecutorFactory* MakeROCMExecutorImplementation() {
+  static StreamExecutorFactory instance;
+  return &instance;
+}
+
 // -- Host
 
 StreamExecutorFactory MakeHostExecutorImplementation;
 
 }  // namespace internal
-}  // namespace gputools
-}  // namespace perftools
+}  // namespace stream_executor

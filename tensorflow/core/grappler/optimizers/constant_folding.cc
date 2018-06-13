@@ -36,6 +36,7 @@ limitations under the License.
 #include "tensorflow/core/lib/gtl/inlined_vector.h"
 #include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/lib/strings/strcat.h"
+#include "tensorflow/core/platform/cpu_info.h"
 #include "tensorflow/core/platform/denormal.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/setround.h"
@@ -1004,7 +1005,7 @@ Status ConstantFolding::EvaluateOneFoldable(const NodeDef& node,
 
   for (const auto& input : node.input()) {
     int port = 0;
-    ParseNodeName(input, &port);
+    ParseNodeNameAsStringPiece(input, &port);
     if (port < 0) {
       // Control dependency
       break;
@@ -2084,9 +2085,9 @@ Status ConstantFolding::SimplifyGraph(GraphDef* optimized_graph,
           left_child_is_constant ? left_child : right_child;
       // Make sure that it is safe to change the value of the child node->
       if (op_child_node->input_size() < 2 ||
-          NumNonControlOutputs(*op_child_node, *node_map_) > 1 ||
           nodes_to_preserve_.find(op_child_node->name()) !=
-              nodes_to_preserve_.end()) {
+              nodes_to_preserve_.end() ||
+          NumNonControlOutputs(*op_child_node, *node_map_) > 1) {
         continue;
       }
 

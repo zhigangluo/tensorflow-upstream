@@ -2,7 +2,7 @@ licenses(["notice"])  # Apache 2.0
 
 package(default_visibility = ["//tensorflow:internal"])
 
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
+load("//tensorflow:tensorflow.bzl", "gpu_py_test")
 
 py_library(
     name = "resnet50",
@@ -14,7 +14,18 @@ py_library(
     ],
 )
 
-cuda_py_test(
+py_library(
+    name = "resnet50_test_lib",
+    srcs = ["resnet50_test.py"],
+    srcs_version = "PY2AND3",
+    deps = [
+        ":resnet50",
+        "//tensorflow:tensorflow_py",
+        "//tensorflow/contrib/eager/python:tfe",
+    ],
+)
+
+gpu_py_test(
     name = "resnet50_test",
     size = "large",
     srcs = ["resnet50_test.py"],
@@ -26,7 +37,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "resnet50_graph_test",
     size = "large",
     srcs = ["resnet50_graph_test.py"],

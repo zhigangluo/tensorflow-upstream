@@ -20,6 +20,7 @@ limitations under the License.
 #include "third_party/eigen3/Eigen/Core"
 #include "tensorflow/stream_executor/blas.h"
 #include "tensorflow/stream_executor/host_buffer.h"
+#include "tensorflow/stream_executor/host_or_device_scalar.h"
 #include "tensorflow/stream_executor/lib/stacktrace.h"
 #include "tensorflow/stream_executor/lib/strcat.h"
 #include "tensorflow/stream_executor/platform.h"
@@ -28,8 +29,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 #include "tensorflow/stream_executor/stream_executor_pimpl.h"
 
-namespace perftools {
-namespace gputools {
+namespace stream_executor {
 
 namespace {
 // Code to turn parameters to functions on stream into strings that
@@ -133,6 +133,14 @@ string ToVlogString(int64 i) { return port::StrCat(i); }
 string ToVlogString(float f) { return port::StrCat(f); }
 
 string ToVlogString(double d) { return port::StrCat(d); }
+
+template <typename T>
+string ToVlogString(const HostOrDeviceScalar<T> &memory_or_constant) {
+  if (memory_or_constant.is_pointer()) {
+    return ToVlogString(memory_or_constant.pointer());
+  }
+  return ToVlogString(memory_or_constant.value());
+}
 
 template <class T>
 string ToVlogString(port::ArraySlice<T> elements) {
@@ -1368,7 +1376,8 @@ Stream &Stream::ThenPoolForward(
     const dnn::BatchDescriptor &input_dimensions,
     const DeviceMemory<double> &input_data,
     const dnn::BatchDescriptor &output_dimensions,
-    DeviceMemory<double> *output_data) {
+    DeviceMemory<double> *output_data,
+    ScratchAllocator *workspace_allocator) {
   VLOG_CALL(PARAM(pooling_dimensions), PARAM(input_dimensions),
             PARAM(input_data), PARAM(output_dimensions), PARAM(output_data));
 
@@ -1376,7 +1385,7 @@ Stream &Stream::ThenPoolForward(
     if (dnn::DnnSupport *dnn = parent_->AsDnn()) {
       CheckError(dnn->DoPoolForward(this, pooling_dimensions, input_dimensions,
                                     input_data, output_dimensions,
-                                    output_data));
+                                    output_data, workspace_allocator));
     } else {
       SetError();
       LOG(WARNING)
@@ -1392,7 +1401,8 @@ Stream &Stream::ThenPoolForward(
     const dnn::BatchDescriptor &input_dimensions,
     const DeviceMemory<float> &input_data,
     const dnn::BatchDescriptor &output_dimensions,
-    DeviceMemory<float> *output_data) {
+    DeviceMemory<float> *output_data,
+    ScratchAllocator *workspace_allocator) {
   VLOG_CALL(PARAM(pooling_dimensions), PARAM(input_dimensions),
             PARAM(input_data), PARAM(output_dimensions), PARAM(output_data));
 
@@ -1400,7 +1410,7 @@ Stream &Stream::ThenPoolForward(
     if (dnn::DnnSupport *dnn = parent_->AsDnn()) {
       CheckError(dnn->DoPoolForward(this, pooling_dimensions, input_dimensions,
                                     input_data, output_dimensions,
-                                    output_data));
+                                    output_data, workspace_allocator));
     } else {
       SetErrorAndLogNoDnnSupport();
     }
@@ -1413,7 +1423,8 @@ Stream &Stream::ThenPoolForward(
     const dnn::BatchDescriptor &input_dimensions,
     const DeviceMemory<Eigen::half> &input_data,
     const dnn::BatchDescriptor &output_dimensions,
-    DeviceMemory<Eigen::half> *output_data) {
+    DeviceMemory<Eigen::half> *output_data,
+    ScratchAllocator *workspace_allocator) {
   VLOG_CALL(PARAM(pooling_dimensions), PARAM(input_dimensions),
             PARAM(input_data), PARAM(output_dimensions), PARAM(output_data));
 
@@ -1421,7 +1432,7 @@ Stream &Stream::ThenPoolForward(
     if (dnn::DnnSupport *dnn = parent_->AsDnn()) {
       CheckError(dnn->DoPoolForward(this, pooling_dimensions, input_dimensions,
                                     input_data, output_dimensions,
-                                    output_data));
+                                    output_data, workspace_allocator));
     } else {
       SetErrorAndLogNoDnnSupport();
     }
@@ -1436,7 +1447,8 @@ Stream &Stream::ThenPoolBackward(
     const dnn::BatchDescriptor &output_dimensions,
     const DeviceMemory<double> &output_data,
     const DeviceMemory<double> &input_diff_data,
-    DeviceMemory<double> *output_diff_data) {
+    DeviceMemory<double> *output_diff_data,
+    ScratchAllocator *workspace_allocator) {
   VLOG_CALL(PARAM(pooling_dimensions), PARAM(input_dimensions),
             PARAM(input_data), PARAM(output_dimensions), PARAM(output_data),
             PARAM(input_diff_data), PARAM(output_diff_data));
@@ -1445,7 +1457,8 @@ Stream &Stream::ThenPoolBackward(
     if (dnn::DnnSupport *dnn = parent_->AsDnn()) {
       CheckError(dnn->DoPoolBackward(this, pooling_dimensions, input_dimensions,
                                      input_data, output_dimensions, output_data,
-                                     input_diff_data, output_diff_data));
+                                     input_diff_data, output_diff_data,
+                                     workspace_allocator));
     } else {
       SetError();
       LOG(WARNING)
@@ -1463,7 +1476,8 @@ Stream &Stream::ThenPoolBackward(
     const dnn::BatchDescriptor &output_dimensions,
     const DeviceMemory<float> &output_data,
     const DeviceMemory<float> &input_diff_data,
-    DeviceMemory<float> *output_diff_data) {
+    DeviceMemory<float> *output_diff_data,
+    ScratchAllocator *workspace_allocator) {
   VLOG_CALL(PARAM(pooling_dimensions), PARAM(input_dimensions),
             PARAM(input_data), PARAM(output_dimensions), PARAM(output_data),
             PARAM(input_diff_data), PARAM(output_diff_data));
@@ -1472,7 +1486,8 @@ Stream &Stream::ThenPoolBackward(
     if (dnn::DnnSupport *dnn = parent_->AsDnn()) {
       CheckError(dnn->DoPoolBackward(this, pooling_dimensions, input_dimensions,
                                      input_data, output_dimensions, output_data,
-                                     input_diff_data, output_diff_data));
+                                     input_diff_data, output_diff_data,
+                                     workspace_allocator));
     } else {
       SetErrorAndLogNoDnnSupport();
     }
@@ -1487,7 +1502,8 @@ Stream &Stream::ThenPoolBackward(
     const dnn::BatchDescriptor &output_dimensions,
     const DeviceMemory<Eigen::half> &output_data,
     const DeviceMemory<Eigen::half> &input_diff_data,
-    DeviceMemory<Eigen::half> *output_diff_data) {
+    DeviceMemory<Eigen::half> *output_diff_data,
+    ScratchAllocator *workspace_allocator) {
   VLOG_CALL(PARAM(pooling_dimensions), PARAM(input_dimensions),
             PARAM(input_data), PARAM(output_dimensions), PARAM(output_data),
             PARAM(input_diff_data), PARAM(output_diff_data));
@@ -1496,7 +1512,8 @@ Stream &Stream::ThenPoolBackward(
     if (dnn::DnnSupport *dnn = parent_->AsDnn()) {
       CheckError(dnn->DoPoolBackward(this, pooling_dimensions, input_dimensions,
                                      input_data, output_dimensions, output_data,
-                                     input_diff_data, output_diff_data));
+                                     input_diff_data, output_diff_data,
+                                     workspace_allocator));
     } else {
       SetErrorAndLogNoDnnSupport();
     }
@@ -1543,7 +1560,8 @@ Stream &Stream::ThenNormalizeBackwardWithDimensions(
     const dnn::BatchDescriptor &dimensions, const DeviceMemory<float> &raw_data,
     const DeviceMemory<float> &normalized_data,
     const DeviceMemory<float> &normalized_variable_gradient,
-    DeviceMemory<float> *raw_variable_gradient) {
+    DeviceMemory<float> *raw_variable_gradient,
+    ScratchAllocator *workspace_allocator) {
   VLOG_CALL(PARAM(normalize_descriptor), PARAM(dimensions), PARAM(raw_data),
             PARAM(normalized_data), PARAM(normalized_variable_gradient),
             PARAM(raw_variable_gradient));
@@ -1552,7 +1570,8 @@ Stream &Stream::ThenNormalizeBackwardWithDimensions(
     if (dnn::DnnSupport *dnn = parent_->AsDnn()) {
       CheckError(dnn->DoNormalizeBackwardWithDimensions(
           this, normalize_descriptor, dimensions, raw_data, normalized_data,
-          normalized_variable_gradient, raw_variable_gradient));
+          normalized_variable_gradient, raw_variable_gradient,
+          workspace_allocator));
     } else {
       SetErrorAndLogNoDnnSupport();
     }
@@ -3883,32 +3902,10 @@ Stream &Stream::ThenBlasGemmWithProfiling(
 
 Stream &Stream::ThenBlasGemmWithAlgorithm(
     blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
-    uint64 k, const Eigen::half &alpha, const DeviceMemory<Eigen::half> &a,
-    int lda, const DeviceMemory<Eigen::half> &b, int ldb,
-    const Eigen::half &beta, DeviceMemory<Eigen::half> *c, int ldc,
-    blas::ComputationType computation_type, blas::AlgorithmType algorithm,
-    blas::ProfileResult *output_profile_result) {
-  VLOG_CALL(PARAM(transa), PARAM(transb), PARAM(m), PARAM(n), PARAM(k),
-            PARAM(alpha), PARAM(a), PARAM(lda), PARAM(b), PARAM(ldb),
-            PARAM(beta), PARAM(c), PARAM(ldc), PARAM(computation_type),
-            PARAM(algorithm));
-
-  ThenBlasWithProfileImpl<blas::Transpose, blas::Transpose, uint64, uint64,
-                          uint64, const Eigen::half &,
-                          const DeviceMemory<Eigen::half> &, int,
-                          const DeviceMemory<Eigen::half> &, int,
-                          const Eigen::half &, DeviceMemory<Eigen::half> *, int,
-                          blas::ComputationType, blas::AlgorithmType>
-      impl;
-  return impl(this, &blas::BlasSupport::DoBlasGemmWithAlgorithm, transa, transb,
-              m, n, k, alpha, a, lda, b, ldb, beta, c, ldc, computation_type,
-              algorithm, output_profile_result);
-}
-
-Stream &Stream::ThenBlasGemmWithAlgorithm(
-    blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
-    uint64 k, int alpha, const DeviceMemory<int8> &a, int lda,
-    const DeviceMemory<int8> &b, int ldb, int beta, DeviceMemory<int> *c,
+    uint64 k, const HostOrDeviceScalar<Eigen::half> &alpha,
+    const DeviceMemory<Eigen::half> &a, int lda,
+    const DeviceMemory<Eigen::half> &b, int ldb,
+    const HostOrDeviceScalar<Eigen::half> &beta, DeviceMemory<Eigen::half> *c,
     int ldc, blas::ComputationType computation_type,
     blas::AlgorithmType algorithm, blas::ProfileResult *output_profile_result) {
   VLOG_CALL(PARAM(transa), PARAM(transb), PARAM(m), PARAM(n), PARAM(k),
@@ -3917,8 +3914,33 @@ Stream &Stream::ThenBlasGemmWithAlgorithm(
             PARAM(algorithm));
 
   ThenBlasWithProfileImpl<
-      blas::Transpose, blas::Transpose, uint64, uint64, uint64, int,
-      const DeviceMemory<int8> &, int, const DeviceMemory<int8> &, int, int,
+      blas::Transpose, blas::Transpose, uint64, uint64, uint64,
+      const HostOrDeviceScalar<Eigen::half> &,
+      const DeviceMemory<Eigen::half> &, int, const DeviceMemory<Eigen::half> &,
+      int, const HostOrDeviceScalar<Eigen::half> &, DeviceMemory<Eigen::half> *,
+      int, blas::ComputationType, blas::AlgorithmType>
+      impl;
+  return impl(this, &blas::BlasSupport::DoBlasGemmWithAlgorithm, transa, transb,
+              m, n, k, alpha, a, lda, b, ldb, beta, c, ldc, computation_type,
+              algorithm, output_profile_result);
+}
+
+Stream &Stream::ThenBlasGemmWithAlgorithm(
+    blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
+    uint64 k, const HostOrDeviceScalar<int> &alpha, const DeviceMemory<int8> &a,
+    int lda, const DeviceMemory<int8> &b, int ldb,
+    const HostOrDeviceScalar<int> &beta, DeviceMemory<int> *c, int ldc,
+    blas::ComputationType computation_type, blas::AlgorithmType algorithm,
+    blas::ProfileResult *output_profile_result) {
+  VLOG_CALL(PARAM(transa), PARAM(transb), PARAM(m), PARAM(n), PARAM(k),
+            PARAM(alpha), PARAM(a), PARAM(lda), PARAM(b), PARAM(ldb),
+            PARAM(beta), PARAM(c), PARAM(ldc), PARAM(computation_type),
+            PARAM(algorithm));
+
+  ThenBlasWithProfileImpl<
+      blas::Transpose, blas::Transpose, uint64, uint64, uint64,
+      const HostOrDeviceScalar<int> &, const DeviceMemory<int8> &, int,
+      const DeviceMemory<int8> &, int, const HostOrDeviceScalar<int> &,
       DeviceMemory<int> *, int, blas::ComputationType, blas::AlgorithmType>
       impl;
   return impl(this, &blas::BlasSupport::DoBlasGemmWithAlgorithm, transa, transb,
@@ -3928,8 +3950,9 @@ Stream &Stream::ThenBlasGemmWithAlgorithm(
 
 Stream &Stream::ThenBlasGemmWithAlgorithm(
     blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
-    uint64 k, float alpha, const DeviceMemory<float> &a, int lda,
-    const DeviceMemory<float> &b, int ldb, float beta, DeviceMemory<float> *c,
+    uint64 k, const HostOrDeviceScalar<float> &alpha,
+    const DeviceMemory<float> &a, int lda, const DeviceMemory<float> &b,
+    int ldb, const HostOrDeviceScalar<float> &beta, DeviceMemory<float> *c,
     int ldc, blas::ComputationType computation_type,
     blas::AlgorithmType algorithm, blas::ProfileResult *output_profile_result) {
   VLOG_CALL(PARAM(transa), PARAM(transb), PARAM(m), PARAM(n), PARAM(k),
@@ -3938,8 +3961,9 @@ Stream &Stream::ThenBlasGemmWithAlgorithm(
             PARAM(algorithm));
 
   ThenBlasWithProfileImpl<
-      blas::Transpose, blas::Transpose, uint64, uint64, uint64, float,
-      const DeviceMemory<float> &, int, const DeviceMemory<float> &, int, float,
+      blas::Transpose, blas::Transpose, uint64, uint64, uint64,
+      const HostOrDeviceScalar<float> &, const DeviceMemory<float> &, int,
+      const DeviceMemory<float> &, int, const HostOrDeviceScalar<float> &,
       DeviceMemory<float> *, int, blas::ComputationType, blas::AlgorithmType>
       impl;
   return impl(this, &blas::BlasSupport::DoBlasGemmWithAlgorithm, transa, transb,
@@ -3949,32 +3973,35 @@ Stream &Stream::ThenBlasGemmWithAlgorithm(
 
 Stream &Stream::ThenBlasGemmWithAlgorithm(
     blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
-    uint64 k, double alpha, const DeviceMemory<double> &a, int lda,
-    const DeviceMemory<double> &b, int ldb, double beta,
-    DeviceMemory<double> *c, int ldc, blas::ComputationType computation_type,
+    uint64 k, const HostOrDeviceScalar<double> &alpha,
+    const DeviceMemory<double> &a, int lda, const DeviceMemory<double> &b,
+    int ldb, const HostOrDeviceScalar<double> &beta, DeviceMemory<double> *c,
+    int ldc, blas::ComputationType computation_type,
     blas::AlgorithmType algorithm, blas::ProfileResult *output_profile_result) {
   VLOG_CALL(PARAM(transa), PARAM(transb), PARAM(m), PARAM(n), PARAM(k),
             PARAM(alpha), PARAM(a), PARAM(lda), PARAM(b), PARAM(ldb),
             PARAM(beta), PARAM(c), PARAM(ldc), PARAM(computation_type),
             PARAM(algorithm));
 
-  ThenBlasWithProfileImpl<blas::Transpose, blas::Transpose, uint64, uint64,
-                          uint64, double, const DeviceMemory<double> &, int,
-                          const DeviceMemory<double> &, int, double,
-                          DeviceMemory<double> *, int, blas::ComputationType,
-                          blas::AlgorithmType>
+  ThenBlasWithProfileImpl<
+      blas::Transpose, blas::Transpose, uint64, uint64, uint64,
+      const HostOrDeviceScalar<double> &, const DeviceMemory<double> &, int,
+      const DeviceMemory<double> &, int, const HostOrDeviceScalar<double> &,
+      DeviceMemory<double> *, int, blas::ComputationType, blas::AlgorithmType>
       impl;
   return impl(this, &blas::BlasSupport::DoBlasGemmWithAlgorithm, transa, transb,
-              m, n, k, alpha, a, lda, b, ldb, beta, c, ldc, computation_type,
+              m, n, k, HostOrDeviceScalar<double>(alpha), a, lda, b, ldb,
+              HostOrDeviceScalar<double>(beta), c, ldc, computation_type,
               algorithm, output_profile_result);
 }
 
 Stream &Stream::ThenBlasGemmWithAlgorithm(
     blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
-    uint64 k, std::complex<float> alpha,
+    uint64 k, const HostOrDeviceScalar<std::complex<float>> &alpha,
     const DeviceMemory<std::complex<float>> &a, int lda,
     const DeviceMemory<std::complex<float>> &b, int ldb,
-    std::complex<float> beta, DeviceMemory<std::complex<float>> *c, int ldc,
+    const HostOrDeviceScalar<std::complex<float>> &beta,
+    DeviceMemory<std::complex<float>> *c, int ldc,
     blas::ComputationType computation_type, blas::AlgorithmType algorithm,
     blas::ProfileResult *output_profile_result) {
   VLOG_CALL(PARAM(transa), PARAM(transb), PARAM(m), PARAM(n), PARAM(k),
@@ -3982,12 +4009,14 @@ Stream &Stream::ThenBlasGemmWithAlgorithm(
             PARAM(beta), PARAM(c), PARAM(ldc), PARAM(computation_type),
             PARAM(algorithm));
 
-  ThenBlasWithProfileImpl<
-      blas::Transpose, blas::Transpose, uint64, uint64, uint64,
-      std::complex<float>, const DeviceMemory<std::complex<float>> &, int,
-      const DeviceMemory<std::complex<float>> &, int, std::complex<float>,
-      DeviceMemory<std::complex<float>> *, int, blas::ComputationType,
-      blas::AlgorithmType>
+  ThenBlasWithProfileImpl<blas::Transpose, blas::Transpose, uint64, uint64,
+                          uint64,
+                          const HostOrDeviceScalar<std::complex<float>> &,
+                          const DeviceMemory<std::complex<float>> &, int,
+                          const DeviceMemory<std::complex<float>> &, int,
+                          const HostOrDeviceScalar<std::complex<float>> &,
+                          DeviceMemory<std::complex<float>> *, int,
+                          blas::ComputationType, blas::AlgorithmType>
       impl;
   return impl(this, &blas::BlasSupport::DoBlasGemmWithAlgorithm, transa, transb,
               m, n, k, alpha, a, lda, b, ldb, beta, c, ldc, computation_type,
@@ -3996,10 +4025,11 @@ Stream &Stream::ThenBlasGemmWithAlgorithm(
 
 Stream &Stream::ThenBlasGemmWithAlgorithm(
     blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
-    uint64 k, std::complex<double> alpha,
+    uint64 k, const HostOrDeviceScalar<std::complex<double>> &alpha,
     const DeviceMemory<std::complex<double>> &a, int lda,
     const DeviceMemory<std::complex<double>> &b, int ldb,
-    std::complex<double> beta, DeviceMemory<std::complex<double>> *c, int ldc,
+    const HostOrDeviceScalar<std::complex<double>> &beta,
+    DeviceMemory<std::complex<double>> *c, int ldc,
     blas::ComputationType computation_type, blas::AlgorithmType algorithm,
     blas::ProfileResult *output_profile_result) {
   VLOG_CALL(PARAM(transa), PARAM(transb), PARAM(m), PARAM(n), PARAM(k),
@@ -4007,12 +4037,14 @@ Stream &Stream::ThenBlasGemmWithAlgorithm(
             PARAM(beta), PARAM(c), PARAM(ldc), PARAM(computation_type),
             PARAM(algorithm));
 
-  ThenBlasWithProfileImpl<
-      blas::Transpose, blas::Transpose, uint64, uint64, uint64,
-      std::complex<double>, const DeviceMemory<std::complex<double>> &, int,
-      const DeviceMemory<std::complex<double>> &, int, std::complex<double>,
-      DeviceMemory<std::complex<double>> *, int, blas::ComputationType,
-      blas::AlgorithmType>
+  ThenBlasWithProfileImpl<blas::Transpose, blas::Transpose, uint64, uint64,
+                          uint64,
+                          const HostOrDeviceScalar<std::complex<double>> &,
+                          const DeviceMemory<std::complex<double>> &, int,
+                          const DeviceMemory<std::complex<double>> &, int,
+                          const HostOrDeviceScalar<std::complex<double>> &,
+                          DeviceMemory<std::complex<double>> *, int,
+                          blas::ComputationType, blas::AlgorithmType>
       impl;
   return impl(this, &blas::BlasSupport::DoBlasGemmWithAlgorithm, transa, transb,
               m, n, k, alpha, a, lda, b, ldb, beta, c, ldc, computation_type,
@@ -5192,5 +5224,4 @@ port::Status Stream::BlockHostUntilDone() {
   return first_error;
 }
 
-}  // namespace gputools
-}  // namespace perftools
+}  // namespace stream_executor

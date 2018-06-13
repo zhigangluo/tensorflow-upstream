@@ -15,7 +15,7 @@ load("//tensorflow:tensorflow.bzl", "tf_custom_op_library")
 load("//tensorflow:tensorflow.bzl", "tf_gen_op_wrapper_py")
 load("//tensorflow:tensorflow.bzl", "tf_gen_op_libs")
 load("//tensorflow:tensorflow.bzl", "tf_kernel_library")
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
+load("//tensorflow:tensorflow.bzl", "gpu_py_test")
 load("//tensorflow:tensorflow.bzl", "tf_custom_op_py_library")
 
 tf_custom_op_py_library(
@@ -93,6 +93,7 @@ tf_kernel_library(
     ],
     deps = [
         "//tensorflow/core:framework",
+        "//tensorflow/core:framework_headers_lib",
         "//third_party/eigen3",
     ],
     alwayslink = 1,
@@ -162,7 +163,7 @@ py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "critical_section_test",
     size = "medium",
     srcs = ["python/ops/critical_section_test.py"],
@@ -177,6 +178,8 @@ cuda_py_test(
         "//tensorflow/python:platform_test",
         "//tensorflow/python:resource_variable_ops",
         "//tensorflow/python:tensor_array_ops",
+        "//tensorflow/python/data/ops:dataset_ops",
+        "//tensorflow/python/eager:context",
     ],
 )
 

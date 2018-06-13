@@ -520,6 +520,25 @@ TEST_F(ConstantFoldingTest, NeutralElement_PartialShape_UnknownOutputShape) {
       EXPECT_EQ("Mul", node.op()) << node.name();
     }
   }
+
+  const std::vector<string> fetch = {"mul_0", "mul_4", "mul_8"};
+  auto x_known_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({2, 2}));
+  auto x_partially_unknown_t =
+      GenerateRandomTensor<DT_FLOAT>(TensorShape({3, 4}));
+  auto x_unknown_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({5, 7}));
+  auto expected_tensors =
+      EvaluateNodes(item.graph, fetch,
+                    {{"x_known", x_known_t},
+                     {"x_partially_unknown", x_partially_unknown_t},
+                     {"x_unknown", x_unknown_t}});
+  EXPECT_EQ(fetch.size(), expected_tensors.size());
+  auto tensors = EvaluateNodes(output, fetch,
+                               {{"x_known", x_known_t},
+                                {"x_partially_unknown", x_partially_unknown_t},
+                                {"x_unknown", x_unknown_t}});
+  EXPECT_EQ(fetch.size(), tensors.size());
+  for (int i = 0; i < tensors.size(); i++)
+    test::ExpectTensorNear<float>(expected_tensors[i], tensors[i], 1e-5);
 }
 
 TEST_F(ConstantFoldingTest, NeutralElement_PartialShape_KnownOutputShape) {
@@ -572,6 +591,20 @@ TEST_F(ConstantFoldingTest, NeutralElement_PartialShape_KnownOutputShape) {
       EXPECT_TRUE(IsControlInput(node.input(1)));
     }
   }
+  const std::vector<string> fetch = {"addn1"};
+  auto x_partially_unknown_t =
+      GenerateRandomTensor<DT_FLOAT>(TensorShape({2, 2}));
+  auto x_unknown_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({2, 2}));
+  auto expected_tensors =
+      EvaluateNodes(item.graph, fetch,
+                    {{"x_partially_unknown", x_partially_unknown_t},
+                     {"x_unknown", x_unknown_t}});
+  EXPECT_EQ(1, expected_tensors.size());
+  auto tensors = EvaluateNodes(output, fetch,
+                               {{"x_partially_unknown", x_partially_unknown_t},
+                                {"x_unknown", x_unknown_t}});
+  EXPECT_EQ(1, tensors.size());
+  test::ExpectTensorNear<float>(expected_tensors[0], tensors[0], 1e-5);
 }
 
 TEST_F(ConstantFoldingTest, CreateConstNodes) {
@@ -689,8 +722,7 @@ TEST_F(ConstantFoldingTest, ControlDependencies) {
   GrapplerItem item;
   item.fetch.push_back("e");
   TF_CHECK_OK(scope.ToGraphDef(&item.graph));
-  auto tensors_expected = EvaluateNodes(item.graph, item.fetch);
-  EXPECT_EQ(1, tensors_expected.size());
+
   ConstantFolding optimizer(nullptr /* cpu_device */);
   GraphDef output;
   Status status = optimizer.Optimize(nullptr, item, &output);
@@ -717,9 +749,6 @@ TEST_F(ConstantFoldingTest, ControlDependencies) {
     }
   }
   EXPECT_EQ(1, found);
-  auto tensors = EvaluateNodes(output, item.fetch);
-  EXPECT_EQ(1, tensors.size());
-  test::ExpectTensorEqual<int>(tensors_expected[0], tensors[0]);
 }
 
 TEST_F(ConstantFoldingTest, ControlDependenciesEmptyFetch) {
@@ -933,6 +962,17 @@ TEST_F(ConstantFoldingTest, ShapeMaterialization) {
     }
   }
   EXPECT_EQ(1, found);
+  auto v1_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({3}));
+  auto v2_t = GenerateRandomTensor<DT_FLOAT>({5, 7});
+  auto v3_t = GenerateRandomTensor<DT_FLOAT>({11, 13});
+
+  auto tensors_expected = EvaluateNodes(
+      item.graph, item.fetch, {{"v1", v1_t}, {"v2", v2_t}, {"v3", v3_t}});
+  EXPECT_EQ(1, item.fetch.size());
+  auto tensors = EvaluateNodes(output, item.fetch,
+                               {{"v1", v1_t}, {"v2", v2_t}, {"v3", v3_t}});
+  EXPECT_EQ(1, item.fetch.size());
+  test::ExpectTensorEqual<int>(tensors_expected[0], tensors[0]);
 }
 
 TEST_F(ConstantFoldingTest, ShapeMaterializationEmptyFetch) {
@@ -984,6 +1024,18 @@ TEST_F(ConstantFoldingTest, ShapeMaterializationEmptyFetch) {
     }
   }
   EXPECT_EQ(3, found);
+
+  auto v1_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({3}));
+  auto v2_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({5, 7}));
+  auto v3_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({11, 13}));
+  std::vector<string> fetch_nodes = {"p2"};
+  auto tensors_expected = EvaluateNodes(
+      item.graph, fetch_nodes, {{"v1", v1_t}, {"v2", v2_t}, {"v3", v3_t}});
+  EXPECT_EQ(1, tensors_expected.size());
+  auto tensors = EvaluateNodes(output, fetch_nodes,
+                               {{"v1", v1_t}, {"v2", v2_t}, {"v3", v3_t}});
+  EXPECT_EQ(1, tensors.size());
+  test::ExpectTensorEqual<int>(tensors_expected[0], tensors[0]);
 }
 
 TEST_F(ConstantFoldingTest, ShapeMaterializationShapeN) {
@@ -1045,6 +1097,20 @@ TEST_F(ConstantFoldingTest, ShapeMaterializationShapeN) {
     }
   }
   EXPECT_EQ(9, found);
+
+  auto v1_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({3, 4}));
+  auto v2_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({5, 6}));
+  auto v3_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({4, 6}));
+  const std::vector<string> fetch_nodes = {"i1a", "i1b", "i2a", "i2b",
+                                           "i2c", "i3a", "i3b"};
+  auto tensors_expected = EvaluateNodes(
+      item.graph, fetch_nodes, {{"v1", v1_t}, {"v2", v2_t}, {"v3", v3_t}});
+  EXPECT_EQ(fetch_nodes.size(), tensors_expected.size());
+  auto tensors = EvaluateNodes(output, fetch_nodes,
+                               {{"v1", v1_t}, {"v2", v2_t}, {"v3", v3_t}});
+  EXPECT_EQ(fetch_nodes.size(), tensors.size());
+  for (int i = 0; i < fetch_nodes.size(); i++)
+    test::ExpectTensorEqual<int>(tensors_expected[i], tensors[i]);
 }
 
 TEST_F(ConstantFoldingTest, ShapeMaterializationShapeN_MultipleOutputs) {
@@ -1095,6 +1161,17 @@ TEST_F(ConstantFoldingTest, ShapeMaterializationShapeN_MultipleOutputs) {
     }
   }
   EXPECT_EQ(4, found);
+
+  auto v1_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({3, 4}));
+  auto v2_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({4, 6}));
+  auto tensors_expected =
+      EvaluateNodes(item.graph, item.fetch, {{"v1", v1_t}, {"v2", v2_t}});
+  EXPECT_EQ(2, tensors_expected.size());
+  auto tensors =
+      EvaluateNodes(output, item.fetch, {{"v1", v1_t}, {"v2", v2_t}});
+  EXPECT_EQ(2, tensors.size());
+  for (int i = 0; i < tensors.size(); i++)
+    test::ExpectTensorEqual<int>(tensors_expected[i], tensors[i]);
 }
 
 TEST_F(ConstantFoldingTest, SwitchNodesEmptyFetch) {
@@ -1170,6 +1247,30 @@ TEST_F(ConstantFoldingTest, SwitchNodesEmptyFetch) {
     }
   }
   EXPECT_EQ(4, found);
+
+  auto v_in_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({3}));
+  Tensor v_ctrl_t(DT_BOOL, TensorShape({}));
+
+  v_ctrl_t.flat<bool>()(0) = true;
+  std::vector<string> fetch_nodes = {"m", "m2"};
+  auto tensors_expected = EvaluateNodes(
+      item.graph, fetch_nodes, {{"v_in", v_in_t}, {"v_ctrl", v_ctrl_t}});
+  EXPECT_EQ(2, tensors_expected.size());
+  auto tensors = EvaluateNodes(output, fetch_nodes,
+                               {{"v_in", v_in_t}, {"v_ctrl", v_ctrl_t}});
+  EXPECT_EQ(2, tensors.size());
+  test::ExpectTensorEqual<int>(tensors_expected[0], tensors[0]);
+  test::ExpectTensorNear<float>(tensors_expected[1], tensors[1], 1e-5);
+
+  v_ctrl_t.flat<bool>()(0) = false;
+  tensors_expected = EvaluateNodes(item.graph, fetch_nodes,
+                                   {{"v_in", v_in_t}, {"v_ctrl", v_ctrl_t}});
+  EXPECT_EQ(2, tensors_expected.size());
+  tensors = EvaluateNodes(output, fetch_nodes,
+                          {{"v_in", v_in_t}, {"v_ctrl", v_ctrl_t}});
+  EXPECT_EQ(2, tensors.size());
+  test::ExpectTensorEqual<int>(tensors_expected[0], tensors[0]);
+  test::ExpectTensorNear<float>(tensors_expected[1], tensors[1], 1e-5);
 }
 
 TEST_F(ConstantFoldingTest, SwitchNodes) {
@@ -1234,6 +1335,28 @@ TEST_F(ConstantFoldingTest, SwitchNodes) {
     }
   }
   EXPECT_EQ(2, found);
+
+  auto v_in_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({3}));
+  Tensor v_ctrl_t(DT_BOOL, TensorShape({}));
+  v_ctrl_t.flat<bool>()(0) = true;
+  auto tensors_expected = EvaluateNodes(
+      item.graph, item.fetch, {{"v_in", v_in_t}, {"v_ctrl", v_ctrl_t}});
+  EXPECT_EQ(2, tensors_expected.size());
+  auto tensors = EvaluateNodes(output, item.fetch,
+                               {{"v_in", v_in_t}, {"v_ctrl", v_ctrl_t}});
+  EXPECT_EQ(2, tensors.size());
+  test::ExpectTensorEqual<int>(tensors_expected[0], tensors[0]);
+  test::ExpectTensorNear<float>(tensors_expected[1], tensors[1], 1e-5);
+
+  v_ctrl_t.flat<bool>()(0) = false;
+  tensors_expected = EvaluateNodes(item.graph, item.fetch,
+                                   {{"v_in", v_in_t}, {"v_ctrl", v_ctrl_t}});
+  EXPECT_EQ(2, tensors_expected.size());
+  tensors = EvaluateNodes(output, item.fetch,
+                          {{"v_in", v_in_t}, {"v_ctrl", v_ctrl_t}});
+  EXPECT_EQ(2, tensors.size());
+  test::ExpectTensorEqual<int>(tensors_expected[0], tensors[0]);
+  test::ExpectTensorNear<float>(tensors_expected[1], tensors[1], 1e-5);
 }
 
 TEST_F(ConstantFoldingTest, MergeNodes) {
@@ -1374,6 +1497,16 @@ TEST_F(ConstantFoldingTest, SplitRemoval) {
   AddNode("out", "Add", {"s1", "s2"}, {}, &want);
 
   CompareGraphs(want, got);
+
+  auto in1_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({2}));
+  auto in2_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({4}));
+  auto tensors_expected =
+      EvaluateNodes(item.graph, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+  EXPECT_EQ(1, tensors_expected.size());
+  auto tensors =
+      EvaluateNodes(got, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+  EXPECT_EQ(1, tensors.size());
+  test::ExpectTensorNear<float>(tensors_expected[0], tensors[0], 1e-5);
 }
 
 TEST_F(ConstantFoldingTest, SplitVRemoval) {
@@ -1416,6 +1549,16 @@ TEST_F(ConstantFoldingTest, SplitVRemoval) {
   AddNode("out", "Add", {"s1", "s2"}, {}, &want);
 
   CompareGraphs(want, got);
+
+  auto in1_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({2}));
+  auto in2_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({5}));
+  auto tensors_expected =
+      EvaluateNodes(item.graph, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+  EXPECT_EQ(1, tensors_expected.size());
+  auto tensors =
+      EvaluateNodes(got, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+  EXPECT_EQ(1, tensors.size());
+  test::ExpectTensorNear<float>(tensors_expected[0], tensors[0], 1e-5);
 }
 
 TEST_F(ConstantFoldingTest, ShuffleReverseOnScalarRemoval) {
@@ -1450,6 +1593,17 @@ TEST_F(ConstantFoldingTest, ShuffleReverseOnScalarRemoval) {
   AddNode("out2", "Identity", {"s2"}, {}, &want);
 
   CompareGraphs(want, got);
+
+  auto in1_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({}));
+  auto in2_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({}));
+  auto tensors_expected =
+      EvaluateNodes(item.graph, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+  EXPECT_EQ(2, tensors_expected.size());
+  auto tensors =
+      EvaluateNodes(got, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+  EXPECT_EQ(2, tensors.size());
+  for (int i = 0; i < tensors.size(); i++)
+    test::ExpectTensorNear<float>(tensors_expected[i], tensors[i], 1e-5);
 }
 
 TEST_F(ConstantFoldingTest, SliceWithSameDimensionRemoval) {
@@ -1486,6 +1640,16 @@ TEST_F(ConstantFoldingTest, SliceWithSameDimensionRemoval) {
     AddNode("out", "Add", {"s1", "s2"}, {}, &want);
 
     CompareGraphs(want, got);
+
+    auto in1_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({3, 5}));
+    auto in2_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({4, 6}));
+    auto tensors_expected =
+        EvaluateNodes(item.graph, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+    EXPECT_EQ(1, tensors_expected.size());
+    auto tensors =
+        EvaluateNodes(got, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+    EXPECT_EQ(1, tensors.size());
+    test::ExpectTensorNear<float>(tensors_expected[0], tensors[0], 1e-5);
   }
   {  // size = {-1, -1}
     tensorflow::Scope scope = tensorflow::Scope::NewRootScope();
@@ -1524,6 +1688,16 @@ TEST_F(ConstantFoldingTest, SliceWithSameDimensionRemoval) {
     AddNode("out", "Add", {"s1", "s2"}, {}, &want);
 
     CompareGraphs(want, got);
+
+    auto in1_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({3, 5}));
+    auto in2_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({4, 6}));
+    auto tensors_expected =
+        EvaluateNodes(item.graph, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+    EXPECT_EQ(1, tensors_expected.size());
+    auto tensors =
+        EvaluateNodes(got, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+    EXPECT_EQ(1, tensors.size());
+    test::ExpectTensorNear<float>(tensors_expected[0], tensors[0], 1e-5);
   }
 }
 
@@ -1602,6 +1776,16 @@ TEST_F(ConstantFoldingTest, PaddingWithZeroSize) {
   AddNode("out", "Add", {"p1", "p2"}, {}, &want);
 
   CompareGraphs(want, got);
+
+  auto in1_t = GenerateRandomTensor<DT_INT32>(TensorShape({4, 6}));
+  auto in2_t = GenerateRandomTensor<DT_INT32>(TensorShape({2, 2}));
+  auto tensors_expected =
+      EvaluateNodes(item.graph, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+  EXPECT_EQ(1, tensors_expected.size());
+  auto tensors =
+      EvaluateNodes(got, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+  EXPECT_EQ(1, tensors.size());
+  test::ExpectTensorEqual<int>(tensors_expected[0], tensors[0]);
 }
 
 TEST_F(ConstantFoldingTest, SqueezeWithAllDimesionsGreaterThanOne) {
@@ -1632,6 +1816,16 @@ TEST_F(ConstantFoldingTest, SqueezeWithAllDimesionsGreaterThanOne) {
   AddNode("out", "Add", {"s1", "s2"}, {}, &want);
 
   CompareGraphs(want, got);
+
+  auto in1_t = GenerateRandomTensor<DT_INT32>(TensorShape({2, 3}));
+  auto in2_t = GenerateRandomTensor<DT_INT32>(TensorShape({1, 2, 3, 1}));
+  auto tensors_expected =
+      EvaluateNodes(item.graph, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+  EXPECT_EQ(1, tensors_expected.size());
+  auto tensors =
+      EvaluateNodes(got, item.fetch, {{"in1", in1_t}, {"in2", in2_t}});
+  EXPECT_EQ(1, tensors.size());
+  test::ExpectTensorEqual<int>(tensors_expected[0], tensors[0]);
 }
 
 TEST_F(ConstantFoldingTest, NoOpReduction) {
@@ -1666,6 +1860,13 @@ TEST_F(ConstantFoldingTest, NoOpReduction) {
     }
   }
   EXPECT_TRUE(found);
+
+  auto v_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({3, 5, 7}));
+  auto tensors_expected = EvaluateNodes(item.graph, item.fetch, {{"v", v_t}});
+  EXPECT_EQ(1, tensors_expected.size());
+  auto tensors = EvaluateNodes(output, item.fetch, {{"v", v_t}});
+  EXPECT_EQ(1, tensors.size());
+  test::ExpectTensorNear<float>(tensors_expected[0], tensors[0], 1e-5);
 }
 
 TEST_F(ConstantFoldingTest, NoOpReshape) {
@@ -1744,6 +1945,21 @@ TEST_F(ConstantFoldingTest, NoOpReshape) {
     }
   }
   EXPECT_EQ(4, found);
+
+  auto v1_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({17}));
+  auto v2_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({17, 1}));
+  auto v3_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({5, 5, 5}));
+  auto v4_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({5, 5, 5}));
+  auto tensors_expected =
+      EvaluateNodes(item.graph, item.fetch,
+                    {{"v1", v1_t}, {"v2", v2_t}, {"v3", v3_t}, {"v4", v4_t}});
+  EXPECT_EQ(4, tensors_expected.size());
+  auto tensors =
+      EvaluateNodes(output, item.fetch,
+                    {{"v1", v1_t}, {"v2", v2_t}, {"v3", v3_t}, {"v4", v4_t}});
+  EXPECT_EQ(4, tensors.size());
+  for (int i = 0; i < tensors.size(); i++)
+    test::ExpectTensorNear<float>(tensors_expected[i], tensors[i], 1e-5);
 }
 
 TEST_F(ConstantFoldingTest, Packing) {
@@ -1760,6 +1976,14 @@ TEST_F(ConstantFoldingTest, Packing) {
   GraphDef output;
   Status status = optimizer.Optimize(nullptr, item, &output);
   TF_EXPECT_OK(status);
+
+  const std::vector<string> fetch_nodes = {"i1", "i2"};
+  auto tensors_expected = EvaluateNodes(item.graph, fetch_nodes);
+  EXPECT_EQ(fetch_nodes.size(), tensors_expected.size());
+  auto tensors = EvaluateNodes(output, fetch_nodes);
+  EXPECT_EQ(fetch_nodes.size(), tensors.size());
+  for (int i = 0; i < fetch_nodes.size(); i++)
+    test::ExpectTensorNear<float>(tensors_expected[i], tensors[i], 1e-5);
 
   // Make sure that the representation of the folded constant is space
   // efficient: in particular, the whole message should be smaller than 8k
@@ -1795,6 +2019,13 @@ TEST_F(ConstantFoldingTest, MaterializeBroadcastGradientArgs) {
   GraphDef output;
   Status status = optimizer.Optimize(nullptr, item, &output);
   TF_EXPECT_OK(status);
+
+  std::vector<string> fetch_nodes = {"o1", "o2", "p1", "p2"};
+  auto a_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({1, 5}));
+  auto g_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({1}));
+  auto tensors_expected =
+      EvaluateNodes(item.graph, fetch_nodes, {{"a", a_t}, {"g", g_t}});
+  EXPECT_EQ(fetch_nodes.size(), tensors_expected.size());
 
   // Run a second time to make sure the optimization is idempotent.
   item.graph.Swap(&output);
@@ -1836,6 +2067,11 @@ TEST_F(ConstantFoldingTest, MaterializeBroadcastGradientArgs) {
     }
   }
   EXPECT_EQ(6, found);
+
+  auto tensors = EvaluateNodes(output, fetch_nodes, {{"a", a_t}, {"g", g_t}});
+  EXPECT_EQ(fetch_nodes.size(), tensors.size());
+  for (int i = 0; i < fetch_nodes.size(); i++)
+    test::ExpectTensorEqual<int>(tensors_expected[i], tensors[i]);
 }
 
 TEST_F(ConstantFoldingTest, MaterializeBroadcastGradientArgs_InfiniteLoop) {
@@ -1854,6 +2090,11 @@ TEST_F(ConstantFoldingTest, MaterializeBroadcastGradientArgs_InfiniteLoop) {
 
   GrapplerItem item;
   TF_CHECK_OK(s.ToGraphDef(&item.graph));
+
+  std::vector<string> fetch_nodes = {"o1", "o2"};
+  auto a_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({2, 2}));
+  auto tensors_expected = EvaluateNodes(item.graph, fetch_nodes, {{"a", a_t}});
+  EXPECT_EQ(fetch_nodes.size(), tensors_expected.size());
 
   ConstantFolding optimizer(nullptr /* cpu_device */);
   GraphDef output;
@@ -1909,6 +2150,10 @@ TEST_F(ConstantFoldingTest, MaterializeBroadcastGradientArgs_InfiniteLoop) {
     }
   }
   EXPECT_EQ(7, found);
+  auto tensors = EvaluateNodes(output, fetch_nodes, {{"a", a_t}});
+  EXPECT_EQ(fetch_nodes.size(), tensors.size());
+  for (int i = 0; i < fetch_nodes.size(); i++)
+    test::ExpectTensorEqual<int>(tensors_expected[i], tensors[i]);
 }
 
 TEST_F(ConstantFoldingTest, MaterializeReductionIndices) {
@@ -1924,6 +2169,14 @@ TEST_F(ConstantFoldingTest, MaterializeReductionIndices) {
   GrapplerItem item;
   TF_CHECK_OK(s.ToGraphDef(&item.graph));
   item.fetch.push_back("reshape");
+
+  auto input_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({3, 4}));
+  Tensor indices_t(DT_INT32, TensorShape({2}));
+  indices_t.flat<int>()(0) = 0;
+  indices_t.flat<int>()(1) = 1;
+  auto tensors_expected = EvaluateNodes(
+      item.graph, item.fetch, {{"input", input_t}, {"indices", indices_t}});
+  EXPECT_EQ(1, tensors_expected.size());
 
   ConstantFolding optimizer(nullptr /* cpu_device */);
   GraphDef output;
@@ -1951,6 +2204,11 @@ TEST_F(ConstantFoldingTest, MaterializeReductionIndices) {
     }
   }
   EXPECT_EQ(3, found);
+
+  auto tensors = EvaluateNodes(output, item.fetch,
+                               {{"input", input_t}, {"indices", indices_t}});
+  EXPECT_EQ(1, tensors.size());
+  test::ExpectTensorNear<float>(tensors_expected[0], tensors[0], 1e-5);
 }
 
 TEST_F(ConstantFoldingTest, LargeConstant) {
@@ -2047,6 +2305,23 @@ TEST_F(ConstantFoldingTest, SwitchIdenticalInputs) {
     }
   }
   EXPECT_EQ(6, found);
+
+  // Evaluate id_true when input tensor x is true.
+  Tensor x_t(DT_BOOL, TensorShape({}));
+  x_t.flat<bool>()(0) = true;
+  auto tensors_expected = EvaluateNodes(item.graph, {"id_true"}, {{"x", x_t}});
+  EXPECT_EQ(1, tensors_expected.size());
+  auto tensors = EvaluateNodes(output, {"id_true"}, {{"x", x_t}});
+  EXPECT_EQ(1, tensors.size());
+  test::ExpectTensorEqual<bool>(tensors_expected[0], tensors[0]);
+
+  // Evalute id_false when input tensor is false.
+  x_t.flat<bool>()(0) = false;
+  tensors_expected = EvaluateNodes(item.graph, {"id_false"}, {{"x", x_t}});
+  EXPECT_EQ(1, tensors_expected.size());
+  tensors = EvaluateNodes(output, {"id_false"}, {{"x", x_t}});
+  EXPECT_EQ(1, tensors.size());
+  test::ExpectTensorEqual<bool>(tensors_expected[0], tensors[0]);
 }
 
 TEST_F(ConstantFoldingTest, PartialFolding_AssociativeAndCommutative) {
@@ -2253,7 +2528,6 @@ TEST_F(ConstantFoldingTest, PartialFolding_IdentityN) {
   ConstantFolding optimizer(nullptr /* cpu_device */);
   GraphDef output;
   Status status = optimizer.Optimize(nullptr, item, &output);
-  LOG(INFO) << output.DebugString();
   TF_EXPECT_OK(status);
   EXPECT_EQ(8, output.node_size());
   for (const auto& node : output.node()) {
@@ -2287,6 +2561,15 @@ TEST_F(ConstantFoldingTest, PartialFolding_IdentityN) {
       EXPECT_EQ(1, node.input_size());
       EXPECT_EQ("^id_n", node.input(0));
     }
+  }
+
+  auto x_t = GenerateRandomTensor<DT_FLOAT>(TensorShape({}));
+  auto tensors_expected = EvaluateNodes(item.graph, item.fetch, {{"x", x_t}});
+  EXPECT_EQ(4, tensors_expected.size());
+  auto tensors = EvaluateNodes(output, item.fetch, {{"x", x_t}});
+  EXPECT_EQ(4, tensors.size());
+  for (int i = 0; i < tensors.size(); i++) {
+    test::ExpectTensorNear<float>(tensors_expected[i], tensors[i], 1e-5);
   }
 }
 
@@ -2331,6 +2614,8 @@ TEST_F(ConstantFoldingTest, TrivialPack) {
   EXPECT_EQ(tensors_expected[0].shape(), tensors[0].shape());
 }
 
+// The test does not evalute the optimized and original graphs to check if their
+// outputs are the same. See b/78233179.
 TEST_F(ConstantFoldingTest, Enter) {
   GrapplerItem item;
   AttrValue frame_name;
@@ -2347,7 +2632,7 @@ TEST_F(ConstantFoldingTest, Enter) {
   value_tensor.AsProtoTensorContent(value.mutable_tensor());
 
   GraphDef& graph = item.graph;
-  AddNode("x", "Placeholder", {}, {{"T", type}}, &graph);
+  AddNode("x", "Placeholder", {}, {{"dtype", type}}, &graph);
   AddNode("c1", "Const", {"^x"}, {{"value", value}, {"dtype", type}}, &graph);
   AddNode("enter1", "Enter", {"x"},
           {{"T", type},

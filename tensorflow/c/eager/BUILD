@@ -3,14 +3,14 @@ licenses(["notice"])  # Apache 2.0
 
 load(
     "//tensorflow:tensorflow.bzl",
-    "tf_cuda_cc_test",
+    "tf_gpu_cc_test",
     "tf_cc_test",
     "tf_copts",
     "tfe_xla_copts",
-    "tf_cuda_library",
+    "tf_gpu_library",
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "c_api",
     srcs = [
         "c_api.cc",
@@ -31,7 +31,6 @@ tf_cuda_library(
             "//tensorflow/core/common_runtime/eager:context",
             "//tensorflow/core/common_runtime/eager:eager_executor",
             "//tensorflow/core/common_runtime/eager:execute",
-            "//tensorflow/core/common_runtime/eager:execute_node",
             "//tensorflow/core/common_runtime/eager:kernel_and_device",
             "//tensorflow/core/common_runtime/eager:tensor_handle",
             "//tensorflow/core/common_runtime/eager:copy_to_device_node",
@@ -49,11 +48,12 @@ tf_cuda_library(
         ],
         "//conditions:default": [],
     }) + [
+        "//tensorflow/core/common_runtime/eager:eager_operation",
         "//tensorflow/core:gpu_runtime",
     ],
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "c_api_internal",
     hdrs = ["c_api_internal.h"],
     visibility = ["//tensorflow:internal"],
@@ -71,12 +71,13 @@ tf_cuda_library(
         "//tensorflow/core:lib_internal",
         "//tensorflow/core/common_runtime/eager:context",
         "//tensorflow/core/common_runtime/eager:eager_executor",
+        "//tensorflow/core/common_runtime/eager:eager_operation",
         "//tensorflow/core/common_runtime/eager:kernel_and_device",
         "//tensorflow/core/common_runtime/eager:tensor_handle",
     ],
 )
 
-tf_cuda_cc_test(
+tf_gpu_cc_test(
     name = "c_api_test",
     srcs = ["c_api_test.cc"],
     extra_copts = tfe_xla_copts(),
@@ -94,7 +95,7 @@ tf_cuda_cc_test(
     ],
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "runtime",
     srcs = ["runtime.cc"],
     hdrs = ["runtime.h"],

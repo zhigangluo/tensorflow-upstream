@@ -47,7 +47,7 @@ limitations under the License.
 #include "tensorflow/core/kernels/bounds_check.h"
 #include "tensorflow/core/kernels/fill_functor.h"
 #include "tensorflow/core/kernels/gather_functor_gpu.cu.h"
-#include "tensorflow/core/util/cuda_kernel_helper.h"
+#include "tensorflow/core/util/gpu_kernel_helper.h"
 #include "tensorflow/core/util/transform_output_iterator.h"
 
 namespace tensorflow {
@@ -285,8 +285,8 @@ class DynamicPartitionOpGPU : public AsyncOpKernel {
         c->allocate_temp(partition_count.dtype(), partition_count.shape(),
                          &cpu_tensor, alloc_attr),
         done);
-    perftools::gputools::DeviceMemoryBase wrapped(
-        partition_count.flat<int32>().data(), num_partitions_ * sizeof(int32));
+    se::DeviceMemoryBase wrapped(partition_count.flat<int32>().data(),
+                                 num_partitions_ * sizeof(int32));
     const bool status =
         stream
             ->ThenMemcpy(cpu_tensor.flat<int32>().data(), wrapped,

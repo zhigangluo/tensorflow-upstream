@@ -372,6 +372,13 @@ config_setting(
 )
 
 config_setting(
+    name = "using_rocm_hipcc",
+    define_values = {
+        "using_rocm_hipcc": "true",
+    },
+)
+
+config_setting(
     name = "with_mpi_support",
     values = {"define": "with_mpi_support=true"},
     visibility = ["//visibility:public"],
@@ -450,11 +457,12 @@ tf_cc_shared_object(
     linkstatic = 1,
     visibility = ["//visibility:public"],
     deps = [
-        "//tensorflow/core:framework_internal_impl",
-        "//tensorflow/core:lib_internal_impl",
         "//tensorflow/core:core_cpu_impl",
-        "//tensorflow/stream_executor:stream_executor_impl",
+        "//tensorflow/core:framework_internal_impl",
         "//tensorflow/core:gpu_runtime_impl",
+        "//tensorflow/core/grappler/optimizers:custom_graph_optimizer_registry_impl",
+        "//tensorflow/core:lib_internal_impl",
+        "//tensorflow/stream_executor:stream_executor_impl",
     ] + tf_additional_binary_deps(),
 )
 

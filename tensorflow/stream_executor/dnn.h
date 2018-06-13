@@ -38,8 +38,7 @@ namespace Eigen {
 struct half;
 }  // namespace Eigen
 
-namespace perftools {
-namespace gputools {
+namespace stream_executor {
 
 class HostBuffer;
 class Stream;
@@ -713,6 +712,7 @@ class AlgorithmDesc {
     return this->algo_ == other.algo_ &&
            this->tensor_ops_enabled_ == other.tensor_ops_enabled_;
   }
+  uint64 hash() const;
 
  private:
   enum { kDefaultAlgorithm = -1 };
@@ -732,12 +732,15 @@ class ProfileResult {
             elapsed_time_in_ms_ != std::numeric_limits<float>::max());
   }
   AlgorithmDesc algorithm() const { return algorithm_; }
+  size_t scratch_size() const { return scratch_size_; }
   void set_algorithm(AlgorithmDesc val) { algorithm_ = val; }
+  void set_scratch_size(size_t val) { scratch_size_ = val; }
   float elapsed_time_in_ms() const { return elapsed_time_in_ms_; }
   void set_elapsed_time_in_ms(float val) { elapsed_time_in_ms_ = val; }
 
  private:
   AlgorithmDesc algorithm_;
+  size_t scratch_size_ = 0;
   float elapsed_time_in_ms_ = std::numeric_limits<float>::max();
 };
 
@@ -749,10 +752,19 @@ class ProfileResult {
 //    the allocation for the scratch memory fails.
 class AlgorithmConfig {
  public:
-  AlgorithmConfig() {}
-  explicit AlgorithmConfig(AlgorithmDesc algorithm) : algorithm_(algorithm) {}
-  AlgorithmConfig(AlgorithmDesc algorithm, AlgorithmDesc algorithm_no_scratch)
-      : algorithm_(algorithm), algorithm_no_scratch_(algorithm_no_scratch) {}
+  AlgorithmConfig()
+      : algorithm_(),
+        algorithm_no_scratch_(),
+        algorithm_scratch_size_(0) {}
+  explicit AlgorithmConfig(AlgorithmDesc algorithm)
+      : algorithm_(algorithm),
+        algorithm_no_scratch_(),
+        algorithm_scratch_size_(0) {}
+  AlgorithmConfig(AlgorithmDesc algorithm, AlgorithmDesc algorithm_no_scratch,
+                  size_t algorithm_scratch_size = 0)
+      : algorithm_(algorithm),
+        algorithm_no_scratch_(algorithm_no_scratch),
+        algorithm_scratch_size_(0) {}
   AlgorithmDesc algorithm() const { return algorithm_; }
   void set_algorithm(AlgorithmDesc val) { algorithm_ = val; }
   AlgorithmDesc algorithm_no_scratch() const { return algorithm_no_scratch_; }
@@ -767,10 +779,17 @@ class AlgorithmConfig {
     return !(*this == other);
   }
   string ToString() const;
+  size_t algorithm_scratch_size() const {
+    return algorithm_scratch_size_;
+  }
+  void set_algorithm_scratch_size(size_t val) {
+    algorithm_scratch_size_ = val;
+  }
 
  private:
   AlgorithmDesc algorithm_;
   AlgorithmDesc algorithm_no_scratch_;
+  size_t        algorithm_scratch_size_;
 };
 
 // Describes a local response normalization (LRN). LRN is used e.g. in
@@ -876,6 +895,22 @@ enum class ElementwiseOperation { kAdd, kMultiply };
 
 string ElementwiseOperationString(ElementwiseOperation op);
 
+// A simple class representing the version of the backing library, to 
+// workaround the "too perfect forwarding" issue in gcc6+ compilers. 
+// See PR#16309 and issue #18402 for links discussing the issue.
+class VersionInfo {
+ public:
+  VersionInfo(int major = 0, int minor = 0, int patch = 0)
+      : major_(major), minor_(minor), patch_(patch) {}
+  int major_version() { return major_; }
+  int minor_version() { return minor_; }
+  int patch() { return patch_; }
+ private:
+  int major_;
+  int minor_;
+  int patch_;
+};
+
 // Suite of operations typically used for implementing Deep/Convolutional Neural
 // Nets. Note: A false return value of an operation indicates the
 // implementation is not available.
@@ -886,8 +921,8 @@ class DnnSupport {
 
   virtual port::Status Init() = 0;
 
-  // Gets the version of the backing library, as a {major, minor, patch} tuple.
-  virtual port::StatusOr<std::tuple<int, int, int>> GetVersion() {
+  // Gets the version of the backing library, as a VersionInfo object.
+  virtual port::StatusOr<VersionInfo> GetVersion() {
     return port::UnimplementedError(
         "DnnSupport::GetVersion not implemented on this platform.");
   }
@@ -1530,14 +1565,16 @@ class DnnSupport {
                              const dnn::BatchDescriptor& input_dimensions,
                              const DeviceMemory<float>& input_data,
                              const dnn::BatchDescriptor& output_dimensions,
-                             DeviceMemory<float>* output_data) = 0;
+                             DeviceMemory<float>* output_data,
+                             ScratchAllocator* workspace_allocator = nullptr) = 0;
 
   virtual bool DoPoolForward(Stream* stream,
                              const dnn::PoolingDescriptor& pooling_dimensions,
                              const dnn::BatchDescriptor& input_dimensions,
                              const DeviceMemory<double>& input_data,
                              const dnn::BatchDescriptor& output_dimensions,
-                             DeviceMemory<double>* output_data) {
+                             DeviceMemory<double>* output_data,
+                             ScratchAllocator* workspace_allocator = nullptr) {
     LOG(FATAL) << "DoPoolForward not implemented for double.";
     return false;
   }
@@ -1547,7 +1584,8 @@ class DnnSupport {
                              const dnn::BatchDescriptor& input_dimensions,
                              const DeviceMemory<Eigen::half>& input_data,
                              const dnn::BatchDescriptor& output_dimensions,
-                             DeviceMemory<Eigen::half>* output_data) {
+                             DeviceMemory<Eigen::half>* output_data,
+                             ScratchAllocator* workspace_allocator = nullptr) {
     LOG(FATAL) << "DoPoolForward not implemented for float16.";
     return false;
   }
@@ -1560,7 +1598,8 @@ class DnnSupport {
                               const dnn::BatchDescriptor& output_dimensions,
                               const DeviceMemory<double>& output_data,
                               const DeviceMemory<double>& input_diff_data,
-                              DeviceMemory<double>* output_diff_data) {
+                              DeviceMemory<double>* output_diff_data,
+                              ScratchAllocator* workspace_allocator = nullptr) {
     LOG(FATAL) << "DoPoolBackward not implemented.";
     return false;
   }
@@ -1572,7 +1611,8 @@ class DnnSupport {
                               const dnn::BatchDescriptor& output_dimensions,
                               const DeviceMemory<float>& output_data,
                               const DeviceMemory<float>& input_diff_data,
-                              DeviceMemory<float>* output_diff_data) {
+                              DeviceMemory<float>* output_diff_data,
+                              ScratchAllocator* workspace_allocator = nullptr) {
     LOG(FATAL) << "DoPoolBackward not implemented.";
     return false;
   }
@@ -1584,7 +1624,8 @@ class DnnSupport {
                               const dnn::BatchDescriptor& output_dimensions,
                               const DeviceMemory<Eigen::half>& output_data,
                               const DeviceMemory<Eigen::half>& input_diff_data,
-                              DeviceMemory<Eigen::half>* output_diff_data) {
+                              DeviceMemory<Eigen::half>* output_diff_data,
+                              ScratchAllocator* workspace_allocator = nullptr) {
     LOG(FATAL) << "DoPoolBackward not implemented.";
     return false;
   }
@@ -1631,7 +1672,8 @@ class DnnSupport {
       const DeviceMemory<float>& raw_data,
       const DeviceMemory<float>& normalized_data,
       const DeviceMemory<float>& normalized_variable_gradient,
-      DeviceMemory<float>* raw_variable_gradient) {
+      DeviceMemory<float>* raw_variable_gradient,
+      ScratchAllocator *workspace_allocator = nullptr) {
     return false;
   }
 
@@ -2008,7 +2050,7 @@ class DnnSupport {
   //    is no longer in use.
   virtual port::StatusOr<std::unique_ptr<dnn::RnnDescriptor>>
   createRnnDescriptor(int num_layers, int hidden_size, int input_size,
-                      dnn::RnnInputMode input_mode,
+                      int batch_size, dnn::RnnInputMode input_mode,
                       dnn::RnnDirectionMode direction_mode,
                       dnn::RnnMode rnn_mode, dnn::DataType data_type,
                       const dnn::AlgorithmConfig& algorithm_config,
@@ -2285,7 +2327,6 @@ class DnnSupport {
 };
 
 }  // namespace dnn
-}  // namespace gputools
-}  // namespace perftools
+}  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_DNN_H_

@@ -24,9 +24,7 @@ llvm_host_triple = "x86_64-unknown-linux_gnu"
 
 llvm_targets = [
     "AArch64",
-    # Uncomment to enable the AMDGPU backend.
-    # TODO(phawkins): use a configure-time test.
-    # "AMDGPU",
+    "AMDGPU",
     "ARM",
     "NVPTX",
     "PowerPC",
@@ -369,6 +367,9 @@ llvm_target_list = [
             ("-gen-asm-matcher", "lib/Target/AMDGPU/AMDGPUGenAsmMatcher.inc"),
             ("-gen-disassembler", "lib/Target/AMDGPU/AMDGPUGenDisassemblerTables.inc"),
             ("-gen-pseudo-lowering", "lib/Target/AMDGPU/AMDGPUGenMCPseudoLowering.inc"),
+            ("-gen-searchable-tables", "lib/Target/AMDGPU/AMDGPUGenSearchableTables.inc"),
+            # XXX FIXME this rule has to be explicitly disabled
+            #("-gen-tgt-intrinsic", "lib/Target/AMDGPU/AMDGPUGenIntrinsics.inc"),
         ],
     },
     {
@@ -2006,7 +2007,6 @@ cc_library(
     ]) + [
         "include/llvm/BinaryFormat/MachO.def",
         "include/llvm/Support/VCSRevision.h",
-        "include/llvm/ExecutionEngine/ObjectMemoryBuffer.h",
     ],
     deps = [
         ":config",
@@ -2053,6 +2053,7 @@ cc_library(
         "include/llvm/Target/*.def",
         "include/llvm/Target/*.inc",
         "include/llvm/CodeGen/*.def",
+        "include/llvm/CodeGen/*.inc",
     ]),
     deps = [
         ":analysis",

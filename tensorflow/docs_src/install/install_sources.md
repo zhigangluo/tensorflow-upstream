@@ -238,15 +238,15 @@ the desired version instead of relying on the default.
 One of the questions that `configure` will ask is as follows:
 
 <pre>
-Please specify optimization flags to use during compilation when bazel option "--config=opt" is specified [Default is -march=native]
+Please specify optimization flags to use during compilation when bazel option "--config=opt" is specified [Default is -march=haswell]
 </pre>
 
-This question refers to a later phase in which you'll use bazel to
-[build the pip package](#build-the-pip-package).  We recommend
-accepting the default (`-march=native`), which will
-optimize the generated code for your local machine's CPU type.  However,
-if you are building TensorFlow on one CPU type but will run TensorFlow on
-a different CPU type, then consider specifying a more specific optimization
+This question refers to a later phase in which you'll use bazel to [build the
+pip package](#build-the-pip-package) or the [C/Java libraries](#BuildCorJava).
+We recommend accepting the default (`-march=haswell`), for better portability over different Linux falvors and CPU architectures.
+However, if you are building
+TensorFlow on one CPU type but will run TensorFlow on a different CPU type, then
+consider specifying a more specific optimization
 flag as described in [the gcc
 documentation](https://gcc.gnu.org/onlinedocs/gcc-4.5.3/gcc/i386-and-x86_002d64-Options.html).
 
@@ -263,7 +263,7 @@ Found possible Python library paths:
 Please input the desired Python library path to use.  Default is [/usr/lib/python2.7/dist-packages]
 
 Using python library path: /usr/local/lib/python2.7/dist-packages
-Please specify optimization flags to use during compilation when bazel option "--config=opt" is specified [Default is -march=native]:
+Please specify optimization flags to use during compilation when bazel option "--config=opt" is specified [Default is -march=haswell]:
 Do you wish to use jemalloc as the malloc implementation? [Y/n]
 jemalloc enabled
 Do you wish to build TensorFlow with Google Cloud Platform support? [y/N]
@@ -310,6 +310,10 @@ Note the following:
 
 
 ## Build the pip package
+
+Note: If you're only interested in building the libraries for the TensorFlow C
+or Java APIs, see [Build the C or Java libraries](#BuildCorJava), you do not
+need to build the pip package in that case.
 
 To build a pip package for TensorFlow with CPU-only support,
 you would typically invoke the following command:
@@ -389,9 +393,9 @@ If you are new to TensorFlow, see @{$get_started/premade_estimators$Getting Star
 If the system outputs an error message instead of a greeting, see [Common
 installation problems](#common_installation_problems).
 
-## Common installation problems
+## Common build and installation problems
 
-The installation problems you encounter typically depend on the
+The build and installation problems you encounter typically depend on the
 operating system.  See the "Common installation problems" section
 of one of the following guides:
 
@@ -442,6 +446,11 @@ Stack Overflow and specify the `tensorflow` tag.
   @local_config_cc//:cc-compiler-darwin_x86_64: Xcode version must be specified
   to use an Apple CROSSTOOL.</pre>
   </td>
+</tr>
+
+<tr>
+  <td><a href="https://stackoverflow.com/q/47080760">47080760</a></td>
+  <td><pre>undefined reference to `cublasGemmEx@libcublas.so.9.0'</pre></td>
 </tr>
 
 </table>
@@ -508,3 +517,20 @@ Stack Overflow and specify the `tensorflow` tag.
 <tr><td>tensorflow-1.0.0</td><td>CPU</td><td>3.5</td><td>MSVC 2015 update 3</td><td>Cmake v3.6.3</td><td>N/A</td><td>N/A</td></tr>
 <tr><td>tensorflow_gpu-1.0.0</td><td>GPU</td><td>3.5</td><td>MSVC 2015 update 3</td><td>Cmake v3.6.3</td><td>5.1</td><td>8</td></tr>
 </table>
+
+<a name="BuildCorJava"></a>
+## Build the C or Java libraries
+
+The instructions above are tailored to building the TensorFlow Python packages.
+
+If you're interested in building the libraries for the TensorFlow C API, do the
+following:
+
+1.  Follow the steps up to [Configure the installation](#ConfigureInstallation)
+2.  Build the C libraries following instructions in the [README](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/tools/lib_package/README.md).
+
+If you're interested inv building the libraries for the TensorFlow Java API,
+do the following:
+
+1.  Follow the steps up to [Configure the installation](#ConfigureInstallation)
+2.  Build the Java library following instructions in the [README](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/tools/lib_package/README.md).

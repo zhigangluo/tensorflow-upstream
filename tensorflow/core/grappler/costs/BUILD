@@ -1,6 +1,6 @@
 licenses(["notice"])  # Apache 2.0
 
-load("//tensorflow:tensorflow.bzl", "tf_cuda_library", "tf_cc_test")
+load("//tensorflow:tensorflow.bzl", "tf_gpu_library", "tf_cc_test")
 load(
     "//tensorflow/core:platform/default/build_config.bzl",
     "tf_protos_grappler",
@@ -41,6 +41,9 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":utils",
+        "//tensorflow/core/grappler/utils:topological_sort",
+        "//tensorflow/core/grappler:graph_view",
+        "//tensorflow/core/grappler:op_types",
         "//tensorflow/core:core_cpu_base",
         "//tensorflow/core:framework",
         "//tensorflow/core:lib",
@@ -122,7 +125,7 @@ tf_cc_test(
     ],
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "utils",
     srcs = ["utils.cc"],
     hdrs = ["utils.h"],

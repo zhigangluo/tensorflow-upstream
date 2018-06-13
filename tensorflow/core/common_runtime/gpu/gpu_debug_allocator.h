@@ -34,7 +34,7 @@ namespace tensorflow {
 class GPUDebugAllocator : public VisitableAllocator {
  public:
   explicit GPUDebugAllocator(VisitableAllocator* allocator,
-                             CudaGpuId cuda_gpu_id);
+                             PhysicalGpuId physical_gpu_id);
   ~GPUDebugAllocator() override;
   string Name() override { return "gpu_debug"; }
   void* AllocateRaw(size_t alignment, size_t num_bytes) override;
@@ -55,7 +55,7 @@ class GPUDebugAllocator : public VisitableAllocator {
  private:
   VisitableAllocator* base_allocator_ = nullptr;  // owned
 
-  perftools::gputools::StreamExecutor* stream_exec_;  // Not owned.
+  se::StreamExecutor* stream_exec_;  // Not owned.
 
   TF_DISALLOW_COPY_AND_ASSIGN(GPUDebugAllocator);
 };
@@ -66,7 +66,7 @@ class GPUDebugAllocator : public VisitableAllocator {
 class GPUNanResetAllocator : public VisitableAllocator {
  public:
   explicit GPUNanResetAllocator(VisitableAllocator* allocator,
-                                CudaGpuId cuda_gpu_id);
+                                PhysicalGpuId physical_gpu_id);
   ~GPUNanResetAllocator() override;
   string Name() override { return "gpu_nan_reset"; }
   void* AllocateRaw(size_t alignment, size_t num_bytes) override;
@@ -81,7 +81,7 @@ class GPUNanResetAllocator : public VisitableAllocator {
  private:
   VisitableAllocator* base_allocator_ = nullptr;  // owned
 
-  perftools::gputools::StreamExecutor* stream_exec_;  // Not owned.
+  se::StreamExecutor* stream_exec_;  // Not owned.
 
   TF_DISALLOW_COPY_AND_ASSIGN(GPUNanResetAllocator);
 };

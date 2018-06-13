@@ -226,8 +226,6 @@ def setup_python(environ_cp):
   # Set-up env variables used by python_configure.bzl
   write_action_env_to_bazelrc('PYTHON_BIN_PATH', python_bin_path)
   write_action_env_to_bazelrc('PYTHON_LIB_PATH', python_lib_path)
-  write_to_bazelrc('build --force_python=py%s' % python_major_version)
-  write_to_bazelrc('build --host_force_python=py%s' % python_major_version)
   write_to_bazelrc('build --python_path=\"%s"' % python_bin_path)
   environ_cp['PYTHON_BIN_PATH'] = python_bin_path
 
@@ -488,7 +486,7 @@ def set_cc_opt_flags(environ_cp):
   elif is_windows():
     default_cc_opt_flags = '/arch:AVX'
   else:
-    default_cc_opt_flags = '-march=native'
+    default_cc_opt_flags = '-march=haswell'
   question = ('Please specify optimization flags to use during compilation when'
               ' bazel option "--config=opt" is specified [Default is %s]: '
              ) % default_cc_opt_flags
@@ -498,7 +496,7 @@ def set_cc_opt_flags(environ_cp):
     write_to_bazelrc('build:opt --copt=%s' % opt)
   # It should be safe on the same build host.
   if not is_ppc64le() and not is_windows():
-    write_to_bazelrc('build:opt --host_copt=-march=native')
+    write_to_bazelrc('build:opt --host_copt=-march=haswell')
   write_to_bazelrc('build:opt --define with_default_optimizations=true')
   # TODO(mikecase): Remove these default defines once we are able to get
   # TF Lite targets building without them.
@@ -1484,16 +1482,18 @@ def main():
 
   set_build_var(environ_cp, 'TF_NEED_JEMALLOC', 'jemalloc as malloc',
                 'with_jemalloc', True)
+  # ROCM TODO: restore these flags to default ones after we get a successful
+  # build
   set_build_var(environ_cp, 'TF_NEED_GCP', 'Google Cloud Platform',
-                'with_gcp_support', True, 'gcp')
+                'with_gcp_support', False, 'gcp')
   set_build_var(environ_cp, 'TF_NEED_HDFS', 'Hadoop File System',
-                'with_hdfs_support', True, 'hdfs')
+                'with_hdfs_support', False, 'hdfs')
   set_build_var(environ_cp, 'TF_NEED_S3', 'Amazon S3 File System',
-                'with_s3_support', True, 's3')
+                'with_s3_support', False, 's3')
   set_build_var(environ_cp, 'TF_NEED_KAFKA', 'Apache Kafka Platform',
-                'with_kafka_support', True, 'kafka')
+                'with_kafka_support', False, 'kafka')
   set_build_var(environ_cp, 'TF_ENABLE_XLA', 'XLA JIT', 'with_xla_support',
-                False, 'xla')
+                True, 'xla')
   set_build_var(environ_cp, 'TF_NEED_GDR', 'GDR', 'with_gdr_support',
                 False, 'gdr')
   set_build_var(environ_cp, 'TF_NEED_VERBS', 'VERBS', 'with_verbs_support',
@@ -1508,6 +1508,12 @@ def main():
       set_computecpp_toolkit_path(environ_cp)
     else:
       set_trisycl_include_dir(environ_cp)
+
+  set_action_env_var(environ_cp, 'TF_NEED_ROCM', 'ROCm', True)
+  if 'LD_LIBRARY_PATH' in environ_cp and environ_cp.get(
+      'LD_LIBRARY_PATH') != '1':
+    write_action_env_to_bazelrc('LD_LIBRARY_PATH',
+                                environ_cp.get('LD_LIBRARY_PATH'))
 
   set_action_env_var(environ_cp, 'TF_NEED_CUDA', 'CUDA', False)
   if (environ_cp.get('TF_NEED_CUDA') == '1' and

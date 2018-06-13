@@ -26,10 +26,10 @@ limitations under the License.
 #include "tensorflow/core/kernels/bounds_check.h"
 #include "tensorflow/core/util/tensor_format.h"
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/kernels/bias_op_gpu.h"
 #include "tensorflow/core/platform/stream_executor.h"
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace tensorflow {
 
@@ -303,7 +303,7 @@ REGISTER_KERNEL(double);
 #undef REGISTER_KERNEL
 #endif  // TENSORFLOW_USE_SYCL
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 template <typename T>
 class BiasOp<GPUDevice, T> : public BinaryOp<T> {
  public:
@@ -393,8 +393,8 @@ class BiasGradOp<GPUDevice, T> : public OpKernel {
     if (channel == 0) return;
     auto* stream = context->op_device_context()->stream();
     OP_REQUIRES(context, stream, errors::Internal("No GPU stream available."));
-    perftools::gputools::DeviceMemoryBase output_ptr(
-        output->flat<T>().data(), output->NumElements() * sizeof(T));
+    se::DeviceMemoryBase output_ptr(output->flat<T>().data(),
+                                    output->NumElements() * sizeof(T));
     stream->ThenMemZero(&output_ptr, output->NumElements() * sizeof(T));
     if (output_backprop.NumElements() > 0) {
       BiasGradGPU<T>::compute(context->template eigen_device<Device>(),
@@ -417,6 +417,6 @@ class BiasGradOp<GPUDevice, T> : public OpKernel {
 TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU_KERNEL);
 #undef REGISTER_GPU_KERNEL
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow

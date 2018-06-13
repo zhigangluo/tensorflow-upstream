@@ -6,6 +6,7 @@ load("//tensorflow:tensorflow.bzl", "if_windows")
 load("//tensorflow:tensorflow.bzl", "if_not_windows")
 load("//tensorflow/core:platform/default/build_config_root.bzl", "if_static")
 load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
 load(
     "//third_party/mkl:build_defs.bzl",
     "if_mkl",
@@ -127,6 +128,7 @@ def cc_proto_library(
     protoc="@protobuf_archive//:protoc",
     internal_bootstrap_hack=False,
     use_grpc_plugin=False,
+    use_grpc_namespace=False,
     default_header=False,
     **kargs):
   """Bazel rule to create a C++ protobuf library from proto source files.
@@ -174,8 +176,11 @@ def cc_proto_library(
     return
 
   grpc_cpp_plugin = None
+  plugin_options = []
   if use_grpc_plugin:
     grpc_cpp_plugin = "//external:grpc_cpp_plugin"
+    if use_grpc_namespace:
+      plugin_options = ["services_namespace=grpc"]
 
   gen_srcs = _proto_cc_srcs(srcs, use_grpc_plugin)
   gen_hdrs = _proto_cc_hdrs(srcs, use_grpc_plugin)
@@ -189,6 +194,7 @@ def cc_proto_library(
       protoc=protoc,
       plugin=grpc_cpp_plugin,
       plugin_language="grpc",
+      plugin_options=plugin_options,
       gen_cc=1,
       outs=outs,
       visibility=["//visibility:public"],
@@ -314,10 +320,34 @@ def tf_proto_library_cc(name, srcs = [], has_services = None,
   use_grpc_plugin = None
   if cc_grpc_version:
     use_grpc_plugin = True
+
+  cc_deps = tf_deps(protodeps, "_cc")
+  cc_name = name + "_cc"
+  if not srcs:
+    # This is a collection of sub-libraries. Build header-only and impl
+    # libraries containing all the sources.
+    proto_gen(
+        name = cc_name + "_genproto",
+        deps = [s + "_genproto" for s in cc_deps],
+        protoc = "@protobuf_archive//:protoc",
+        visibility=["//visibility:public"],
+    )
+    native.cc_library(
+        name = cc_name,
+        deps = cc_deps + ["@protobuf_archive//:protobuf_headers"] +
+               if_static([name + "_cc_impl"]),
+    )
+    native.cc_library(
+        name = cc_name + "_impl",
+        deps = [s + "_impl" for s in cc_deps] + ["@protobuf_archive//:cc_wkt_protos"],
+    )
+
+    return
+
   cc_proto_library(
-      name = name + "_cc",
+      name = cc_name,
       srcs = srcs,
-      deps = tf_deps(protodeps, "_cc") + ["@protobuf_archive//:cc_wkt_protos"],
+      deps = cc_deps + ["@protobuf_archive//:cc_wkt_protos"],
       cc_libs = cc_libs + if_static(
           ["@protobuf_archive//:protobuf"],
           ["@protobuf_archive//:protobuf_headers"]
@@ -336,11 +366,28 @@ def tf_proto_library_cc(name, srcs = [], has_services = None,
 
 def tf_proto_library_py(name, srcs=[], protodeps=[], deps=[], visibility=[],
                         testonly=0, srcs_version="PY2AND3", use_grpc_plugin=False):
+  py_deps = tf_deps(protodeps, "_py")
+  py_name = name + "_py"
+  if not srcs:
+    # This is a collection of sub-libraries. Build header-only and impl
+    # libraries containing all the sources.
+    proto_gen(
+        name = py_name + "_genproto",
+        deps = [s + "_genproto" for s in py_deps],
+        protoc = "@protobuf_archive//:protoc",
+        visibility=["//visibility:public"],
+    )
+    native.py_library(
+        name = py_name,
+        deps = py_deps + ["@protobuf_archive//:protobuf_python"])
+
+    return
+
   py_proto_library(
-      name = name + "_py",
+      name = py_name,
       srcs = srcs,
       srcs_version = srcs_version,
-      deps = deps + tf_deps(protodeps, "_py") + ["@protobuf_archive//:protobuf_python"],
+      deps = deps + py_deps + ["@protobuf_archive//:protobuf_python"],
       protoc = "@protobuf_archive//:protoc",
       default_runtime = "@protobuf_archive//:protobuf_python",
       visibility = visibility,
@@ -504,6 +551,15 @@ def tf_additional_libdevice_deps():
 
 def tf_additional_libdevice_srcs():
   return ["platform/default/cuda_libdevice_path.cc"]
+
+def tf_additional_rocdl_data():
+  return []
+
+def tf_additional_rocdl_deps():
+  return ["@local_config_rocm//rocm:rocm_headers"]
+
+def tf_additional_rocdl_srcs():
+  return ["platform/default/rocm_rocdl_path.cc"]
 
 def tf_additional_test_deps():
   return []

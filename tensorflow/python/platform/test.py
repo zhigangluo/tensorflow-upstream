@@ -26,6 +26,8 @@ depending on the python version.
 @@assert_equal_graph_def
 @@get_temp_dir
 @@is_built_with_cuda
+@@is_built_with_rocm
+@@is_built_with_gpu_support
 @@is_gpu_available
 @@gpu_device_name
 @@compute_gradient
@@ -42,7 +44,6 @@ from __future__ import print_function
 # pylint: disable=g-bad-import-order
 from tensorflow.python.framework import test_util as _test_util
 from tensorflow.python.platform import googletest as _googletest
-from tensorflow.python.util.all_util import remove_undocumented
 
 # pylint: disable=unused-import
 from tensorflow.python.framework.test_util import assert_equal_graph_def
@@ -109,12 +110,16 @@ def is_built_with_cuda():
   """Returns whether TensorFlow was built with CUDA (GPU) support."""
   return _test_util.IsGoogleCudaEnabled()
 
+  
+@tf_export('test.is_built_with_rocm')
+def is_built_with_rocm():
+  """Returns whether TensorFlow was built with ROCm (GPU) support."""
+  return _test_util.IsBuiltWithROCm()
 
-_allowed_symbols = [
-    # We piggy-back googletest documentation.
-    'Benchmark',
-    'mock',
-    'StubOutForTesting',
-]
 
-remove_undocumented(__name__, _allowed_symbols)
+@tf_export('test.is_built_with_gpu_support')
+def is_built_with_gpu_support():
+  """Returns whether TensorFlow was built with GPU (either CUDA or ROCm) support.
+  """
+  return is_built_with_cuda() or is_built_with_rocm()
+

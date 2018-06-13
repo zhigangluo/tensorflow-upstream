@@ -44,7 +44,7 @@ limitations under the License.
 #include "tensorflow/core/lib/core/bits.h"
 #include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/lib/strings/strcat.h"
-#include "tensorflow/core/platform/cpu_info.h"
+#include "tensorflow/core/platform/byte_order.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/protobuf.h"
@@ -209,13 +209,13 @@ DeviceProperties GetDeviceInfo(const string& device_str) {
   if (DeviceNameUtils::ParseFullName(device_str, &parsed)) {
     if (parsed.type == "GPU") {
       TfGpuId tf_gpu_id(parsed.id);
-      CudaGpuId cuda_gpu_id;
-      Status s = GpuIdManager::TfToCudaGpuId(tf_gpu_id, &cuda_gpu_id);
+      PhysicalGpuId physical_gpu_id;
+      Status s = GpuIdManager::TfToPhysicalGpuId(tf_gpu_id, &physical_gpu_id);
       if (!s.ok()) {
         // We are probably running simulation without linking cuda libraries.
-        cuda_gpu_id = CudaGpuId(parsed.id);
+        physical_gpu_id = PhysicalGpuId(parsed.id);
       }
-      return GetLocalGPUInfo(cuda_gpu_id);
+      return GetLocalGPUInfo(physical_gpu_id);
     } else if (parsed.type == "CPU") {
       return GetLocalCPUInfo();
     }

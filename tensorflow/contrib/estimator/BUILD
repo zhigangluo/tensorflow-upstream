@@ -7,7 +7,7 @@ package(
 licenses(["notice"])  # Apache 2.0
 
 load("//tensorflow:tensorflow.bzl", "py_test")
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
+load("//tensorflow:tensorflow.bzl", "gpu_py_test")
 
 py_library(
     name = "estimator_py",
@@ -210,7 +210,7 @@ py_library(
 
 py_test(
     name = "head_test",
-    size = "small",
+    size = "medium",
     srcs = ["python/estimator/head_test.py"],
     srcs_version = "PY2AND3",
     deps = [
@@ -250,7 +250,7 @@ py_library(
 
 py_test(
     name = "linear_test",
-    size = "small",
+    size = "medium",
     srcs = ["python/estimator/linear_test.py"],
     srcs_version = "PY2AND3",
     tags = [
@@ -367,6 +367,7 @@ py_library(
         "//tensorflow/python:sparse_tensor",
         "//tensorflow/python:state_ops",
         "//tensorflow/python:training",
+        "//tensorflow/python:util",
         "//tensorflow/python:variable_scope",
         "//tensorflow/python/estimator:export_output",
         "//tensorflow/python/estimator:model_fn",
@@ -376,7 +377,7 @@ py_library(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "replicate_model_fn_test",
     size = "medium",
     srcs = ["python/estimator/replicate_model_fn_test.py"],
@@ -447,6 +448,7 @@ py_test(
     srcs_version = "PY2AND3",
     tags = [
         "no_pip",
+        "noasan",  # times out
         "notsan",
     ],
     deps = [

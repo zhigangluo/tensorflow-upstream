@@ -30,6 +30,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/dnn.h"
 #include "tensorflow/stream_executor/event.h"
 #include "tensorflow/stream_executor/fft.h"
+#include "tensorflow/stream_executor/host_or_device_scalar.h"
 #include "tensorflow/stream_executor/kernel.h"
 #include "tensorflow/stream_executor/launch_dim.h"
 #include "tensorflow/stream_executor/lib/array_slice.h"
@@ -38,8 +39,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform/thread_annotations.h"
 #include "tensorflow/stream_executor/temporary_memory_manager.h"
 
-namespace perftools {
-namespace gputools {
+namespace stream_executor {
 
 namespace host {
 class HostBlas;
@@ -633,19 +633,22 @@ class Stream {
                           const dnn::BatchDescriptor &input_dimensions,
                           const DeviceMemory<double> &input_data,
                           const dnn::BatchDescriptor &output_dimensions,
-                          DeviceMemory<double> *output_data);
+                          DeviceMemory<double> *output_data,
+                          ScratchAllocator *workspace_allocator = nullptr);
 
   Stream &ThenPoolForward(const dnn::PoolingDescriptor &pooling_dimensions,
                           const dnn::BatchDescriptor &input_dimensions,
                           const DeviceMemory<float> &input_data,
                           const dnn::BatchDescriptor &output_dimensions,
-                          DeviceMemory<float> *output_data);
+                          DeviceMemory<float> *output_data,
+                          ScratchAllocator *workspace_allocator = nullptr);
 
   Stream &ThenPoolForward(const dnn::PoolingDescriptor &pooling_dimensions,
                           const dnn::BatchDescriptor &input_dimensions,
                           const DeviceMemory<Eigen::half> &input_data,
                           const dnn::BatchDescriptor &output_dimensions,
-                          DeviceMemory<Eigen::half> *output_data);
+                          DeviceMemory<Eigen::half> *output_data,
+                          ScratchAllocator *workspace_allocator = nullptr);
 
   Stream &ThenPoolBackward(const dnn::PoolingDescriptor &pooling_dimensions,
                            const dnn::BatchDescriptor &input_dimensions,
@@ -653,7 +656,8 @@ class Stream {
                            const dnn::BatchDescriptor &output_dimensions,
                            const DeviceMemory<double> &output_data,
                            const DeviceMemory<double> &input_diff_data,
-                           DeviceMemory<double> *output_diff_data);
+                           DeviceMemory<double> *output_diff_data,
+                           ScratchAllocator *workspace_allocator = nullptr);
 
   Stream &ThenPoolBackward(const dnn::PoolingDescriptor &pooling_dimensions,
                            const dnn::BatchDescriptor &input_dimensions,
@@ -661,7 +665,8 @@ class Stream {
                            const dnn::BatchDescriptor &output_dimensions,
                            const DeviceMemory<float> &output_data,
                            const DeviceMemory<float> &input_diff_data,
-                           DeviceMemory<float> *output_diff_data);
+                           DeviceMemory<float> *output_diff_data,
+                           ScratchAllocator *workspace_allocator = nullptr);
 
   Stream &ThenPoolBackward(const dnn::PoolingDescriptor &pooling_dimensions,
                            const dnn::BatchDescriptor &input_dimensions,
@@ -669,7 +674,8 @@ class Stream {
                            const dnn::BatchDescriptor &output_dimensions,
                            const DeviceMemory<Eigen::half> &output_data,
                            const DeviceMemory<Eigen::half> &input_diff_data,
-                           DeviceMemory<Eigen::half> *output_diff_data);
+                           DeviceMemory<Eigen::half> *output_diff_data,
+                           ScratchAllocator *workspace_allocator = nullptr);
 
   Stream &ThenNormalize(const dnn::NormalizeDescriptor &normalize_descriptor,
                         const DeviceMemory<float> &input_data,
@@ -688,7 +694,8 @@ class Stream {
       const DeviceMemory<float> &raw_data,
       const DeviceMemory<float> &normalized_data,
       const DeviceMemory<float> &normalized_variable_gradient,
-      DeviceMemory<float> *raw_variable_gradient);
+      DeviceMemory<float> *raw_variable_gradient,
+      ScratchAllocator *workspace_allocator = nullptr);
 
   Stream &ThenActivate(dnn::ActivationMode activation_mode,
                        const dnn::BatchDescriptor &dimensions,
@@ -1423,50 +1430,53 @@ class Stream {
   // See BlasSupport::DoBlasGemmWithAlgorithm.
   Stream &ThenBlasGemmWithAlgorithm(
       blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
-      uint64 k, const Eigen::half &alpha, const DeviceMemory<Eigen::half> &a,
-      int lda, const DeviceMemory<Eigen::half> &b, int ldb,
-      const Eigen::half &beta, DeviceMemory<Eigen::half> *c, int ldc,
-      blas::ComputationType computation_type, blas::AlgorithmType algorithm,
-      blas::ProfileResult *output_profile_result);
-  Stream &ThenBlasGemmWithAlgorithm(blas::Transpose transa,
-                                    blas::Transpose transb, uint64 m, uint64 n,
-                                    uint64 k, int alpha,
-                                    const DeviceMemory<int8> &a, int lda,
-                                    const DeviceMemory<int8> &b, int ldb,
-                                    int beta, DeviceMemory<int> *c, int ldc,
-                                    blas::ComputationType computation_type,
-                                    blas::AlgorithmType algorithm,
-                                    blas::ProfileResult *output_profile_result);
-  Stream &ThenBlasGemmWithAlgorithm(blas::Transpose transa,
-                                    blas::Transpose transb, uint64 m, uint64 n,
-                                    uint64 k, float alpha,
-                                    const DeviceMemory<float> &a, int lda,
-                                    const DeviceMemory<float> &b, int ldb,
-                                    float beta, DeviceMemory<float> *c, int ldc,
-                                    blas::ComputationType computation_type,
-                                    blas::AlgorithmType algorithm,
-                                    blas::ProfileResult *output_profile_result);
-  Stream &ThenBlasGemmWithAlgorithm(
-      blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
-      uint64 k, double alpha, const DeviceMemory<double> &a, int lda,
-      const DeviceMemory<double> &b, int ldb, double beta,
-      DeviceMemory<double> *c, int ldc, blas::ComputationType computation_type,
+      uint64 k, const HostOrDeviceScalar<Eigen::half> &alpha,
+      const DeviceMemory<Eigen::half> &a, int lda,
+      const DeviceMemory<Eigen::half> &b, int ldb,
+      const HostOrDeviceScalar<Eigen::half> &beta, DeviceMemory<Eigen::half> *c,
+      int ldc, blas::ComputationType computation_type,
       blas::AlgorithmType algorithm,
       blas::ProfileResult *output_profile_result);
   Stream &ThenBlasGemmWithAlgorithm(
       blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
-      uint64 k, std::complex<float> alpha,
+      uint64 k, const HostOrDeviceScalar<int> &alpha,
+      const DeviceMemory<int8> &a, int lda, const DeviceMemory<int8> &b,
+      int ldb, const HostOrDeviceScalar<int> &beta, DeviceMemory<int> *c,
+      int ldc, blas::ComputationType computation_type,
+      blas::AlgorithmType algorithm,
+      blas::ProfileResult *output_profile_result);
+  Stream &ThenBlasGemmWithAlgorithm(
+      blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
+      uint64 k, const HostOrDeviceScalar<float> &alpha,
+      const DeviceMemory<float> &a, int lda, const DeviceMemory<float> &b,
+      int ldb, const HostOrDeviceScalar<float> &beta, DeviceMemory<float> *c,
+      int ldc, blas::ComputationType computation_type,
+      blas::AlgorithmType algorithm,
+      blas::ProfileResult *output_profile_result);
+  Stream &ThenBlasGemmWithAlgorithm(
+      blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
+      uint64 k, const HostOrDeviceScalar<double> &alpha,
+      const DeviceMemory<double> &a, int lda, const DeviceMemory<double> &b,
+      int ldb, const HostOrDeviceScalar<double> &beta, DeviceMemory<double> *c,
+      int ldc, blas::ComputationType computation_type,
+      blas::AlgorithmType algorithm,
+      blas::ProfileResult *output_profile_result);
+  Stream &ThenBlasGemmWithAlgorithm(
+      blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
+      uint64 k, const HostOrDeviceScalar<std::complex<float>> &alpha,
       const DeviceMemory<std::complex<float>> &a, int lda,
       const DeviceMemory<std::complex<float>> &b, int ldb,
-      std::complex<float> beta, DeviceMemory<std::complex<float>> *c, int ldc,
+      const HostOrDeviceScalar<std::complex<float>> &beta,
+      DeviceMemory<std::complex<float>> *c, int ldc,
       blas::ComputationType computation_type, blas::AlgorithmType algorithm,
       blas::ProfileResult *output_profile_result);
   Stream &ThenBlasGemmWithAlgorithm(
       blas::Transpose transa, blas::Transpose transb, uint64 m, uint64 n,
-      uint64 k, std::complex<double> alpha,
+      uint64 k, const HostOrDeviceScalar<std::complex<double>> &alpha,
       const DeviceMemory<std::complex<double>> &a, int lda,
       const DeviceMemory<std::complex<double>> &b, int ldb,
-      std::complex<double> beta, DeviceMemory<std::complex<double>> *c, int ldc,
+      const HostOrDeviceScalar<std::complex<double>> &beta,
+      DeviceMemory<std::complex<double>> *c, int ldc,
       blas::ComputationType computation_type, blas::AlgorithmType algorithm,
       blas::ProfileResult *output_profile_result);
 
@@ -2098,7 +2108,6 @@ struct Quantization<int32> {
       dnn::QuantizedActivationMode::k32Bit;
 };
 
-}  // namespace gputools
-}  // namespace perftools
+}  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_STREAM_H_
