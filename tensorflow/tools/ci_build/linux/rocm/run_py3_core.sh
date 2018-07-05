@@ -53,6 +53,7 @@ bazel test --config=rocm --test_tag_filters=-no_oss,-oss_serial,-no_gpu,-benchma
     -//tensorflow/python/keras:sequential_test \
     -//tensorflow/python/keras:simplernn_test \
     -//tensorflow/python/keras:training_eager_test \
+    -//tensorflow/python/keras:training_test \
     -//tensorflow/python/keras:wrappers_test \
     -//tensorflow/python/kernel_tests:atrous_conv2d_test \
     -//tensorflow/python/kernel_tests:batch_matmul_op_test \
