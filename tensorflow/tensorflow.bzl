@@ -903,7 +903,7 @@ register_extension_info(
     label_regex_for_dep = "{extension_name}",
 )
 
-def _cuda_copts():
+def _cuda_copts(opts=[]):
   """Gets the appropriate set of copts for (maybe) CUDA compilation.
 
     If we're doing CUDA compilation, returns copts for our particular CUDA
@@ -918,10 +918,10 @@ def _cuda_copts():
       ]),
       "@local_config_cuda//cuda:using_clang": ([
           "-fcuda-flush-denormals-to-zero",
-      ]),
+      ]) + if_cuda_is_configured(opts)
   })
 
-def _rocm_copts():
+def _rocm_copts(opts=[]):
   """Gets the appropriate set of copts for (maybe) ROCm compilation.
 
     If we're doing ROCm compilation, returns copts for our particular ROCm
@@ -932,7 +932,7 @@ def _rocm_copts():
       "//conditions:default": [],
       "@local_config_rocm//rocm:using_hipcc": ([
           "",
-      ]),
+      ]) + if_rocm_is_configured(opts)
   })
 
 # Build defs for TensorFlow kernels
@@ -950,7 +950,7 @@ def tf_gpu_kernel_library(srcs,
                           deps=[],
                           hdrs=[],
                           **kwargs):
-  copts=copts + tf_copts() + _cuda_copts() + _rocm_copts() + if_cuda_is_configured(cuda_copts) + if_rocm_is_configured(cuda_copts)
+  copts=copts + tf_copts() + _cuda_copts(opts=cuda_copts) + _rocm_copts(opts=cuda_copts)
   kwargs["features"] = kwargs.get("features", []) + ["-use_header_modules"]
 
   native.cc_library(
