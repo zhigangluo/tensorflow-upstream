@@ -13,35 +13,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/stream_executor/stream_executor_internal.h"
+#ifndef TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_PLATFORM_ID_H_
+#define TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_PLATFORM_ID_H_
+
+#include "tensorflow/stream_executor/platform.h"
 
 namespace stream_executor {
-namespace internal {
+namespace rocm {
 
-// -- CUDA
+// Opaque and unique identifier for the ROCm platform.
+// This is needed so that plugins can refer to/identify this platform without
+// instantiating a ROCmPlatform object.
+// This is broken out here to avoid a circular dependency between ROCmPlatform
+// and ROCmExecutor.
+extern const Platform::Id kROCmPlatformId;
 
-StreamExecutorFactory* MakeCUDAExecutorImplementation() {
-  static StreamExecutorFactory instance;
-  return &instance;
-}
-
-// -- OpenCL
-
-StreamExecutorFactory* MakeOpenCLExecutorImplementation() {
-  static StreamExecutorFactory instance;
-  return &instance;
-}
-
-// -- ROCm
-
-StreamExecutorFactory* MakeROCMExecutorImplementation() {
-  static StreamExecutorFactory instance;
-  return &instance;
-}
-
-// -- Host
-
-StreamExecutorFactory MakeHostExecutorImplementation;
-
-}  // namespace internal
+}  // namespace rocm
 }  // namespace stream_executor
+
+#endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_PLATFORM_ID_H_

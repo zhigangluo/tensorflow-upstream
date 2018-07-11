@@ -13,35 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/stream_executor/stream_executor_internal.h"
+#include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 
 namespace stream_executor {
-namespace internal {
+namespace rocm {
 
-// -- CUDA
+PLATFORM_DEFINE_ID(kROCmPlatformId);
 
-StreamExecutorFactory* MakeCUDAExecutorImplementation() {
-  static StreamExecutorFactory instance;
-  return &instance;
-}
-
-// -- OpenCL
-
-StreamExecutorFactory* MakeOpenCLExecutorImplementation() {
-  static StreamExecutorFactory instance;
-  return &instance;
-}
-
-// -- ROCm
-
-StreamExecutorFactory* MakeROCMExecutorImplementation() {
-  static StreamExecutorFactory instance;
-  return &instance;
-}
-
-// -- Host
-
-StreamExecutorFactory MakeHostExecutorImplementation;
-
-}  // namespace internal
+}  // namespace rocm
 }  // namespace stream_executor
