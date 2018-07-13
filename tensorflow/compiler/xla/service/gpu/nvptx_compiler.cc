@@ -608,20 +608,19 @@ StatusOr<std::unique_ptr<Executable>> NVPTXCompiler::RunBackend(
     }
     libdevice_dir = cached_libdevice_dir_;
   }
-  int cc_major, cc_minor;
-  if (!stream_exec->GetDeviceDescription().cuda_compute_capability(&cc_major,
-                                                                   &cc_minor)) {
+  se::DeviceVersion device_version =
+      stream_exec->GetDeviceDescription().device_hardware_version();
+  if (!device_version.is_valid()) {
     LOG(WARNING)
         << "Couldn't get compute capability for device; assuming sm_20.";
-    cc_major = 2;
-    cc_minor = 0;
+    device_version.major_part = 2;
+    device_version.minor_part = 0;
   }
 
   string ptx;
   {
     XLA_SCOPED_LOGGING_TIMER("NVPTXCompiler::RunBackend - CompileToPtx");
-    TF_ASSIGN_OR_RETURN(ptx, CompileToPtx(&llvm_module, {cc_major, cc_minor},
-                                          module->config(), libdevice_dir));
+    TF_ASSIGN_OR_RETURN(ptx, CompileToPtx(&llvm_module, device_version,
   }
 
   if (!ir_dump_directory.empty()) {
@@ -655,8 +654,8 @@ StatusOr<std::unique_ptr<Executable>> NVPTXCompiler::RunBackend(
     }
   }
 
-  const std::vector<uint8> cubin =
-      CompilePtxOrGetCachedResult(ptx, cc_major, cc_minor);
+  const std::vector<uint8> cubin = CompilePtxOrGetCachedResult(
+      ptx, device_version.major_part, device_version.minor_part);
 
   auto thunk_schedule = MakeUnique<ThunkSchedule>(
       ir_emitter.ConsumeThunkSequence(), std::move(stream_assignment),
@@ -678,7 +677,7 @@ StatusOr<std::unique_ptr<Executable>> NVPTXCompiler::RunBackend(
   }
 
   auto* nvptx_executable = new NVPTXExecutable(
-      ptx, cubin, {cc_major, cc_minor}, std::move(thunk_schedule),
+      ptx, cubin, device_version, std::move(thunk_schedule),
       std::move(module), std::move(buffer_assignment),
       std::move(profile_printer), std::move(profile_index_map));
   if (embed_ir_in_executable) {
