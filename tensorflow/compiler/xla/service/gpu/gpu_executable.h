@@ -77,9 +77,6 @@ class GpuExecutable : public Executable {
       const ServiceExecutableRunOptions* run_options,
       tensorflow::gtl::ArraySlice<const ShapedBuffer*> arguments) override;
 
-  virtual Status CheckCompatibilityWithServiceExecutableRunOptions(
-      const ServiceExecutableRunOptions* run_options) = 0;
-
  protected:
   // If `block_host_until_done` is false, execution will not block the host
   // until the kernels have completed. This is used as an optimization for

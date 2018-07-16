@@ -840,7 +840,8 @@ DeviceDescription *ROCMExecutor::PopulateDeviceDescription() const {
   builder.set_device_address_bits(64);
 
   builder.set_device_vendor("Advanced Micro Devices, Inc");
-  builder.set_rocm_amdgpu_isa_version(version_);
+  DeviceVersion device_version(version_);
+  builder.set_device_hardware_version(device_version);
   builder.set_shared_memory_per_core(
       ROCMDriver::GetMaxSharedMemoryPerCore(device_).ValueOrDie());
   builder.set_shared_memory_per_block(

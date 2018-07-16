@@ -66,16 +66,21 @@ Status GpuExecutable::ExecuteThunks(
     const BufferAllocations& buffer_allocations, bool block_host_until_done,
     HloExecutionProfile* hlo_execution_profile) {
 
-  CheckCompatibilityWithServiceExecutableRunOptions(run_options);
-
   se::Stream* main_stream = run_options->stream();
   se::StreamExecutor* executor = main_stream->parent();
 
   se::DeviceVersion stream_device_version =
       executor->GetDeviceDescription().device_hardware_version();
+#if GOOGLE_CUDA
   TF_RET_CHECK(stream_device_version == device_hardware_version_)
       << "Compute capability mismatch; expected {" << device_hardware_version_
       << "}, but was {" << stream_device_version << "}";
+#elif TENSORFLOW_USE_ROCM
+  TF_RET_CHECK(stream_device_version == device_hardware_version_)
+      << "AMDGPU ISA version mismatch; expected {"
+      << device_hardware_version_.major_part << "}, but was {"
+      << stream_device_version.major_part << "}";
+#endif
 
   bool do_profile = hlo_execution_profile != nullptr;
   if (do_profile) {

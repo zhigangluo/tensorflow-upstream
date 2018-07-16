@@ -53,7 +53,6 @@ DeviceDescription::DeviceDescription()
       shared_memory_per_core_(kUninitializedUint64),
       shared_memory_per_block_(kUninitializedUint64),
       clock_rate_ghz_(-1.0),
-      rocm_amdgpu_isa_version_(0),
       device_hardware_version_(),
       numa_node_(-1),
       core_count_(-1),
@@ -111,11 +110,6 @@ DeviceDescriptionBuilder::DeviceDescriptionBuilder()
     : device_description_(new DeviceDescription) {}
 
 }  // namespace internal
-
-bool DeviceDescription::rocm_amdgpu_isa_version(int *version) const {
-  *version = rocm_amdgpu_isa_version_;
-  return rocm_amdgpu_isa_version_ != 0;
-}
 
 bool ThreadDimOk(const DeviceDescription &device_description,
                  const ThreadDim &thread_dim) {

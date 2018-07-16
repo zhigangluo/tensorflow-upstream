@@ -40,7 +40,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/gpu/fusion_merger.h"
 #include "tensorflow/compiler/xla/service/gpu/gpu_constants.h"
 #include "tensorflow/compiler/xla/service/gpu/gpu_copy_insertion.h"
-#include "tensorflow/compiler/xla/service/gpu/amdgpu_executable.h"
+#include "tensorflow/compiler/xla/service/gpu/gpu_executable.h"
 #include "tensorflow/compiler/xla/service/gpu/gpu_hlo_support_checker.h"
 #include "tensorflow/compiler/xla/service/gpu/gpu_layout_assignment.h"
 #include "tensorflow/compiler/xla/service/gpu/hlo_schedule.h"
@@ -79,14 +79,13 @@ limitations under the License.
 #include "tensorflow/core/lib/gtl/cleanup.h"
 #include "tensorflow/core/lib/io/path.h"
 #include "tensorflow/core/lib/strings/strcat.h"
-#include "tensorflow/core/platform/rocm_rocdl_path.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/regexp.h"
+#include "tensorflow/core/platform/rocm_rocdl_path.h"
 #include "tensorflow/core/platform/stream_executor_no_cuda.h"
 #include "tensorflow/core/platform/subprocess.h"
 #include "tensorflow/core/platform/tracing.h"
-
 
 namespace xla {
 namespace gpu {
@@ -436,13 +435,13 @@ StatusOr<std::unique_ptr<Executable>> AMDGPUCompiler::RunBackend(
     generated_hsaco_.emplace_back(MakeUnique<std::vector<char>>());
     hsaco = generated_hsaco_.back().get();
   }
-  
-  int isa_version = 0;
-  if (!stream_exec->GetDeviceDescription().
-                    rocm_amdgpu_isa_version(&isa_version)) {
+
+  se::DeviceVersion isa_version =
+      stream_exec->GetDeviceDescription().device_hardware_version();
+  if (!isa_version.is_valid()) {
     LOG(WARNING)
         << "Couldn't get AMDGPU ISA version for device; assuming gfx803.";
-    isa_version = 803;
+    isa_version.major_part = 803;
   }
   if (rocdl_dir_.empty()) {
     // Compute rocdl_dir_ just once and cache it in this member.
@@ -451,8 +450,9 @@ StatusOr<std::unique_ptr<Executable>> AMDGPUCompiler::RunBackend(
 
   {
     XLA_SCOPED_LOGGING_TIMER("AMDGPUCompiler::Runbackend - CompileToHsaco");
-    TF_ASSIGN_OR_RETURN(*hsaco, CompileToHsaco(&llvm_module, isa_version,
-                                               module->config(), rocdl_dir_));
+    TF_ASSIGN_OR_RETURN(*hsaco,
+                        CompileToHsaco(&llvm_module, isa_version.major_part,
+                                       module->config(), rocdl_dir_));
   }
 
   if (!ir_dump_directory.empty()) {
@@ -486,11 +486,11 @@ StatusOr<std::unique_ptr<Executable>> AMDGPUCompiler::RunBackend(
     profile_printer =
         CreateHloProfilePrinterData(*profile_index_map, cost_analysis);
   }
- 
-  auto* amdgpu_executable = new AMDGPUExecutable(
-        std::move(hsaco->data()), isa_version, std::move(thunk_schedule),
-        std::move(module), std::move(buffer_assignment),
-        std::move(profile_printer), std::move(profile_index_map));
+
+  auto* amdgpu_executable = new GpuExecutable(
+      std::move(hsaco->data()), {}, isa_version, std::move(thunk_schedule),
+      std::move(module), std::move(buffer_assignment),
+      std::move(profile_printer), std::move(profile_index_map));
   if (embed_ir_in_executable) {
     DCHECK_NE("", ir_module_string_before_opt);
     amdgpu_executable->set_ir_module_string(ir_module_string_before_opt);

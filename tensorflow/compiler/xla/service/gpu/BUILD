@@ -275,8 +275,7 @@ cc_library(
         "thunk_schedule.cc",
         "tuple_thunk.cc",
         "while_thunk.cc",
-    ] + if_cuda_is_configured(if_cuda(["nvptx_executable.cc"])) +
-        if_rocm_is_configured(if_rocm(["amdgpu_executable.cc"])),
+    ],
     hdrs = [
         "conditional_thunk.h",
         "convolution_thunk.h",
@@ -294,8 +293,7 @@ cc_library(
         "thunk_schedule.h",
         "tuple_thunk.h",
         "while_thunk.h",
-    ] + if_cuda_is_configured(if_cuda(["nvptx_executable.h"])) +
-        if_rocm_is_configured(if_rocm(["amdgpu_executable.h"])),
+    ],
     deps = [
         ":backend_configs",
         ":buffer_allocations",

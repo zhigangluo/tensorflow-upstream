@@ -37,7 +37,7 @@ using tensorflow::str_util::Lowercase;
 constexpr se::DeviceVersion kMinCudaComputeCapability = {3, 5};
 
 // Minimum supported AMDGPU ISA version is 803.
-constexpr int kMinAMDGPUISAVersion = 803;
+constexpr se::DeviceVersion kMinAMDGPUISAVersion{803};
 
 // The name of the interpreter platform.
 constexpr char kInterpreter[] = "interpreter";
@@ -184,9 +184,9 @@ PlatformUtil::GetSupportedPlatforms() {
 // by XLA.
 static bool IsDeviceSupported(se::StreamExecutor* executor) {
   const auto& description = executor->GetDeviceDescription();
+  se::DeviceVersion device_version = description.device_hardware_version();
   if (executor->platform()->id() == se::cuda::kCudaPlatformId) {
     // CUDA devices must have a minimum compute capability.
-    se::DeviceVersion device_version = description.device_hardware_version();
     if (device_version < kMinCudaComputeCapability) {
       LOG(INFO) << "StreamExecutor cuda device ("
                 << executor->device_ordinal() << ") is of "
@@ -196,16 +196,14 @@ static bool IsDeviceSupported(se::StreamExecutor* executor) {
       return false;
     }
   } else if (executor->platform()->id() == se::rocm::kROCmPlatformId) {
-    int isa_version = 0;
-    if (description.rocm_amdgpu_isa_version(&isa_version)) {
-      if (isa_version < kMinAMDGPUISAVersion) {
-        LOG(INFO) << "StreamExecutor ROCM device ("
-                  << executor->device_ordinal() << ") is of "
-                  << "obsolete AMDGPU ISA version: "
-                  << "gfx" << kMinAMDGPUISAVersion << " required, "
-                  << "device is gfx" << isa_version;
-        return false;
-      }
+    // ROCm devices must have a minimum compute capability.
+    if (device_version < kMinAMDGPUISAVersion) {
+      LOG(INFO) << "StreamExecutor ROCM device (" << executor->device_ordinal()
+                << ") is of "
+                << "obsolete AMDGPU ISA version: "
+                << "gfx" << kMinAMDGPUISAVersion.major_part << " required, "
+                << "device is gfx" << device_version.major_part;
+      return false;
     }
   }
   return true;

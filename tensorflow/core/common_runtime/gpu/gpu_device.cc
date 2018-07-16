@@ -859,7 +859,7 @@ Status SingleVirtualDeviceMemoryLimit(const GPUOptions& gpu_options,
       gpu_options.per_process_gpu_memory_fraction();
   if (per_process_gpu_memory_fraction > 1.0 ||
       gpu_options.experimental().use_unified_memory()) {
-    DeviceVersion device_version =
+    se::DeviceVersion device_version =
         se->GetDeviceDescription().device_hardware_version();
     if (!device_version.is_valid()) {
       return errors::Internal("Failed to get compute capability for device.");
@@ -1109,7 +1109,7 @@ Status BaseGPUDeviceFactory::CreateDevices(const SessionOptions& options,
 static string GetShortDeviceDescription(PhysicalGpuId physical_gpu_id,
                                         const se::DeviceDescription& desc) {
 #if GOOGLE_CUDA
-  DeviceVersion device_version = desc.device_hardware_version();
+  se::DeviceVersion device_version = desc.device_hardware_version();
   // LINT.IfChange
   return strings::StrCat("device: ", physical_gpu_id.value(),
                          ", name: ", desc.name(),
@@ -1338,10 +1338,11 @@ static int GetMinGPUMultiprocessorCount(
 
 namespace {
 
-std::vector<DeviceVersion> supported_cuda_compute_capabilities = {
+#if GOOGLE_CUDA
+std::vector<se::DeviceVersion> supported_cuda_compute_capabilities = {
     TF_CUDA_CAPABILITIES,};
 
-std::vector<DeviceVersion> GetSupportedCudaComputeCapabilities() {
+std::vector<se::DeviceVersion> GetSupportedCudaComputeCapabilities() {
   auto cuda_caps = supported_cuda_compute_capabilities;
 #ifdef TF_EXTRA_CUDA_CAPABILITIES
 // TF_EXTRA_CUDA_CAPABILITIES should be defined a sequence separated by commas,
@@ -1360,12 +1361,13 @@ std::vector<DeviceVersion> GetSupportedCudaComputeCapabilities() {
 #endif
   return cuda_caps;
 }
-#endif // GOOGLE_CUDA
 
-#if TENSORFLOW_USE_ROCM
-std::vector<int> supported_amdgpu_isa_versions = { 803, 900, 906 };
+#elif TENSORFLOW_USE_ROCM
+std::vector<se::DeviceVersion> supported_amdgpu_isa_versions = {{803,0},
+                                                                {900,0},
+                                                                {906,0}};
 
-std::vector<int> GetSupportedAMDGPUISAVersions() {
+std::vector<se::DeviceVersion> GetSupportedAMDGPUISAVersions() {
   return supported_amdgpu_isa_versions;
 }
 #endif // TENSORFLOW_USE_ROCM
@@ -1443,7 +1445,7 @@ Status BaseGPUDeviceFactory::GetValidDeviceIds(
     }
     const auto& description = stream_exec->GetDeviceDescription();
 #if GOOGLE_CUDA
-    DeviceVersion device_version = description.device_hardware_version();
+    se::DeviceVersion device_version = description.device_hardware_version();
     LOG(INFO) << "Found device " << i << " with properties: "
               << "\nname: " << description.name()
               << " compute capability: " << device_version
@@ -1452,14 +1454,10 @@ Status BaseGPUDeviceFactory::GetValidDeviceIds(
               << strings::HumanReadableNumBytes(total_bytes)
               << " freeMemory: " << strings::HumanReadableNumBytes(free_bytes);
 #elif TENSORFLOW_USE_ROCM
-    int isa_version;
-    if (!description.rocm_amdgpu_isa_version(&isa_version)) {
-      // Logs internally on failure.
-      isa_version = 0;
-    }
+    se::DeviceVersion isa_version = description.device_hardware_version();
     LOG(INFO) << "Found device " << i << " with properties: "
               << "\nname: " << description.name()
-              << "\nAMDGPU ISA: gfx" << isa_version
+              << "\nAMDGPU ISA: gfx" << isa_version.major_part
               << "\nmemoryClockRate (GHz) " << description.clock_rate_ghz()
               << "\npciBusID " << description.pci_bus_id()
               << "\nTotal memory: "
@@ -1480,7 +1478,7 @@ Status BaseGPUDeviceFactory::GetValidDeviceIds(
     return errors::FailedPrecondition(
         "No supported cuda capabilities in binary.");
   }
-  DeviceVersion min_supported_capability = *std::min_element(
+  se::DeviceVersion min_supported_capability = *std::min_element(
       cuda_supported_capabilities.begin(), cuda_supported_capabilities.end());
 #elif TENSORFLOW_USE_ROCM
   auto rocm_supported_isas = GetSupportedAMDGPUISAVersions();
@@ -1488,8 +1486,8 @@ Status BaseGPUDeviceFactory::GetValidDeviceIds(
     return errors::FailedPrecondition(
         "No supported rocm capabilities in binary.");
   }
-  int min_supported_isa = *std::min_element(
-      rocm_supported_isas.begin(), rocm_supported_isas.end());
+  se::DeviceVersion min_supported_isa =
+      *std::min_element(rocm_supported_isas.begin(), rocm_supported_isas.end());
 #endif
 
   int min_gpu_core_count =
@@ -1509,8 +1507,8 @@ Status BaseGPUDeviceFactory::GetValidDeviceIds(
     se::StreamExecutor* se = exec_status.ValueOrDie();
     const se::DeviceDescription& desc = se->GetDeviceDescription();
 
+    se::DeviceVersion device_version = desc.device_hardware_version();
 #if GOOGLE_CUDA
-    DeviceVersion device_version = desc.device_hardware_version();
     if (!device_version.is_valid()) {
       LOG(INFO) << "Ignoring visible gpu device "
                 << "(" << GetShortDeviceDescription(visible_gpu_id, desc)
@@ -1530,19 +1528,15 @@ Status BaseGPUDeviceFactory::GetValidDeviceIds(
       continue;
     }
 #elif TENSORFLOW_USE_ROCM
-    int device_isa;
-    if (!desc.rocm_amdgpu_isa_version(&device_isa)) {
-      continue;
-    }
     // Only GPUs with no less than the minimum supported compute capability is
     // accepted.
-    if (device_isa < min_supported_isa) {
+    if (device_version < min_supported_isa) {
       LOG(INFO) << "Ignoring visible gpu device "
                 << "(" << GetShortDeviceDescription(visible_gpu_id, desc)
                 << ") "
-                << "with AMDGPU ISA gfx" << device_isa
+                << "with AMDGPU ISA gfx" << device_version.major_part
                 << ". The minimum required AMDGPU ISA is gfx"
-                << min_supported_isa << ".";
+                << min_supported_isa.major_part << ".";
       continue;
     }
 #endif
