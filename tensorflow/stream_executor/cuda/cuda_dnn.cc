@@ -1980,10 +1980,10 @@ GetCudnnConvolutionBackwardFilterAlgo(const CudnnHandle& cudnn,
 
 port::StatusOr<DeviceMemory<uint8>> AllocateCudnnConvolutionForwardWorkspace(
     Stream* stream, const CudnnHandle& cudnn,
-    const dnn::AlgorithmDesc& algorithm_desc,
     const CudnnTensorDescriptor& input_nd, const CudnnFilterDescriptor& filter,
     const CudnnConvolutionDescriptor& conv,
     const CudnnTensorDescriptor& output_nd,
+    dnn::AlgorithmDesc* algorithm_desc,
     ScratchAllocator* scratch_allocator) {
   // TODO(csigg): This has side effects on the convolution descriptor. It is
   // functionally correct because the convolution is run with the algorithm of
@@ -1998,6 +1998,12 @@ port::StatusOr<DeviceMemory<uint8>> AllocateCudnnConvolutionForwardWorkspace(
       /*wDesc=*/filter.handle(), /*convDesc=*/conv.handle(),
       /*yDesc=*/output_nd.handle(), /*algo=*/ToConvForwardAlgo(algorithm_desc),
       /*sizeInBytes=*/&size_in_bytes));
+
+  if (TF_PREDICT_FALSE(!algorithm_desc)) {
+    return port::Status(port::error::INVALID_ARGUMENT,
+                        "No AlgorithmDesc provided");
+  }
+  algorithm_desc->set_scratch_size(size_in_bytes);
   int64 size_in_bytes_int64 = size_in_bytes;
 
   if (TF_PREDICT_FALSE(size_in_bytes_int64 < 0)) {
@@ -2022,10 +2028,10 @@ port::StatusOr<DeviceMemory<uint8>> AllocateCudnnConvolutionForwardWorkspace(
 port::StatusOr<DeviceMemory<uint8>>
 AllocateCudnnConvolutionBackwardDataWorkspace(
     Stream* stream, const CudnnHandle& cudnn,
-    const dnn::AlgorithmDesc& algorithm_desc,
     const CudnnTensorDescriptor& input_nd, const CudnnFilterDescriptor& filter,
     const CudnnConvolutionDescriptor& conv,
     const CudnnTensorDescriptor& output_nd,
+    dnn::AlgorithmDesc* algorithm_desc,
     ScratchAllocator* scratch_allocator) {
   // TODO(csigg): This has side effects on the convolution descriptor. It is
   // functionally correct because the convolution is run with the algorithm of
@@ -2042,6 +2048,12 @@ AllocateCudnnConvolutionBackwardDataWorkspace(
       /*dxDesc=*/input_nd.handle(),
       /*algo=*/ToConvBackwardDataAlgo(algorithm_desc),
       /*sizeInBytes=*/&size_in_bytes));
+
+  if (TF_PREDICT_FALSE(!algorithm_desc)) {
+    return port::Status(port::error::INVALID_ARGUMENT,
+                        "No AlgorithmDesc provided");
+  }
+  algorithm_desc->set_scratch_size(size_in_bytes);
   int64 size_in_bytes_int64 = size_in_bytes;
 
   if (TF_PREDICT_FALSE(size_in_bytes_int64 < 0)) {
@@ -2066,10 +2078,10 @@ AllocateCudnnConvolutionBackwardDataWorkspace(
 port::StatusOr<DeviceMemory<uint8>>
 AllocateCudnnConvolutionBackwardFilterWorkspace(
     Stream* stream, const CudnnHandle& cudnn,
-    const dnn::AlgorithmDesc& algorithm_desc,
     const CudnnTensorDescriptor& input_nd, const CudnnFilterDescriptor& filter,
     const CudnnConvolutionDescriptor& conv,
     const CudnnTensorDescriptor& output_nd,
+    dnn::AlgorithmDesc* algorithm_desc,
     ScratchAllocator* scratch_allocator) {
   // TODO(csigg): This has side effects on the convolution descriptor. It is
   // functionally correct because the convolution is run with the algorithm of
@@ -2086,6 +2098,12 @@ AllocateCudnnConvolutionBackwardFilterWorkspace(
       /*gradDesc=*/filter.handle(),
       /*algo=*/ToConvBackwardFilterAlgo(algorithm_desc),
       /*sizeInBytes=*/&size_in_bytes));
+
+  if (TF_PREDICT_FALSE(!algorithm_desc)) {
+    return port::Status(port::error::INVALID_ARGUMENT,
+                        "No AlgorithmDesc provided");
+  }
+  algorithm_desc->set_scratch_size(size_in_bytes);
   int64 size_in_bytes_int64 = size_in_bytes;
 
   if (TF_PREDICT_FALSE(size_in_bytes_int64 < 0)) {
@@ -2132,7 +2150,7 @@ port::StatusOr<dnn::AlgorithmDesc> GetCudnnConvolutionForwardAlgorithm(
   }
 
   auto scratch_or = AllocateCudnnConvolutionForwardWorkspace(
-      stream, cudnn, algo_desc, input_nd, filter, conv, output_nd,
+      stream, cudnn, input_nd, filter, conv, output_nd, algo_desc,
       scratch_allocator);
 
   if (scratch_or.ok()) {
@@ -2149,11 +2167,12 @@ port::StatusOr<dnn::AlgorithmDesc> GetCudnnConvolutionForwardAlgorithm(
         "while a secondary algorithm is not provided.");
   }
 
+  algo_desc = algorithm_config.algorithm_no_scratch();
   SE_ASSIGN_OR_RETURN(
       *scratch, AllocateCudnnConvolutionForwardWorkspace(
-                    stream, cudnn, algorithm_config.algorithm_no_scratch(),
-                    input_nd, filter, conv, output_nd, scratch_allocator));
-  return algorithm_config.algorithm_no_scratch();
+                    stream, cudnn,
+                    input_nd, filter, conv, output_nd, &algo_desc, scratch_allocator));
+  return algo_desc;
 }
 
 port::StatusOr<dnn::AlgorithmDesc> GetCudnnConvolutionBackwardDataAlgorithm(
@@ -2198,11 +2217,12 @@ port::StatusOr<dnn::AlgorithmDesc> GetCudnnConvolutionBackwardDataAlgorithm(
         "while a secondary algorithm is not provided.");
   }
 
+  algo_desc = algorithm_config.algorithm_no_scratch();
   SE_ASSIGN_OR_RETURN(
       *scratch, AllocateCudnnConvolutionBackwardDataWorkspace(
-                    stream, cudnn, algorithm_config.algorithm_no_scratch(),
-                    input_nd, filter, conv, output_nd, scratch_allocator));
-  return algorithm_config.algorithm_no_scratch();
+                    stream, cudnn,
+                    input_nd, filter, conv, output_nd, &algo_desc, scratch_allocator));
+  return algo_desc;
 }
 
 port::StatusOr<dnn::AlgorithmDesc> GetCudnnConvolutionBackwardFilterAlgorithm(
@@ -2247,11 +2267,12 @@ port::StatusOr<dnn::AlgorithmDesc> GetCudnnConvolutionBackwardFilterAlgorithm(
         "while a secondary algorithm is not provided.");
   }
 
+  algo_desc = algorithm_config.algorithm_no_scratch();
   SE_ASSIGN_OR_RETURN(*scratch,
                       AllocateCudnnConvolutionBackwardFilterWorkspace(
-                          stream, cudnn, algorithm_config.algorithm(), input_nd,
-                          filter, conv, output_nd, scratch_allocator));
-  return algorithm_config.algorithm_no_scratch();
+                          stream, cudnn, input_nd,
+                          filter, conv, output_nd, &algo_desc, scratch_allocator));
+  return algo_desc;
 }
 
 // A helper class to set env-vars and choose options for cudnn-related
