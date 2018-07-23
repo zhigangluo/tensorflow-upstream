@@ -30,8 +30,6 @@ limitations under the License.
 
 namespace tensorflow {
 
-string get_env_var(char const* var_name);
-
 RdmaMgr::RdmaMgr(const WorkerEnv* const worker_env,
                  GrpcChannelCache* const channel_cache)
     : worker_env_(worker_env), channel_cache_(channel_cache) {
@@ -204,11 +202,10 @@ bool IsGDRAvailable() {
 #elif defined(PLATFORM_WINDOWS)
   return false;
 #elif TENSORFLOW_USE_ROCM
-  string maybe_gdr = get_env_var("ROCM_USE_GDR");
-  if (maybe_gdr.empty()) {
-      maybe_gdr = "no";
-  }
-  return maybe_gdr[0] == 'y' || maybe_gdr[0] == 'Y';
+  const char *value = getenv("ROCM_USE_GDR");
+  string rocm_use_gdr = value == nullptr ? "no" : value;
+  VLOG(0) << "ROCM_USE_GDR is: \"" << rocm_use_gdr << "\"";
+  return !rocm_use_gdr.empty() && rocm_use_gdr[0] == 'y';
 #else
   std::ifstream ifs("/proc/modules");
   string line;
