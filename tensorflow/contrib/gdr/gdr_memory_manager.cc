@@ -646,6 +646,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
     done(errors::Unavailable(ibv_wc_status_str(wc.status)));
     return;
   }
+  LOG(INFO) << "ibv_poll_cq send_cq ret=" << ret;
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
   if (host_copy.NumElements() > 0) {
@@ -710,10 +711,20 @@ Status GdrMemoryManager::CreateEndpoint(const string& host, const string& port,
         strerror(errno), ": ", "cannot connect to rdma://", host, ":", port);
   }
 
+  const char *gdr_max_send_wr_env = getenv("GDR_MAX_SEND_WR");
+  string gdr_max_send_wr = gdr_max_send_wr_env == nullptr ? "32" : gdr_max_send_wr_env;
+  int32 gdr_max_send_wr_int;
+  if (strings::safe_strto32(gdr_max_send_wr, &gdr_max_send_wr_int)) {
+    if (gdr_max_send_wr_int < 32) {
+      gdr_max_send_wr_int = 32;
+    }
+  }
+  VLOG(0) << "gdr_max_send_wr_int is: \"" << gdr_max_send_wr_int << "\"";
+
   ibv_qp_init_attr init_attr = {};
   init_attr.qp_type = IBV_QPT_RC;
   init_attr.cap.max_recv_wr = 1;
-  init_attr.cap.max_send_wr = 32;
+  init_attr.cap.max_send_wr = gdr_max_send_wr_int;
   init_attr.cap.max_recv_sge = 1;
   init_attr.cap.max_send_sge = 1;
 
