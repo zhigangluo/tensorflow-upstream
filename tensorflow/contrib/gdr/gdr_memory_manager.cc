@@ -163,6 +163,7 @@ class GdrMemoryManager : public RemoteMemoryManager {
   RdmaEndpointPtr listening_;
   std::atomic<bool> stopped_;
   std::atomic<bool> use_checksum_;
+  std::atomic<uint32_t> wr_count_;
   int epfd_;
 
   // Server side endpoints
@@ -218,6 +219,7 @@ GdrMemoryManager::GdrMemoryManager(const string& host, const string& port)
       listening_(nullptr, EndpointDeleter),
       stopped_(true),
       use_checksum_(false),
+      wr_count_(0),
       next_key_(0) {
   const char *value = getenv("GDR_USE_CHECKSUM");
   string gdr_use_chcksum = value == nullptr ? "no" : value;
@@ -271,6 +273,15 @@ Status GdrMemoryManager::Init() {
         "Unsupported address ", host_, ":", port_,
         " as it does not bind to a particular RDMA device");
   }
+
+  struct ibv_device_attr device_attr;
+  if (ibv_query_device(listening_->verbs, &device_attr)) {
+    return errors::Unavailable(strerror(errno), ": ",
+                               "cannot set server to non-blocking mode");
+  }
+  LOG(INFO) << "ibv_query_device max_mr_size=" << device_attr.max_mr_size
+      << "max_qp_wr=" << device_attr.max_qp_wr
+      << "max_mr=" << device_attr.max_mr;
 
   int flags = fcntl(listening_->channel->fd, F_GETFL, 0);
   if (fcntl(listening_->channel->fd, F_SETFL, flags | O_NONBLOCK)) {
