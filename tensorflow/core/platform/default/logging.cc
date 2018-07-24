@@ -27,6 +27,21 @@ limitations under the License.
 #include <stdlib.h>
 #include <time.h>
 
+// the following is for acquiring thread ID for logging
+#include <sys/types.h>
+#include <sys/syscall.h>
+#include <pthread.h>
+#ifndef gettid
+#include <unistd.h>
+// equivalent to:  pid_t  gettid(void)
+#define gettid() syscall(SYS_gettid)
+#endif
+// cache potential syscall to gain efficiency
+static int mytid() {
+    thread_local int tid = gettid();
+    return tid;
+}
+
 namespace tensorflow {
 namespace internal {
 
@@ -87,8 +102,8 @@ void LogMessage::GenerateLogMessage() {
            localtime(&now_seconds));
 
   // TODO(jeff,sanjay): Replace this with something that logs through the env.
-  fprintf(stderr, "%s.%06d: %c %s:%d] %s\n", time_buffer, micros_remainder,
-          "IWEF"[severity_], fname_, line_, str().c_str());
+  fprintf(stderr, "%s.%06d: %d: %c %s:%d] %s\n", time_buffer, micros_remainder,
+          mytid(), "IWEF"[severity_], fname_, line_, str().c_str());
 }
 #endif
 
