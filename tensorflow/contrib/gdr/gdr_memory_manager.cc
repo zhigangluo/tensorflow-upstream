@@ -245,9 +245,19 @@ Status GdrMemoryManager::Init() {
                                host_, ":", port_);
   }
 
+  const char *gdr_max_recv_wr_env = getenv("GDR_MAX_RECV_WR");
+  string gdr_max_recv_wr = gdr_max_recv_wr_env == nullptr ? "32" : gdr_max_recv_wr_env;
+  int32 gdr_max_recv_wr_int;
+  if (strings::safe_strto32(gdr_max_recv_wr, &gdr_max_recv_wr_int)) {
+    if (gdr_max_recv_wr_int < 32) {
+      gdr_max_recv_wr_int = 32;
+    }
+  }
+  VLOG(0) << "gdr_max_recv_wr_int is: \"" << gdr_max_recv_wr_int << "\"";
+
   ibv_qp_init_attr init_attr = {};
   init_attr.qp_type = IBV_QPT_RC;
-  init_attr.cap.max_recv_wr = 32;
+  init_attr.cap.max_recv_wr = gdr_max_recv_wr_int;
   init_attr.cap.max_send_wr = 1;
   init_attr.cap.max_recv_sge = 1;
   init_attr.cap.max_send_sge = 1;
@@ -280,8 +290,8 @@ Status GdrMemoryManager::Init() {
                                "cannot set server to non-blocking mode");
   }
   LOG(INFO) << "ibv_query_device max_mr_size=" << device_attr.max_mr_size
-      << "max_qp_wr=" << device_attr.max_qp_wr
-      << "max_mr=" << device_attr.max_mr;
+      << " max_qp_wr=" << device_attr.max_qp_wr
+      << " max_mr=" << device_attr.max_mr;
 
   int flags = fcntl(listening_->channel->fd, F_GETFL, 0);
   if (fcntl(listening_->channel->fd, F_SETFL, flags | O_NONBLOCK)) {
