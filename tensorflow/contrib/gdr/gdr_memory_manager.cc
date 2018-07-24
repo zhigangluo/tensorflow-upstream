@@ -111,7 +111,9 @@ void EndpointDeleter(rdma_cm_id* id) {
 
 void MRDeleter(ibv_mr* mr) {
   if (mr) {
-    rdma_dereg_mr(mr);
+    if (rdma_dereg_mr(mr)) {
+      LOG(ERROR) << "rdma_dereg_mr failed";
+    }
   }
 }
 
@@ -387,6 +389,16 @@ void GdrMemoryManager::Run() {
             }
             server_clients_.push_back({id, EndpointDeleter});
           }
+          else {
+            LOG(ERROR) << strerror(errno)
+                       << ": rdma_accept failed";
+            continue;
+          }
+        }
+        else {
+          LOG(ERROR) << strerror(errno)
+                     << ": rdma_get_request failed";
+          continue;
         }
       } else {
         // Polling work completions
@@ -404,6 +416,7 @@ void GdrMemoryManager::Run() {
             LOG(ERROR) << "ibv_poll_cq failed";
             continue;
           }
+          LOG(INFO) << "ibv_poll_cq ret="<<ret;
           for (int i = 0; i < ret; i++) {
             if (wc[i].opcode != IBV_WC_RECV_RDMA_WITH_IMM) {
               LOG(ERROR) << "Received unknown operation " << wc[i].opcode;
@@ -429,6 +442,9 @@ void GdrMemoryManager::Run() {
               continue;
             }
           }
+        }
+        else {
+          LOG(ERROR) << "ibv_get_cq_event failed";
         }
       }
     }
