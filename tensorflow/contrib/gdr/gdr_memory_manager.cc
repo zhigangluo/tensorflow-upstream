@@ -160,6 +160,7 @@ class GdrMemoryManager : public RemoteMemoryManager {
   const string port_;
   RdmaEndpointPtr listening_;
   std::atomic<bool> stopped_;
+  std::atomic<bool> use_checksum_;
   int epfd_;
 
   // Server side endpoints
@@ -214,7 +215,13 @@ GdrMemoryManager::GdrMemoryManager(const string& host, const string& port)
       port_(port),
       listening_(nullptr, EndpointDeleter),
       stopped_(true),
-      next_key_(0) {}
+      use_checksum_(false),
+      next_key_(0) {
+  const char *value = getenv("GDR_USE_CHECKSUM");
+  string gdr_use_chcksum = value == nullptr ? "no" : value;
+  VLOG(0) << "gdr_use_chcksum is: \"" << gdr_use_chcksum << "\"";
+  use_checksum_ = !gdr_use_chcksum.empty() && gdr_use_chcksum[0] == 'y';
+}
 
 GdrMemoryManager::~GdrMemoryManager() { close(epfd_); }
 
@@ -305,6 +312,9 @@ Status GdrMemoryManager::Init() {
       instrumented_.insert(allocator);
       LOG(INFO) << "Instrumenting CPU allocator " << allocator->Name();
     }
+    else {
+      LOG(INFO) << "Skipping instrumenting of duplicate CPU allocator " << allocator->Name();
+    }
   }
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
@@ -315,6 +325,9 @@ Status GdrMemoryManager::Init() {
     int32_t bus_id = TryToReadNumaNode(listening_->verbs->device) + 1;
     ProcessState::singleton()->AddGPUAllocVisitor(bus_id, cuda_alloc_visitor);
     LOG(INFO) << "Instrumenting GPU allocator with bus_id " << bus_id;
+  }
+  else {
+    LOG(INFO) << "GDR not available";
   }
 #endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
@@ -327,8 +340,14 @@ void GdrMemoryManager::Run() {
     epoll_event events[32];
     int ret = epoll_wait(epfd_, events, 32, 1);
     if (ret == -1) {
-      LOG(ERROR) << "epoll_wait: " << strerror(errno);
-      return;
+      if (EINTR == errno) {
+        LOG(INFO) << "epoll_wait: " << strerror(errno);
+        continue;
+      }
+      else {
+        LOG(ERROR) << "epoll_wait: " << strerror(errno);
+        return;
+      }
     }
     for (int i = 0; i < ret; i++) {
       rdma_cm_id* id = static_cast<rdma_cm_id*>(events[i].data.ptr);
@@ -406,8 +425,7 @@ void GdrMemoryManager::Run() {
               }
             }
             if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
-              perror("rdma_post_recvv");
-              LOG(ERROR) << "rdma_post_recvv failed";
+              LOG(ERROR) << strerror(errno) << ": rdma_post_recvv failed";
               continue;
             }
           }
@@ -430,8 +448,6 @@ void GdrMemoryManager::TransportOptionsFromTensor(
     done(errors::Unavailable("Cannot register tensor buffer of size 0"));
     return;
   }
-
-  ibv_mr* mr = FindMemoryRegion(addr, length);
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
   if (!on_host) {
@@ -464,7 +480,7 @@ void GdrMemoryManager::TransportOptionsFromTensor(
           }
 
           uint64_t checksum = 0;
-          if (VLOG_IS_ON(2)) {
+          if (use_checksum_) {
             checksum = GPUUtil::Checksum(*host_copy);
           }
 
@@ -484,6 +500,8 @@ void GdrMemoryManager::TransportOptionsFromTensor(
   }
 #endif
 
+  ibv_mr* mr = FindMemoryRegion(addr, length);
+
   if (mr == nullptr) {
     done(errors::Unavailable("Cannot find pinned memory region"));
     return;
@@ -497,13 +515,9 @@ void GdrMemoryManager::TransportOptionsFromTensor(
   }
 
   uint64_t checksum = 0;
-  if (VLOG_IS_ON(2)) {
+  if (use_checksum_) {
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
-    if (!on_host) {
-      checksum = GPUUtil::Checksum(device, device_context, tensor);
-    } else {
-      checksum = GPUUtil::Checksum(tensor);
-    }
+    checksum = GPUUtil::Checksum(tensor);
 #endif
   }
 
@@ -534,8 +548,8 @@ void GdrMemoryManager::TensorFromTransportOptions(
   size_t length = buffer->size();
   ibv_mr* mr = FindMemoryRegion(addr, length);
 
-  Tensor host_copy;
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+  Tensor host_copy;
   if (mr == nullptr && !on_host) {
     Allocator* alloc = ProcessState::singleton()->GetGPUHostAllocator(0);
     host_copy = Tensor(alloc, tensor->dtype(), tensor->shape());
@@ -599,7 +613,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
   if (host_copy.NumElements() > 0) {
     uint64_t checksum = 0;
-    if (VLOG_IS_ON(2)) {
+    if (use_checksum_) {
       checksum = GPUUtil::Checksum(host_copy);
       CHECK(checksum == remote_mr.checksum())
           << "Checksum mismatch: " << checksum << "!=" << remote_mr.checksum();
@@ -634,7 +648,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
           << remote_mr.tensor_key() << " took " << (end - start) << " micros";
 
   uint64_t checksum = 0;
-  if (VLOG_IS_ON(2)) {
+  if (use_checksum_) {
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
     if (device->tensorflow_gpu_device_info() && (!on_host)) {
       checksum = GPUUtil::Checksum(device, device_context, *tensor);
