@@ -287,11 +287,12 @@ Status GdrMemoryManager::Init() {
   struct ibv_device_attr device_attr;
   if (ibv_query_device(listening_->verbs, &device_attr)) {
     return errors::Unavailable(strerror(errno), ": ",
-                               "cannot set server to non-blocking mode");
+                               "cannot query device");
   }
   LOG(INFO) << "ibv_query_device max_mr_size=" << device_attr.max_mr_size
       << " max_qp_wr=" << device_attr.max_qp_wr
-      << " max_mr=" << device_attr.max_mr;
+      << " max_mr=" << device_attr.max_mr
+      << " max_mr_size=" << device_attr.max_mr_size;
 
   int flags = fcntl(listening_->channel->fd, F_GETFL, 0);
   if (fcntl(listening_->channel->fd, F_SETFL, flags | O_NONBLOCK)) {
@@ -372,6 +373,10 @@ void GdrMemoryManager::Run() {
         return;
       }
     }
+    // we might get a lot of no-event timeouts, just log the events
+    else if (ret > 0) {
+      LOG(INFO) << "epoll_wait ret=" << ret;
+    }
     for (int i = 0; i < ret; i++) {
       rdma_cm_id* id = static_cast<rdma_cm_id*>(events[i].data.ptr);
       if (id == listening_.get()) {
@@ -384,13 +389,15 @@ void GdrMemoryManager::Run() {
               EndpointDeleter(id);
               continue;
             }
-            for (int i = 0; i < 32; i++) {
+#if 1
+            for (int i = 0; i < 1; i++) {
               if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
                 LOG(ERROR) << strerror(errno) << ": rdma_post_recvv failed";
                 EndpointDeleter(id);
                 continue;
               }
             }
+#endif
             int flags = fcntl(id->recv_cq_channel->fd, F_GETFL, 0);
             if (fcntl(id->recv_cq_channel->fd, F_SETFL, flags | O_NONBLOCK)) {
               LOG(ERROR) << strerror(errno)
@@ -465,10 +472,12 @@ void GdrMemoryManager::Run() {
                 LOG(INFO) << "erasing tensor key " << tensor_key;
               }
             }
+#if 1
             if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
               LOG(ERROR) << strerror(errno) << ": rdma_post_recvv failed";
               continue;
             }
+#endif
           } while (ne);
         }
         else {
@@ -651,6 +660,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
   }
 
   ibv_send_wr wr = {};
+  wr.wr_id = remote_mr.tensor_key();
   wr.opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
   wr.imm_data = htonl(remote_mr.tensor_key());
   wr.send_flags = IBV_SEND_SIGNALED;
@@ -673,7 +683,9 @@ void GdrMemoryManager::TensorFromTransportOptions(
   }
   LOG(INFO) << "ibv_poll_cq send_cq"
             << " count=" << count
-            << " ret=" << ret;
+            << " ret=" << ret
+            << " wr.wr_id=" << wr.wr_id
+            << " wc.wr_id=" << wc.wr_id;
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
   if (!on_host && host_copy.NumElements() > 0) {
