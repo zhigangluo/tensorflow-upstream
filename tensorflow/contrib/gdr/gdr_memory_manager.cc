@@ -687,7 +687,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
     std::swap(host_copy, *ref);
     GPUUtil::CopyCPUTensorToGPU(
         ref, device_context, device, tensor,
-        [ref, done, buffer, remote_mr, start](const Status& s) {
+        [ref, done, buffer, remote_mr, start, checksum](const Status& s) {
           if (!s.ok()) {
             done(s);
             delete ref;
@@ -723,7 +723,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
 
   LOG(INFO) << "RDMA from remote memory region " << remote_mr.rkey()
             << " of size " << buffer->size() << " with tensor key "
-            << remote_mr.tensor_key() << " took " << (end - start) << " micros";
+            << remote_mr.tensor_key() << " took " << (end - start) << " micros"
             << " with checksum=" << checksum;
 
   done(Status::OK());
