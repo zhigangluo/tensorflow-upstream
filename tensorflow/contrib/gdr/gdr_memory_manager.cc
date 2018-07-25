@@ -601,6 +601,11 @@ void GdrMemoryManager::TensorFromTransportOptions(
   size_t length = buffer->size();
   ibv_mr* mr = FindMemoryRegion(addr, length);
 
+  LOG(INFO) << "TensorFromTransportOptions"
+      << " on_host=" << on_host
+      << " tensor_key=" << remote_mr.tensor_key()
+      << " length=" << length;
+
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
   Tensor host_copy;
   if (mr == nullptr && !on_host) {
@@ -658,13 +663,30 @@ void GdrMemoryManager::TensorFromTransportOptions(
 
   ibv_wc wc = {};
   int ret;
-  while ((ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0)
-    ;
-  if (ret < 0 || wc.status) {
+  int count = 0;
+  while ((ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0) {
+    ++count;
+  }
+  if (ret < 0 || wc.status != IBV_WC_SUCCESS) {
     done(errors::Unavailable(ibv_wc_status_str(wc.status)));
     return;
   }
-  LOG(INFO) << "ibv_poll_cq send_cq ret=" << ret;
+  LOG(INFO) << "ibv_poll_cq send_cq"
+            << " count=" << count
+            << " ret=" << ret;
+  if (1 == ret) {
+    /* rdma_post_read and ibv_post_send are two work items, and only 1 completed */
+      while ((ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0) {
+          ++count;
+          if (count > 500000) {
+            LOG(INFO) << "ibv_poll_cq excessive attempts, breaking out";
+            break;
+          }
+      }
+      LOG(INFO) << "ibv_poll_cq send_cq again"
+                << " count=" << count
+                << " ret=" << ret;
+  }
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
   if (!on_host && host_copy.NumElements() > 0) {
@@ -715,12 +737,6 @@ void GdrMemoryManager::TensorFromTransportOptions(
   LOG(INFO) << "RDMA from remote memory region " << remote_mr.rkey()
           << " of size " << buffer->size() << " with tensor key "
           << remote_mr.tensor_key() << " took " << (end - start) << " micros";
-
-  LOG(INFO) << "TensorFromTransportOptions"
-      << " on_host=" << on_host
-      << " tensor_key=" << remote_mr.tensor_key()
-      << " length=" << length
-      << " checksum=" << checksum;
 
   done(Status::OK());
 }
