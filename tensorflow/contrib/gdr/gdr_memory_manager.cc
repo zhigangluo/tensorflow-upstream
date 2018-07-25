@@ -54,7 +54,7 @@ bool IsGDRAvailable() {
 #elif TENSORFLOW_USE_ROCM
   const char *value = getenv("ROCM_USE_GDR");
   string rocm_use_gdr = value == nullptr ? "no" : value;
-  VLOG(0) << "ROCM_USE_GDR is: \"" << rocm_use_gdr << "\"";
+  LOG(INFO) << "ROCM_USE_GDR is: \"" << rocm_use_gdr << "\"";
   return !rocm_use_gdr.empty() && rocm_use_gdr[0] == 'y';
 #else
   std::ifstream ifs("/proc/modules");
@@ -223,7 +223,7 @@ GdrMemoryManager::GdrMemoryManager(const string& host, const string& port)
       next_key_(0) {
   const char *value = getenv("GDR_USE_CHECKSUM");
   string gdr_use_chcksum = value == nullptr ? "no" : value;
-  VLOG(0) << "gdr_use_chcksum is: \"" << gdr_use_chcksum << "\"";
+  LOG(INFO) << "gdr_use_chcksum is: \"" << gdr_use_chcksum << "\"";
   use_checksum_ = !gdr_use_chcksum.empty() && gdr_use_chcksum[0] == 'y';
 }
 
@@ -253,7 +253,7 @@ Status GdrMemoryManager::Init() {
       gdr_max_recv_wr_int = 32;
     }
   }
-  VLOG(0) << "gdr_max_recv_wr_int is: \"" << gdr_max_recv_wr_int << "\"";
+  LOG(INFO) << "gdr_max_recv_wr_int is: \"" << gdr_max_recv_wr_int << "\"";
 
   ibv_qp_init_attr init_attr = {};
   init_attr.qp_type = IBV_QPT_RC;
@@ -431,38 +431,45 @@ void GdrMemoryManager::Run() {
             LOG(ERROR) << strerror(errno) << ": ibv_req_notify_cq failed";
             continue;
           }
-          ibv_wc wc[32];
-          int ret = ibv_poll_cq(id->recv_cq, 32, wc);
-          if (ret < 0) {
-            LOG(ERROR) << "ibv_poll_cq failed";
-            continue;
-          }
-          LOG(INFO) << "ibv_poll_cq ret="<<ret;
-          for (int i = 0; i < ret; i++) {
-            if (wc[i].opcode != IBV_WC_RECV_RDMA_WITH_IMM) {
-              LOG(ERROR) << "Received unknown operation " << wc[i].opcode;
+          ibv_wc wc;
+          int ne;
+          do {
+            ne = ibv_poll_cq(id->recv_cq, 1, &wc);
+            if (ne < 0) {
+              LOG(ERROR) << "ibv_poll_cq failed";
+              continue;
             }
-            if (wc[i].status != 0) {
-              LOG(ERROR) << ibv_wc_status_str(wc[i].status);
+            LOG(INFO) << "ibv_poll_cq recv_cq ne=" << ne;
+            /* there may be an extra event with no completion in the CQ */
+            if (ne == 0) {
+              continue;
             }
-            TensorKey tensor_key = ntohl(wc[i].imm_data);
+            if (wc.opcode != IBV_WC_RECV_RDMA_WITH_IMM) {
+              LOG(ERROR) << "Received unknown operation " << wc.opcode;
+            }
+            if (wc.status != IBV_WC_SUCCESS) {
+              LOG(ERROR) << ibv_wc_status_str(wc.status);
+            }
+            TensorKey tensor_key = ntohl(wc.imm_data);
             {
               mutex_lock l(server_mu_);
               auto iter = tensor_buffers_.find(tensor_key);
               if (iter == std::end(tensor_buffers_)) {
                 LOG(ERROR) << "Cannot find tensor buffer for tensor key "
                            << tensor_key;
+                continue;
               } else {
                 const TensorBuffer* buffer = iter->second;
                 buffer->Unref();
                 tensor_buffers_.erase(iter);
+                LOG(INFO) << "erasing tensor key " << tensor_key;
               }
             }
             if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
               LOG(ERROR) << strerror(errno) << ": rdma_post_recvv failed";
               continue;
             }
-          }
+          } while (ne);
         }
         else {
           LOG(ERROR) << "ibv_get_cq_event failed";
@@ -492,7 +499,7 @@ void GdrMemoryManager::TransportOptionsFromTensor(
     Tensor* host_copy = new Tensor(alloc, tensor.dtype(), tensor.shape());
     GPUUtil::CopyGPUTensorToCPU(
         device, device_context, &tensor, host_copy,
-        [done, host_copy, mutable_transport_options, this](const Status& s) {
+        [done, on_host, host_copy, mutable_transport_options, this](const Status& s) {
           if (!s.ok()) {
             done(s);
             delete host_copy;
@@ -520,6 +527,10 @@ void GdrMemoryManager::TransportOptionsFromTensor(
           if (use_checksum_) {
             checksum = GPUUtil::Checksum(*host_copy);
           }
+          LOG(INFO) << "TransportOptionsFromTensor"
+              << " on_host=" << on_host
+              << " tensor_key=" << tensor_key
+              << " checksum=" << checksum;
 
           RemoteMemoryRegion remote_mr;
           remote_mr.set_host(host_);
@@ -557,6 +568,10 @@ void GdrMemoryManager::TransportOptionsFromTensor(
     checksum = GPUUtil::Checksum(tensor);
 #endif
   }
+  LOG(INFO) << "TransportOptionsFromTensor"
+      << " on_host=" << on_host
+      << " tensor_key=" << tensor_key
+      << " checksum=" << checksum;
 
   RemoteMemoryRegion remote_mr;
   remote_mr.set_host(host_);
@@ -622,6 +637,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
 
   uint64_t start = Env::Default()->NowMicros();
 
+  LOG(INFO) << "rdma_post_read";
   if (rdma_post_read(id, nullptr, buffer->data(), buffer->size(), mr, 0,
                      remote_mr.addr(), remote_mr.rkey())) {
     done(errors::Unavailable(strerror(errno), ": ", "rdma_post_read failed"));
@@ -633,6 +649,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
   wr.imm_data = htonl(remote_mr.tensor_key());
   wr.send_flags = IBV_SEND_SIGNALED;
   ibv_send_wr* bad_wr;
+  LOG(INFO) << "ibv_post_send imm tensor_key " << remote_mr.tensor_key();
   if (ibv_post_send(id->qp, &wr, &bad_wr)) {
     done(errors::Unavailable(strerror(errno), ": ", "ibv_post_send failed"));
     return;
@@ -668,7 +685,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
           }
           uint64_t end = Env::Default()->NowMicros();
 
-          VLOG(2) << "RDMA from remote memory region " << remote_mr.rkey()
+          LOG(INFO) << "host_copy RDMA from remote memory region " << remote_mr.rkey()
                   << " of size " << buffer->size() << " with tensor key "
                   << remote_mr.tensor_key() << " took " << (end - start)
                   << " micros";
@@ -681,7 +698,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
 
   uint64_t end = Env::Default()->NowMicros();
 
-  VLOG(2) << "RDMA from remote memory region " << remote_mr.rkey()
+  LOG(INFO) << "RDMA from remote memory region " << remote_mr.rkey()
           << " of size " << buffer->size() << " with tensor key "
           << remote_mr.tensor_key() << " took " << (end - start) << " micros";
 
@@ -719,7 +736,7 @@ Status GdrMemoryManager::CreateEndpoint(const string& host, const string& port,
       gdr_max_send_wr_int = 32;
     }
   }
-  VLOG(0) << "gdr_max_send_wr_int is: \"" << gdr_max_send_wr_int << "\"";
+  LOG(INFO) << "gdr_max_send_wr_int is: \"" << gdr_max_send_wr_int << "\"";
 
   ibv_qp_init_attr init_attr = {};
   init_attr.qp_type = IBV_QPT_RC;
