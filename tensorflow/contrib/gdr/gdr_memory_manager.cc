@@ -674,19 +674,6 @@ void GdrMemoryManager::TensorFromTransportOptions(
   LOG(INFO) << "ibv_poll_cq send_cq"
             << " count=" << count
             << " ret=" << ret;
-  if (1 == ret) {
-    /* rdma_post_read and ibv_post_send are two work items, and only 1 completed */
-      while ((ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0) {
-          ++count;
-          if (count > 500000) {
-            LOG(INFO) << "ibv_poll_cq excessive attempts, breaking out";
-            break;
-          }
-      }
-      LOG(INFO) << "ibv_poll_cq send_cq again"
-                << " count=" << count
-                << " ret=" << ret;
-  }
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
   if (!on_host && host_copy.NumElements() > 0) {
@@ -711,7 +698,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
           LOG(INFO) << "host_copy RDMA from remote memory region " << remote_mr.rkey()
                   << " of size " << buffer->size() << " with tensor key "
                   << remote_mr.tensor_key() << " took " << (end - start)
-                  << " micros";
+                  << " micros with checksum=" << checksum;
           done(Status::OK());
           delete ref;
         });
@@ -735,8 +722,9 @@ void GdrMemoryManager::TensorFromTransportOptions(
   }
 
   LOG(INFO) << "RDMA from remote memory region " << remote_mr.rkey()
-          << " of size " << buffer->size() << " with tensor key "
-          << remote_mr.tensor_key() << " took " << (end - start) << " micros";
+            << " of size " << buffer->size() << " with tensor key "
+            << remote_mr.tensor_key() << " took " << (end - start) << " micros";
+            << " with checksum=" << checksum;
 
   done(Status::OK());
 }
