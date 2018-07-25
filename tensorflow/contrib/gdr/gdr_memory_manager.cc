@@ -571,6 +571,7 @@ void GdrMemoryManager::TransportOptionsFromTensor(
   LOG(INFO) << "TransportOptionsFromTensor"
       << " on_host=" << on_host
       << " tensor_key=" << tensor_key
+      << " length=" << length
       << " checksum=" << checksum;
 
   RemoteMemoryRegion remote_mr;
@@ -637,7 +638,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
 
   uint64_t start = Env::Default()->NowMicros();
 
-  LOG(INFO) << "rdma_post_read";
+  LOG(INFO) << "rdma_post_read length=" << length;
   if (rdma_post_read(id, nullptr, buffer->data(), buffer->size(), mr, 0,
                      remote_mr.addr(), remote_mr.rkey())) {
     done(errors::Unavailable(strerror(errno), ": ", "rdma_post_read failed"));
@@ -666,7 +667,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
   LOG(INFO) << "ibv_poll_cq send_cq ret=" << ret;
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
-  if (host_copy.NumElements() > 0) {
+  if (!on_host && host_copy.NumElements() > 0) {
     uint64_t checksum = 0;
     if (use_checksum_) {
       checksum = GPUUtil::Checksum(host_copy);
@@ -698,10 +699,6 @@ void GdrMemoryManager::TensorFromTransportOptions(
 
   uint64_t end = Env::Default()->NowMicros();
 
-  LOG(INFO) << "RDMA from remote memory region " << remote_mr.rkey()
-          << " of size " << buffer->size() << " with tensor key "
-          << remote_mr.tensor_key() << " took " << (end - start) << " micros";
-
   uint64_t checksum = 0;
   if (use_checksum_) {
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
@@ -714,6 +711,17 @@ void GdrMemoryManager::TensorFromTransportOptions(
         << "Checksum mismatch: " << checksum << "!=" << remote_mr.checksum();
 #endif
   }
+
+  LOG(INFO) << "RDMA from remote memory region " << remote_mr.rkey()
+          << " of size " << buffer->size() << " with tensor key "
+          << remote_mr.tensor_key() << " took " << (end - start) << " micros";
+
+  LOG(INFO) << "TensorFromTransportOptions"
+      << " on_host=" << on_host
+      << " tensor_key=" << remote_mr.tensor_key()
+      << " length=" << length
+      << " checksum=" << checksum;
+
   done(Status::OK());
 }
 
