@@ -164,11 +164,11 @@ class GdrMemoryManager : public RemoteMemoryManager {
   std::atomic<bool> stopped_;
   std::atomic<bool> use_checksum_;
   int32 wr_limit_;
-  int epfd_;
+  //int epfd_;
 
   // Server side endpoints
   // Accessed sequentially in Run() so not protected by lock
-  std::list<RdmaEndpointPtr> server_clients_;
+  //std::list<RdmaEndpointPtr> server_clients_;
 
   using TensorKey = uint32_t;
   std::atomic<TensorKey> next_key_;
@@ -227,13 +227,15 @@ GdrMemoryManager::GdrMemoryManager(const string& host, const string& port)
   use_checksum_ = !gdr_use_chcksum.empty() && gdr_use_chcksum[0] == 'y';
 }
 
-GdrMemoryManager::~GdrMemoryManager() { close(epfd_); }
+GdrMemoryManager::~GdrMemoryManager() {
+  //close(epfd_);
+}
 
 Status GdrMemoryManager::Init() {
-  epfd_ = epoll_create1(0);
-  if (epfd_ == -1) {
-    return errors::Unavailable(strerror(errno), ": ", "epoll_create");
-  }
+  //epfd_ = epoll_create1(0);
+  //if (epfd_ == -1) {
+  //  return errors::Unavailable(strerror(errno), ": ", "epoll_create");
+  //}
 
   rdma_addrinfo* addrinfo;
   rdma_addrinfo hints = {};
@@ -295,19 +297,19 @@ Status GdrMemoryManager::Init() {
       << " max_mr=" << device_attr.max_mr
       << " max_mr_size=" << device_attr.max_mr_size;
 
-  int flags = fcntl(listening_->channel->fd, F_GETFL, 0);
-  if (fcntl(listening_->channel->fd, F_SETFL, flags | O_NONBLOCK)) {
-    return errors::Unavailable(strerror(errno), ": ",
-                               "cannot set server to non-blocking mode");
-  }
+  //int flags = fcntl(listening_->channel->fd, F_GETFL, 0);
+  //if (fcntl(listening_->channel->fd, F_SETFL, flags | O_NONBLOCK)) {
+  //  return errors::Unavailable(strerror(errno), ": ",
+  //                             "cannot set server to non-blocking mode");
+  //}
 
-  epoll_event event = {};
-  event.events = EPOLLIN | EPOLLPRI;
-  event.data.ptr = listening_.get();
-  if (epoll_ctl(epfd_, EPOLL_CTL_ADD, listening_->channel->fd, &event)) {
-    return errors::Unavailable(strerror(errno), ": ",
-                               "cannot add server to epoll");
-  }
+  //epoll_event event = {};
+  //event.events = EPOLLIN | EPOLLPRI;
+  //event.data.ptr = listening_.get();
+  //if (epoll_ctl(epfd_, EPOLL_CTL_ADD, listening_->channel->fd, &event)) {
+  //  return errors::Unavailable(strerror(errno), ": ",
+  //                             "cannot add server to epoll");
+  //}
 
   Allocator* allocators[] = {
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
@@ -361,131 +363,88 @@ Status GdrMemoryManager::Init() {
 
 void GdrMemoryManager::Run() {
   stopped_ = false;
+  rdma_cm_id* id = nullptr;
+  // Accept incoming connection
+  if (rdma_get_request(listening_.get(), &id)) {
+    LOG(ERROR) << strerror(errno)
+               << ": rdma_get_request failed";
+
+    return;
+  }
+  if (rdma_accept(id, nullptr)) {
+    LOG(ERROR) << strerror(errno)
+               << ": rdma_accept failed";
+    return;
+  }
+  LOG(INFO) << "Accepted new RDMA connection";
+  if (ibv_req_notify_cq(id->recv_cq, 0)) {
+    LOG(ERROR) << strerror(errno)
+               << ": ibv_req_notify_cq failed";
+    EndpointDeleter(id);
+    return;
+  }
+  for (int i = 0; i < wr_limit_; i++) {
+    if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
+      LOG(ERROR) << strerror(errno)
+                 << ": rdma_post_recvv failed";
+      EndpointDeleter(id);
+      return;
+    }
+  }
+  // Polling work completions
   while (!stopped_) {
-    epoll_event events[32];
-    int ret = epoll_wait(epfd_, events, 32, 1);
-    if (ret == -1) {
-      if (EINTR == errno) {
-        LOG(INFO) << "epoll_wait: " << strerror(errno);
+    ibv_cq* cq;
+    void* context;
+    if (ibv_get_cq_event(id->recv_cq_channel, &cq, &context)) {
+      LOG(ERROR) << "ibv_get_cq_event failed";
+      return;
+    }
+    ibv_ack_cq_events(id->recv_cq, 1);
+    if (ibv_req_notify_cq(id->recv_cq, 0)) {
+      LOG(ERROR) << strerror(errno)
+                 << ": ibv_req_notify_cq failed";
+      return;
+    }
+    ibv_wc wc;
+    int ne;
+    do {
+      ne = ibv_poll_cq(id->recv_cq, 1, &wc);
+      if (ne < 0) {
+        LOG(ERROR) << "ibv_poll_cq failed";
         continue;
       }
-      else {
-        LOG(ERROR) << "epoll_wait: " << strerror(errno);
-        return;
+      LOG(INFO) << "ibv_poll_cq recv_cq ne=" << ne;
+      /* there may be an extra event with no completion in the CQ */
+      if (ne == 0) {
+        continue;
       }
-    }
-    // we might get a lot of no-event timeouts, just log the events
-    else if (ret > 0) {
-      LOG(INFO) << "epoll_wait ret=" << ret;
-    }
-    for (int i = 0; i < ret; i++) {
-      rdma_cm_id* id = static_cast<rdma_cm_id*>(events[i].data.ptr);
-      if (id == listening_.get()) {
-        // Accept incoming connections
-        if (!rdma_get_request(listening_.get(), &id)) {
-          if (!rdma_accept(id, nullptr)) {
-            LOG(INFO) << "Accepted new RDMA connection";
-            if (ibv_req_notify_cq(id->recv_cq, 0)) {
-              LOG(ERROR) << strerror(errno) << ": ibv_req_notify_cq failed";
-              EndpointDeleter(id);
-              continue;
-            }
-#if 1
-            for (int i = 0; i < wr_limit_; i++) {
-              if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
-                LOG(ERROR) << strerror(errno) << ": rdma_post_recvv failed";
-                EndpointDeleter(id);
-                continue;
-              }
-            }
-#endif
-            int flags = fcntl(id->recv_cq_channel->fd, F_GETFL, 0);
-            if (fcntl(id->recv_cq_channel->fd, F_SETFL, flags | O_NONBLOCK)) {
-              LOG(ERROR) << strerror(errno)
-                         << ": cannot set server_client to non-blocking mode";
-              EndpointDeleter(id);
-              continue;
-            }
-            epoll_event event = {};
-            event.events = EPOLLIN | EPOLLPRI;
-            event.data.ptr = id;
-            if (epoll_ctl(epfd_, EPOLL_CTL_ADD, id->recv_cq_channel->fd,
-                          &event)) {
-              LOG(ERROR) << strerror(errno)
-                         << ": cannot add server client to epoll";
-              EndpointDeleter(id);
-              continue;
-            }
-            server_clients_.push_back({id, EndpointDeleter});
-          }
-          else {
-            LOG(ERROR) << strerror(errno)
-                       << ": rdma_accept failed";
-            continue;
-          }
-        }
-        else {
-          LOG(ERROR) << strerror(errno)
-                     << ": rdma_get_request failed";
+      if (wc.opcode != IBV_WC_RECV_RDMA_WITH_IMM) {
+        LOG(ERROR) << "Received unknown operation " << wc.opcode;
+      }
+      if (wc.status != IBV_WC_SUCCESS) {
+        LOG(ERROR) << ibv_wc_status_str(wc.status);
+      }
+      TensorKey tensor_key = ntohl(wc.imm_data);
+      {
+        mutex_lock l(server_mu_);
+        auto iter = tensor_buffers_.find(tensor_key);
+        if (iter == std::end(tensor_buffers_)) {
+          LOG(ERROR) << "Cannot find tensor buffer for tensor key "
+                     << tensor_key;
           continue;
-        }
-      } else {
-        // Polling work completions
-        ibv_cq* cq;
-        void* context;
-        if (!ibv_get_cq_event(id->recv_cq_channel, &cq, &context)) {
-          ibv_ack_cq_events(id->recv_cq, 1);
-          if (ibv_req_notify_cq(id->recv_cq, 0)) {
-            LOG(ERROR) << strerror(errno) << ": ibv_req_notify_cq failed";
-            continue;
-          }
-          ibv_wc wc;
-          int ne;
-          do {
-            ne = ibv_poll_cq(id->recv_cq, 1, &wc);
-            if (ne < 0) {
-              LOG(ERROR) << "ibv_poll_cq failed";
-              continue;
-            }
-            LOG(INFO) << "ibv_poll_cq recv_cq ne=" << ne;
-            /* there may be an extra event with no completion in the CQ */
-            if (ne == 0) {
-              continue;
-            }
-            if (wc.opcode != IBV_WC_RECV_RDMA_WITH_IMM) {
-              LOG(ERROR) << "Received unknown operation " << wc.opcode;
-            }
-            if (wc.status != IBV_WC_SUCCESS) {
-              LOG(ERROR) << ibv_wc_status_str(wc.status);
-            }
-            TensorKey tensor_key = ntohl(wc.imm_data);
-            {
-              mutex_lock l(server_mu_);
-              auto iter = tensor_buffers_.find(tensor_key);
-              if (iter == std::end(tensor_buffers_)) {
-                LOG(ERROR) << "Cannot find tensor buffer for tensor key "
-                           << tensor_key;
-                continue;
-              } else {
-                const TensorBuffer* buffer = iter->second;
-                buffer->Unref();
-                tensor_buffers_.erase(iter);
-                LOG(INFO) << "erasing tensor key " << tensor_key;
-              }
-            }
-#if 1
-            if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
-              LOG(ERROR) << strerror(errno) << ": rdma_post_recvv failed";
-              continue;
-            }
-#endif
-          } while (ne);
-        }
-        else {
-          LOG(ERROR) << "ibv_get_cq_event failed";
+        } else {
+          const TensorBuffer* buffer = iter->second;
+          buffer->Unref();
+          tensor_buffers_.erase(iter);
+          LOG(INFO) << "erasing tensor key " << tensor_key;
         }
       }
-    }
+      if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
+        LOG(ERROR) << strerror(errno)
+                   << ": rdma_post_recvv failed";
+        continue;
+      }
+    } while (ne);
   }
 }
 
