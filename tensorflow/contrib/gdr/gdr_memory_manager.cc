@@ -163,7 +163,7 @@ class GdrMemoryManager : public RemoteMemoryManager {
   RdmaEndpointPtr listening_;
   std::atomic<bool> stopped_;
   std::atomic<bool> use_checksum_;
-  std::atomic<uint32_t> wr_count_;
+  int32 wr_limit_;
   int epfd_;
 
   // Server side endpoints
@@ -219,7 +219,7 @@ GdrMemoryManager::GdrMemoryManager(const string& host, const string& port)
       listening_(nullptr, EndpointDeleter),
       stopped_(true),
       use_checksum_(false),
-      wr_count_(0),
+      wr_limit_(32),
       next_key_(0) {
   const char *value = getenv("GDR_USE_CHECKSUM");
   string gdr_use_chcksum = value == nullptr ? "no" : value;
@@ -254,11 +254,12 @@ Status GdrMemoryManager::Init() {
     }
   }
   LOG(INFO) << "gdr_max_recv_wr_int is: \"" << gdr_max_recv_wr_int << "\"";
+  wr_limit_ = gdr_max_recv_wr_int;
 
   ibv_qp_init_attr init_attr = {};
   init_attr.qp_type = IBV_QPT_RC;
-  init_attr.cap.max_recv_wr = gdr_max_recv_wr_int;
-  init_attr.cap.max_send_wr = 1;
+  init_attr.cap.max_recv_wr = wr_limit_;
+  init_attr.cap.max_send_wr = wr_limit_;
   init_attr.cap.max_recv_sge = 1;
   init_attr.cap.max_send_sge = 1;
 
@@ -390,7 +391,7 @@ void GdrMemoryManager::Run() {
               continue;
             }
 #if 1
-            for (int i = 0; i < 1; i++) {
+            for (int i = 0; i < wr_limit_; i++) {
               if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
                 LOG(ERROR) << strerror(errno) << ": rdma_post_recvv failed";
                 EndpointDeleter(id);
@@ -752,6 +753,7 @@ Status GdrMemoryManager::CreateEndpoint(const string& host, const string& port,
         strerror(errno), ": ", "cannot connect to rdma://", host, ":", port);
   }
 
+#if 0
   const char *gdr_max_send_wr_env = getenv("GDR_MAX_SEND_WR");
   string gdr_max_send_wr = gdr_max_send_wr_env == nullptr ? "32" : gdr_max_send_wr_env;
   int32 gdr_max_send_wr_int;
@@ -761,11 +763,12 @@ Status GdrMemoryManager::CreateEndpoint(const string& host, const string& port,
     }
   }
   LOG(INFO) << "gdr_max_send_wr_int is: \"" << gdr_max_send_wr_int << "\"";
+#endif
 
   ibv_qp_init_attr init_attr = {};
   init_attr.qp_type = IBV_QPT_RC;
-  init_attr.cap.max_recv_wr = 1;
-  init_attr.cap.max_send_wr = gdr_max_send_wr_int;
+  init_attr.cap.max_recv_wr = wr_limit_;
+  init_attr.cap.max_send_wr = wr_limit_;
   init_attr.cap.max_recv_sge = 1;
   init_attr.cap.max_send_sge = 1;
 
