@@ -22,6 +22,7 @@ limitations under the License.
 #include <fstream>
 #include <list>
 #include <map>
+#include <queue>
 #include <set>
 
 #include <fcntl.h>
@@ -121,6 +122,32 @@ using RdmaEndpointPtr = std::unique_ptr<rdma_cm_id, decltype(&EndpointDeleter)>;
 
 using MemoryRegionPtr = std::unique_ptr<ibv_mr, decltype(&MRDeleter)>;
 
+template <typename T>
+class BlockingQueue {
+  public:
+    explicit BlockingQueue() {}
+    void push(const T& t) {
+      mu_.lock();
+      queue_.push(t);
+      mu_.unlock();
+      cond_.notify_one();
+    }
+    T pop() {
+      mutex_lock lock(mu_);
+      while (queue_.empty()) {
+        cond_.wait(lock);
+      }
+      T t = queue_.front();
+      queue_.pop();
+      return t;
+    }
+  private:
+    mutex mu_;
+    condition_variable cond_;
+    std::queue<T> queue_ GUARDED_BY(mu_);
+    TF_DISALLOW_COPY_AND_ASSIGN(BlockingQueue);
+};
+
 class GdrMemoryManager : public RemoteMemoryManager {
  public:
   GdrMemoryManager(const string& host, const string& port);
@@ -172,6 +199,8 @@ class GdrMemoryManager : public RemoteMemoryManager {
 
   using TensorKey = uint32_t;
   std::atomic<TensorKey> next_key_;
+  BlockingQueue<TensorKey> keys_to_free_;
+  std::unique_ptr<Thread> polling_thread_;
 
   // Server side on-the-fly tensor buffers
   mutex server_mu_;
@@ -229,6 +258,7 @@ GdrMemoryManager::GdrMemoryManager(const string& host, const string& port)
 
 GdrMemoryManager::~GdrMemoryManager() {
   //close(epfd_);
+  polling_thread_.reset();
 }
 
 Status GdrMemoryManager::Init() {
@@ -391,6 +421,27 @@ void GdrMemoryManager::Run() {
       return;
     }
   }
+
+  // Poll for tensors to free
+  polling_thread_.reset(Env::Default()->StartThread(
+      ThreadOptions(), "TF_gdr_buffer_free", [this] {
+        while (true) {
+          TensorKey tensor_key = keys_to_free_.pop();
+          mutex_lock l(server_mu_);
+          auto iter = tensor_buffers_.find(tensor_key);
+          if (iter == std::end(tensor_buffers_)) {
+            LOG(ERROR) << "Cannot find tensor buffer for tensor key "
+                       << tensor_key;
+            continue;
+          } else {
+            const TensorBuffer* buffer = iter->second;
+            buffer->Unref();
+            tensor_buffers_.erase(iter);
+            LOG(INFO) << "erasing tensor key " << tensor_key;
+          }
+        }
+      }));
+
   // Polling work completions
   while (!stopped_) {
     ibv_cq* cq;
@@ -398,6 +449,9 @@ void GdrMemoryManager::Run() {
     if (ibv_get_cq_event(id->recv_cq_channel, &cq, &context)) {
       LOG(ERROR) << "ibv_get_cq_event failed";
       return;
+    }
+    if (cq != id->recv_cq) {
+      LOG(ERROR) << "ibv_get_cq_event returned a different CQ";
     }
     ibv_ack_cq_events(id->recv_cq, 1);
     if (ibv_req_notify_cq(id->recv_cq, 0)) {
@@ -418,6 +472,11 @@ void GdrMemoryManager::Run() {
       if (ne == 0) {
         continue;
       }
+      if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
+        LOG(ERROR) << strerror(errno)
+                   << ": rdma_post_recvv failed";
+        continue;
+      }
       if (wc.opcode != IBV_WC_RECV_RDMA_WITH_IMM) {
         LOG(ERROR) << "Received unknown operation " << wc.opcode;
       }
@@ -425,25 +484,7 @@ void GdrMemoryManager::Run() {
         LOG(ERROR) << ibv_wc_status_str(wc.status);
       }
       TensorKey tensor_key = ntohl(wc.imm_data);
-      {
-        mutex_lock l(server_mu_);
-        auto iter = tensor_buffers_.find(tensor_key);
-        if (iter == std::end(tensor_buffers_)) {
-          LOG(ERROR) << "Cannot find tensor buffer for tensor key "
-                     << tensor_key;
-          continue;
-        } else {
-          const TensorBuffer* buffer = iter->second;
-          buffer->Unref();
-          tensor_buffers_.erase(iter);
-          LOG(INFO) << "erasing tensor key " << tensor_key;
-        }
-      }
-      if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
-        LOG(ERROR) << strerror(errno)
-                   << ": rdma_post_recvv failed";
-        continue;
-      }
+      keys_to_free_.push(tensor_key);
     } while (ne);
   }
 }
