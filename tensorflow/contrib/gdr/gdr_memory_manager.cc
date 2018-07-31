@@ -459,33 +459,28 @@ void GdrMemoryManager::Run() {
                  << ": ibv_req_notify_cq failed";
       return;
     }
-    ibv_wc wc;
-    int ne;
-    do {
-      ne = ibv_poll_cq(id->recv_cq, 1, &wc);
-      if (ne < 0) {
-        LOG(ERROR) << "ibv_poll_cq failed";
-        continue;
-      }
-      LOG(INFO) << "ibv_poll_cq recv_cq ne=" << ne;
-      /* there may be an extra event with no completion in the CQ */
-      if (ne == 0) {
-        continue;
-      }
+    ibv_wc wc[wr_limit_];
+    int ne = ibv_poll_cq(id->recv_cq, wr_limit_, wc);
+    if (ne < 0) {
+      LOG(ERROR) << "ibv_poll_cq failed";
+      continue;
+    }
+    LOG(INFO) << "ibv_poll_cq recv_cq ne=" << ne;
+    for (int i = 0; i < ne; ++i) {
       if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
         LOG(ERROR) << strerror(errno)
                    << ": rdma_post_recvv failed";
         continue;
       }
-      if (wc.opcode != IBV_WC_RECV_RDMA_WITH_IMM) {
-        LOG(ERROR) << "Received unknown operation " << wc.opcode;
+      if (wc[i].opcode != IBV_WC_RECV_RDMA_WITH_IMM) {
+        LOG(ERROR) << "Received unknown operation " << wc[i].opcode;
       }
-      if (wc.status != IBV_WC_SUCCESS) {
-        LOG(ERROR) << ibv_wc_status_str(wc.status);
+      if (wc[i].status != IBV_WC_SUCCESS) {
+        LOG(ERROR) << ibv_wc_status_str(wc[i].status);
       }
-      TensorKey tensor_key = ntohl(wc.imm_data);
+      TensorKey tensor_key = ntohl(wc[i].imm_data);
       keys_to_free_.push(tensor_key);
-    } while (ne);
+    }
   }
 }
 
