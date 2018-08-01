@@ -451,12 +451,12 @@ void GdrMemoryManager::Run() {
       << " rnr_retry=" << attr.rnr_retry
       << " alt_timeout=" << attr.alt_timeout
       ;
-  if (ibv_req_notify_cq(id->recv_cq, 0)) {
-    LOG(ERROR) << strerror(errno)
-               << ": ibv_req_notify_cq failed";
-    EndpointDeleter(id);
-    return;
-  }
+  //if (ibv_req_notify_cq(id->recv_cq, 0)) {
+  //  LOG(ERROR) << strerror(errno)
+  //             << ": ibv_req_notify_cq failed";
+  //  EndpointDeleter(id);
+  //  return;
+  //}
   for (int i = 0; i < wr_limit_; i++) {
     if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
       LOG(ERROR) << strerror(errno)
@@ -733,7 +733,8 @@ void GdrMemoryManager::TensorFromTransportOptions(
   LOG(INFO) << "rdma_post_read "
             << " length=" << length
             << " tensor_key=" << remote_mr.tensor_key();
-  if (rdma_post_read(id, nullptr, buffer->data(), buffer->size(), mr,
+  if (rdma_post_read(id, (void*)remote_mr.tensor_key(),
+              buffer->data(), buffer->size(), mr,
               IBV_SEND_SIGNALED, remote_mr.addr(), remote_mr.rkey())) {
     done(errors::Unavailable(strerror(errno), ": ", "rdma_post_read failed"));
     return;
@@ -748,7 +749,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
   //while ((ret = rdma_get_send_comp(id, &wc)) == 0) {
   while ((ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0) {
     ++count;
-    if (0 == count%500000) {
+    if (0 == count%1000000) {
       struct ibv_qp_attr attr;
       struct ibv_qp_init_attr init_attr;
       if (ibv_query_qp(id->qp, &attr, IBV_QP_STATE, &init_attr)) {
@@ -764,6 +765,10 @@ void GdrMemoryManager::TensorFromTransportOptions(
     done(errors::Unavailable(ibv_wc_status_str(wc.status)));
     return;
   }
+  LOG(INFO) << "ibv_poll_cq send_cq"
+            << " count=" << count
+            << " ret=" << ret
+            << " wc.wr_id=" << wc.wr_id;
 
   --send_count_;
   LOG(INFO) << "send_count_=" << send_count_;
@@ -787,7 +792,7 @@ void GdrMemoryManager::TensorFromTransportOptions(
   //while ((ret = rdma_get_send_comp(id, &wc)) == 0) {
   while ((ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0) {
     ++count;
-    if (0 == count%500000) {
+    if (0 == count%1000000) {
       struct ibv_qp_attr attr;
       struct ibv_qp_init_attr init_attr;
       if (ibv_query_qp(id->qp, &attr, IBV_QP_STATE, &init_attr)) {
