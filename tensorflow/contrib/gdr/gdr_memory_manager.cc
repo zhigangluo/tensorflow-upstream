@@ -490,6 +490,7 @@ void GdrMemoryManager::Run() {
 
   // Polling work completions
   while (!stopped_) {
+#if 0
     ibv_cq* cq;
     void* context;
     if (ibv_get_cq_event(id->recv_cq_channel, &cq, &context)) {
@@ -532,6 +533,35 @@ void GdrMemoryManager::Run() {
       LOG(INFO) << "pushing key to free " << tensor_key;
       keys_to_free_.push(tensor_key);
     }
+#else
+    ibv_wc wc;
+    int ret = rdma_get_recv_comp(id, &wc);
+    if (ret < 0) {
+      LOG(ERROR) << strerror(errno)
+                 << ": rdma_get_recv_comp failed";
+      return;
+    }
+    if (1 == ret) {
+      --recv_count_;
+      LOG(INFO) << "recv_count_=" << recv_count_;
+      if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
+        LOG(ERROR) << strerror(errno)
+                   << ": rdma_post_recvv failed";
+        continue;
+      }
+      ++recv_count_;
+      LOG(INFO) << "recv_count_=" << recv_count_;
+      if (wc.opcode != IBV_WC_RECV_RDMA_WITH_IMM) {
+        LOG(ERROR) << "Received unknown operation " << wc.opcode;
+      }
+      if (wc.status != IBV_WC_SUCCESS) {
+        LOG(ERROR) << ibv_wc_status_str(wc.status);
+      }
+      TensorKey tensor_key = ntohl(wc.imm_data);
+      LOG(INFO) << "pushing key to free " << tensor_key;
+      keys_to_free_.push(tensor_key);
+    }
+#endif
   }
 }
 
@@ -725,16 +755,16 @@ void GdrMemoryManager::TensorFromTransportOptions(
   ibv_wc wc = {};
   int ret;
   int count = 0;
-  while ((ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0) {
+  while ((ret = rdma_get_send_comp(id, &wc)) == 0) {
     ++count;
-    struct ibv_qp_attr attr;
-    struct ibv_qp_init_attr init_attr;
-    if (ibv_query_qp(id->qp, &attr, IBV_QP_STATE, &init_attr)) {
-      EndpointDeleter(id);
-      done(errors::Unavailable(strerror(errno), ": ibv_query_qp failed"));
-      return;
-    }
-    if (0 == count%1000000) {
+    if (0 == count%500000) {
+      struct ibv_qp_attr attr;
+      struct ibv_qp_init_attr init_attr;
+      if (ibv_query_qp(id->qp, &attr, IBV_QP_STATE, &init_attr)) {
+        EndpointDeleter(id);
+        done(errors::Unavailable(strerror(errno), ": ibv_query_qp failed"));
+        return;
+      }
       LOG(INFO) << "QP attributes: qp_state=" << ibv_state_to_string(attr.qp_state);
     }
   }
