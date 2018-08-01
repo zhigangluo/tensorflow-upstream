@@ -729,26 +729,15 @@ void GdrMemoryManager::TensorFromTransportOptions(
 
   uint64_t start = Env::Default()->NowMicros();
 
-  LOG(INFO) << "rdma_post_read length=" << length;
-  if (rdma_post_read(id, nullptr, buffer->data(), buffer->size(), mr, 0,
-                     remote_mr.addr(), remote_mr.rkey())) {
+  LOG(INFO) << "rdma_post_read "
+            << " length=" << length
+            << " tensor_key=" << remote_mr.tensor_key();
+  if (rdma_post_read(id, nullptr, buffer->data(), buffer->size(), mr,
+              IBV_SEND_SIGNALED, remote_mr.addr(), remote_mr.rkey())) {
     done(errors::Unavailable(strerror(errno), ": ", "rdma_post_read failed"));
     return;
   }
-  ++send_count_;
-  LOG(INFO) << "send_count_=" << send_count_;
 
-  ibv_send_wr wr = {};
-  wr.wr_id = remote_mr.tensor_key();
-  wr.opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
-  wr.imm_data = htonl(remote_mr.tensor_key());
-  wr.send_flags = IBV_SEND_SIGNALED;
-  ibv_send_wr* bad_wr;
-  LOG(INFO) << "ibv_post_send imm tensor_key " << remote_mr.tensor_key();
-  if (ibv_post_send(id->qp, &wr, &bad_wr)) {
-    done(errors::Unavailable(strerror(errno), ": ", "ibv_post_send failed"));
-    return;
-  }
   ++send_count_;
   LOG(INFO) << "send_count_=" << send_count_;
 
@@ -773,8 +762,48 @@ void GdrMemoryManager::TensorFromTransportOptions(
     done(errors::Unavailable(ibv_wc_status_str(wc.status)));
     return;
   }
-  send_count_ -= 2;
+
+  --send_count_;
   LOG(INFO) << "send_count_=" << send_count_;
+
+  ibv_send_wr wr = {};
+  wr.wr_id = remote_mr.tensor_key();
+  wr.opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
+  wr.imm_data = htonl(remote_mr.tensor_key());
+  wr.send_flags = IBV_SEND_SIGNALED;
+  ibv_send_wr* bad_wr;
+  LOG(INFO) << "ibv_post_send imm tensor_key=" << remote_mr.tensor_key();
+  if (ibv_post_send(id->qp, &wr, &bad_wr)) {
+    done(errors::Unavailable(strerror(errno), ": ", "ibv_post_send failed"));
+    return;
+  }
+
+  ++send_count_;
+  LOG(INFO) << "send_count_=" << send_count_;
+
+  count = 0;
+  while ((ret = rdma_get_send_comp(id, &wc)) == 0) {
+    ++count;
+    if (0 == count%500000) {
+      struct ibv_qp_attr attr;
+      struct ibv_qp_init_attr init_attr;
+      if (ibv_query_qp(id->qp, &attr, IBV_QP_STATE, &init_attr)) {
+        EndpointDeleter(id);
+        done(errors::Unavailable(strerror(errno), ": ibv_query_qp failed"));
+        return;
+      }
+      LOG(INFO) << "QP attributes: qp_state=" << ibv_state_to_string(attr.qp_state);
+    }
+  }
+
+  if (ret < 0 || wc.status != IBV_WC_SUCCESS) {
+    done(errors::Unavailable(ibv_wc_status_str(wc.status)));
+    return;
+  }
+
+  --send_count_;
+  LOG(INFO) << "send_count_=" << send_count_;
+
   LOG(INFO) << "ibv_poll_cq send_cq"
             << " count=" << count
             << " ret=" << ret
