@@ -148,6 +148,20 @@ class BlockingQueue {
     TF_DISALLOW_COPY_AND_ASSIGN(BlockingQueue);
 };
 
+static string ibv_state_to_string(enum ibv_qp_state state) {
+  switch (state) {
+    case IBV_QPS_RESET: return "IBV_QPS_RESET";
+    case IBV_QPS_INIT: return "IBV_QPS_INIT";
+    case IBV_QPS_RTR: return "IBV_QPS_RTR";
+    case IBV_QPS_RTS: return "IBV_QPS_RTS";
+    case IBV_QPS_SQD: return "IBV_QPS_SQD";
+    case IBV_QPS_SQE: return "IBV_QPS_SQE";
+    case IBV_QPS_ERR: return "IBV_QPS_ERR";
+    default: return "unknown state";
+  }
+  return "unknown state";
+}
+
 class GdrMemoryManager : public RemoteMemoryManager {
  public:
   GdrMemoryManager(const string& host, const string& port);
@@ -191,6 +205,8 @@ class GdrMemoryManager : public RemoteMemoryManager {
   std::atomic<bool> stopped_;
   std::atomic<bool> use_checksum_;
   int32 wr_limit_;
+  std::atomic<int> recv_count_;
+  std::atomic<int> send_count_;
   //int epfd_;
 
   // Server side endpoints
@@ -249,6 +265,8 @@ GdrMemoryManager::GdrMemoryManager(const string& host, const string& port)
       stopped_(true),
       use_checksum_(false),
       wr_limit_(32),
+      recv_count_(0),
+      send_count_(0),
       next_key_(0) {
   const char *value = getenv("GDR_USE_CHECKSUM");
   string gdr_use_chcksum = value == nullptr ? "no" : value;
@@ -407,6 +425,32 @@ void GdrMemoryManager::Run() {
     return;
   }
   LOG(INFO) << "Accepted new RDMA connection";
+  struct ibv_qp_attr attr;
+  struct ibv_qp_init_attr init_attr_;
+  int mask = IBV_QP_STATE|IBV_QP_TIMEOUT|IBV_QP_RETRY_CNT|IBV_QP_RNR_RETRY|
+      IBV_QP_MAX_QP_RD_ATOMIC|IBV_QP_MIN_RNR_TIMER|IBV_QP_MAX_DEST_RD_ATOMIC|
+      IBV_QP_CAP;
+  if (ibv_query_qp(id->qp, &attr, mask, &init_attr_)) {
+    LOG(ERROR) << strerror(errno)
+               << ": ibv_query_qp failed";
+    EndpointDeleter(id);
+    return;
+  }
+  LOG(INFO) << "QP attributes:"
+      << " qp_state=" << ibv_state_to_string(attr.qp_state)
+      << " cap.max_send_wr=" << attr.cap.max_send_wr
+      << " cap.max_recv_wr=" << attr.cap.max_recv_wr
+      << " cap.max_send_sge=" << attr.cap.max_send_sge
+      << " cap.max_recv_sge=" << attr.cap.max_recv_sge
+      << " cap.max_inline_data=" << attr.cap.max_inline_data
+      << " max_rd_atomic=" << attr.max_rd_atomic
+      << " max_dest_rd_atomic=" << attr.max_dest_rd_atomic
+      << " min_rnr_timer=" << attr.min_rnr_timer
+      << " timeout=" << attr.timeout
+      << " retry_cnt=" << attr.retry_cnt
+      << " rnr_retry=" << attr.rnr_retry
+      << " alt_timeout=" << attr.alt_timeout
+      ;
   if (ibv_req_notify_cq(id->recv_cq, 0)) {
     LOG(ERROR) << strerror(errno)
                << ": ibv_req_notify_cq failed";
@@ -420,6 +464,8 @@ void GdrMemoryManager::Run() {
       EndpointDeleter(id);
       return;
     }
+    ++recv_count_;
+    LOG(INFO) << "recv_count_=" << recv_count_;
   }
 
   // Poll for tensors to free
@@ -465,6 +511,8 @@ void GdrMemoryManager::Run() {
       LOG(ERROR) << "ibv_poll_cq failed";
       continue;
     }
+    recv_count_ -= ne;
+    LOG(INFO) << "recv_count_=" << recv_count_;
     LOG(INFO) << "ibv_poll_cq recv_cq ne=" << ne;
     for (int i = 0; i < ne; ++i) {
       if (rdma_post_recvv(id, nullptr, nullptr, 0)) {
@@ -472,6 +520,8 @@ void GdrMemoryManager::Run() {
                    << ": rdma_post_recvv failed";
         continue;
       }
+      ++recv_count_;
+      LOG(INFO) << "recv_count_=" << recv_count_;
       if (wc[i].opcode != IBV_WC_RECV_RDMA_WITH_IMM) {
         LOG(ERROR) << "Received unknown operation " << wc[i].opcode;
       }
@@ -479,6 +529,7 @@ void GdrMemoryManager::Run() {
         LOG(ERROR) << ibv_wc_status_str(wc[i].status);
       }
       TensorKey tensor_key = ntohl(wc[i].imm_data);
+      LOG(INFO) << "pushing key to free " << tensor_key;
       keys_to_free_.push(tensor_key);
     }
   }
@@ -654,6 +705,8 @@ void GdrMemoryManager::TensorFromTransportOptions(
     done(errors::Unavailable(strerror(errno), ": ", "rdma_post_read failed"));
     return;
   }
+  ++send_count_;
+  LOG(INFO) << "send_count_=" << send_count_;
 
   ibv_send_wr wr = {};
   wr.wr_id = remote_mr.tensor_key();
@@ -666,17 +719,32 @@ void GdrMemoryManager::TensorFromTransportOptions(
     done(errors::Unavailable(strerror(errno), ": ", "ibv_post_send failed"));
     return;
   }
+  ++send_count_;
+  LOG(INFO) << "send_count_=" << send_count_;
 
   ibv_wc wc = {};
   int ret;
   int count = 0;
   while ((ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0) {
     ++count;
+    struct ibv_qp_attr attr;
+    struct ibv_qp_init_attr init_attr;
+    if (ibv_query_qp(id->qp, &attr, IBV_QP_STATE, &init_attr)) {
+      EndpointDeleter(id);
+      done(errors::Unavailable(strerror(errno), ": ibv_query_qp failed"));
+      return;
+    }
+    if (0 == count%1000000) {
+      LOG(INFO) << "QP attributes: qp_state=" << ibv_state_to_string(attr.qp_state);
+    }
   }
+
   if (ret < 0 || wc.status != IBV_WC_SUCCESS) {
     done(errors::Unavailable(ibv_wc_status_str(wc.status)));
     return;
   }
+  send_count_ -= 2;
+  LOG(INFO) << "send_count_=" << send_count_;
   LOG(INFO) << "ibv_poll_cq send_cq"
             << " count=" << count
             << " ret=" << ret
@@ -784,6 +852,30 @@ Status GdrMemoryManager::CreateEndpoint(const string& host, const string& port,
 
   LOG(INFO) << "RDMA endpoint connected to rdma://" << host << ":" << port;
   endpoint = RdmaEndpointPtr(id, EndpointDeleter);
+  struct ibv_qp_attr attr;
+  struct ibv_qp_init_attr init_attr_;
+  int mask = IBV_QP_STATE|IBV_QP_TIMEOUT|IBV_QP_RETRY_CNT|IBV_QP_RNR_RETRY|
+      IBV_QP_MAX_QP_RD_ATOMIC|IBV_QP_MIN_RNR_TIMER|IBV_QP_MAX_DEST_RD_ATOMIC|
+      IBV_QP_CAP;
+  if (ibv_query_qp(id->qp, &attr, mask, &init_attr_)) {
+    EndpointDeleter(id);
+    return errors::Unavailable(strerror(errno), ": ibv_query_qp failed");
+  }
+  LOG(INFO) << "QP attributes:"
+      << " qp_state=" << ibv_state_to_string(attr.qp_state)
+      << " cap.max_send_wr=" << attr.cap.max_send_wr
+      << " cap.max_recv_wr=" << attr.cap.max_recv_wr
+      << " cap.max_send_sge=" << attr.cap.max_send_sge
+      << " cap.max_recv_sge=" << attr.cap.max_recv_sge
+      << " cap.max_inline_data=" << attr.cap.max_inline_data
+      << " max_rd_atomic=" << attr.max_rd_atomic
+      << " max_dest_rd_atomic=" << attr.max_dest_rd_atomic
+      << " min_rnr_timer=" << attr.min_rnr_timer
+      << " timeout=" << attr.timeout
+      << " retry_cnt=" << attr.retry_cnt
+      << " rnr_retry=" << attr.rnr_retry
+      << " alt_timeout=" << attr.alt_timeout
+      ;
   return Status::OK();
 }
 
