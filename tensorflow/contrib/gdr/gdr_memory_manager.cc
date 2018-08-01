@@ -533,9 +533,10 @@ void GdrMemoryManager::Run() {
       LOG(INFO) << "pushing key to free " << tensor_key;
       keys_to_free_.push(tensor_key);
     }
-#else
+#elif 1
     ibv_wc wc;
-    int ret = rdma_get_recv_comp(id, &wc);
+    //int ret = rdma_get_recv_comp(id, &wc);
+    int ret = ibv_poll_cq(id->recv_cq, 1, &wc);
     if (ret < 0) {
       LOG(ERROR) << strerror(errno)
                  << ": rdma_get_recv_comp failed";
@@ -744,7 +745,8 @@ void GdrMemoryManager::TensorFromTransportOptions(
   ibv_wc wc = {};
   int ret;
   int count = 0;
-  while ((ret = rdma_get_send_comp(id, &wc)) == 0) {
+  //while ((ret = rdma_get_send_comp(id, &wc)) == 0) {
+  while ((ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0) {
     ++count;
     if (0 == count%500000) {
       struct ibv_qp_attr attr;
@@ -782,7 +784,8 @@ void GdrMemoryManager::TensorFromTransportOptions(
   LOG(INFO) << "send_count_=" << send_count_;
 
   count = 0;
-  while ((ret = rdma_get_send_comp(id, &wc)) == 0) {
+  //while ((ret = rdma_get_send_comp(id, &wc)) == 0) {
+  while ((ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0) {
     ++count;
     if (0 == count%500000) {
       struct ibv_qp_attr attr;
