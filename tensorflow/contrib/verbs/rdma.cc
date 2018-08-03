@@ -481,7 +481,8 @@ void RdmaAdapter::Process_CQ() {
         rb = rc->rx_message_buffer_;
         RdmaMessage::ParseMessage(rm, rb->buffer_);
         RdmaMessageBuffer::SendAck(rc);
-        RDMA_LOG(1) << "Step 0x" << std::hex << rm.step_id_ << std::dec
+        RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
+                    << "Step 0x" << std::hex << rm.step_id_ << std::dec
                     << ": Received " << MessageTypeToString(rm.type_) << " "
                     << "#" << rm.request_index_ << ": " << rm.name_;
 
@@ -504,7 +505,7 @@ void RdmaAdapter::Process_CQ() {
         }
       } else if (wc_[i].opcode == IBV_WC_RDMA_WRITE) {
         RdmaWriteID* wr_id = reinterpret_cast<RdmaWriteID*>(wc_[i].wr_id);
-        RDMA_LOG(2) << "Write complete of type " << wr_id->write_type;
+        RDMA_LOG(1) << "Write complete of type " << wr_id->write_type;
         switch (wr_id->write_type) {
           case RDMA_WRITE_ID_ACK:
             break;
