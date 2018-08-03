@@ -463,6 +463,7 @@ void RdmaAdapter::Process_CQ() {
 
         if (imm_data == RDMA_IMM_DATA_ACK) {
           // receive an ack to a message
+          RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": receive an ack to a message";
           rb = rc->tx_message_buffer_;
           rb->SetBufferStatus(remote, idle);
           rb->SendNextItem();
@@ -471,6 +472,7 @@ void RdmaAdapter::Process_CQ() {
 
         if (imm_data <= RDMA_IMM_MAX_REQUEST_ID) {
           // receive a tensor RDMA write
+          RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": receive a tensor RDMA write";
           uint32_t request_index = imm_data;
           RdmaTensorRequest* request = rc->GetTensorRequest(request_index);
           request->RecvTensorContent();
