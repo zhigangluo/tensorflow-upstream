@@ -885,7 +885,6 @@ void RdmaMessageBuffer::SendNextItem() {
   uint32_t imm_data = RDMA_IMM_DATA_MESSAGE;
   mu_.lock();
   if (!queue_.empty() && (local_status_ == idle) && (remote_status_ == idle)) {
-    RDMA_LOG(1) << "SendNextItem(this=" << this << ") calling Write";
     local_status_ = busy;
     remote_status_ = busy;
     string message = queue_.front();
@@ -894,6 +893,9 @@ void RdmaMessageBuffer::SendNextItem() {
     // unitl Write() is successful
     mu_.unlock();
     memcpy(buffer_, message.data(), message.size());
+    RDMA_LOG(1) << "SendNextItem(this=" << this << ") calling Write"
+                << " message=" << message
+                << " message.size()=" << message.size();
     Write(imm_data, message.size());
   } else {
     RDMA_LOG(1) << "SendNextItem(this=" << this << ") no-op:"
