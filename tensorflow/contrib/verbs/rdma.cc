@@ -15,6 +15,7 @@ limitations under the License.
 
 #ifdef TENSORFLOW_USE_VERBS
 
+#include <atomic>
 #include <fcntl.h>
 #include <cstdlib>
 
@@ -508,7 +509,8 @@ void RdmaAdapter::Process_CQ() {
       } else if (wc_[i].opcode == IBV_WC_RDMA_WRITE) {
         RdmaWriteID* wr_id = reinterpret_cast<RdmaWriteID*>(wc_[i].wr_id);
         RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
-                    << "Write complete of type " << wr_id->write_type;
+                    << "Write complete of type " << wr_id->write_type
+                    << " and id " << wr_id->id;
         switch (wr_id->write_type) {
           case RDMA_WRITE_ID_ACK:
             break;
@@ -846,14 +848,17 @@ void RdmaMessageBuffer::Write(void *thiz, const RdmaChannel* channel, uint32_t i
                               uint32_t lkey, uint64_t remote_addr,
                               uint32_t rkey, RdmaWriteIDType write_type,
                               void* write_context) {
+  static std::atomic<int> WKEY(0);
+
   struct ibv_sge list;
   list.addr = src_addr;
   list.length = buffer_size;
   list.lkey = lkey;
 
+  auto wkey = WKEY++;
   struct ibv_send_wr wr;
   memset(&wr, 0, sizeof(wr));
-  wr.wr_id = (uint64_t) new RdmaWriteID(write_type, write_context);
+  wr.wr_id = (uint64_t) new RdmaWriteID(write_type, write_context, wkey);
   wr.sg_list = &list;
   wr.num_sge = 1;
   wr.opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
@@ -872,6 +877,7 @@ void RdmaMessageBuffer::Write(void *thiz, const RdmaChannel* channel, uint32_t i
       << ", rkey=" << rkey
       << ", write_type=" << write_type
       << ", write_context=" << write_context
+      << ", wkey=" << wkey
       << ")";
 
   struct ibv_send_wr* bad_wr;

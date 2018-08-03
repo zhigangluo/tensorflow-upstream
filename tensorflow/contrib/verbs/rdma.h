@@ -156,11 +156,12 @@ enum RdmaWriteIDType {
 // Context for RDMA write-complete events
 class RdmaWriteID {
  public:
-  RdmaWriteID(RdmaWriteIDType write_type, void* write_context)
-      : write_type(write_type), write_context(write_context) {}
+  RdmaWriteID(RdmaWriteIDType write_type, void* write_context, int id)
+      : write_type(write_type), write_context(write_context), id(id) {}
 
   RdmaWriteIDType write_type;
   void* write_context;
+  int id;
 };
 
 // Tensor meta-data
