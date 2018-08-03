@@ -45,7 +45,7 @@ namespace tensorflow {
 #define TRAFFIC_CLASS 0
 
 #define RDMA_LOG_0 LOG(INFO)
-#define RDMA_LOG_1 VLOG(1)
+#define RDMA_LOG_1 LOG(INFO)
 #define RDMA_LOG_2 VLOG(2)
 #define RDMA_LOG(LEVEL) RDMA_LOG_##LEVEL
 

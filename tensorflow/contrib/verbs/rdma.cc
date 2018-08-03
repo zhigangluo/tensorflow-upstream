@@ -894,7 +894,10 @@ void RdmaMessageBuffer::SendNextItem() {
     memcpy(buffer_, message.data(), message.size());
     Write(imm_data, message.size());
   } else {
-    RDMA_LOG(1) << "SendNextItem(this=" << this << ") no-op";
+    RDMA_LOG(1) << "SendNextItem(this=" << this << ") no-op:";
+                << " queue.size()=" << queue.size()
+                << " local_status_=" << local_status_
+                << " remote_status_=" << remote_status_;
     mu_.unlock();
   }
 }
