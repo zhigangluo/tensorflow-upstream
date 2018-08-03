@@ -894,6 +894,7 @@ void RdmaMessageBuffer::SendNextItem() {
     mu_.unlock();
     memcpy(buffer_, message.data(), message.size());
     RDMA_LOG(1) << "SendNextItem(this=" << this << ") calling Write"
+                << " queue_.size()=" << queue_.size()
                 << " message=" << message
                 << " message.size()=" << message.size();
     Write(imm_data, message.size());
