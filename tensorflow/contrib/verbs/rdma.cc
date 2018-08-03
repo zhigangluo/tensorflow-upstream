@@ -505,7 +505,8 @@ void RdmaAdapter::Process_CQ() {
         }
       } else if (wc_[i].opcode == IBV_WC_RDMA_WRITE) {
         RdmaWriteID* wr_id = reinterpret_cast<RdmaWriteID*>(wc_[i].wr_id);
-        RDMA_LOG(1) << "Write complete of type " << wr_id->write_type;
+        RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
+                    << "Write complete of type " << wr_id->write_type;
         switch (wr_id->write_type) {
           case RDMA_WRITE_ID_ACK:
             break;
