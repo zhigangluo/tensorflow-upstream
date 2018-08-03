@@ -828,6 +828,7 @@ void RdmaMessageBuffer::EnqueueItem(string item) {
 
 // Rdma-Write the content of the buffer
 void RdmaMessageBuffer::Write(uint32_t imm_data, size_t buffer_size) {
+  RDMA_LOG(1) << "Write(imm_data=" << imm_data << ", buffer_size=" << buffer_size << ")";
   Write(this, channel_, imm_data, buffer_size, (uint64_t)buffer_, self_->lkey,
         remote_.remote_addr, remote_.rkey, RDMA_WRITE_ID_MESSAGE, this);
 }
@@ -872,6 +873,7 @@ void RdmaMessageBuffer::Write(void *thiz, const RdmaChannel* channel, uint32_t i
 
 // Send the next ack from the buffer's job queue.
 void RdmaMessageBuffer::SendAck(const RdmaChannel* channel) {
+  RDMA_LOG(1) << "SendAck(channel=" << channel << ")";
   Write(nullptr, channel, RDMA_IMM_DATA_ACK, 0, 0, 0, 0, 0, RDMA_WRITE_ID_ACK, nullptr);
 }
 
@@ -880,6 +882,7 @@ void RdmaMessageBuffer::SendNextItem() {
   uint32_t imm_data = RDMA_IMM_DATA_MESSAGE;
   mu_.lock();
   if (!queue_.empty() && (local_status_ == idle) && (remote_status_ == idle)) {
+    RDMA_LOG(1) << "SendNextItem() calling Write";
     local_status_ = busy;
     remote_status_ = busy;
     string message = queue_.front();
@@ -890,6 +893,7 @@ void RdmaMessageBuffer::SendNextItem() {
     memcpy(buffer_, message.data(), message.size());
     Write(imm_data, message.size());
   } else {
+    RDMA_LOG(1) << "SendNextItem() no-op";
     mu_.unlock();
   }
 }
