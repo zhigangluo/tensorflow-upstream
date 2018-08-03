@@ -825,8 +825,12 @@ void RdmaMessageBuffer::SetRemoteMR(RemoteMR rmr, bool override) {
 // Put a task in the buffer's job queue
 void RdmaMessageBuffer::EnqueueItem(string item) {
   mutex_lock lock{mu_};
-  queue_.push(item);
-  RDMA_LOG(1) << "EnqueueItem(this=" << this << ", item=" << item << ")";
+  auto qid = qid_++;
+  queue_.push(make_pair(qid,item));
+  RDMA_LOG(1) << "EnqueueItem(this=" << this
+              << ", qid=" << qid
+              << ", item=" << item
+              << ")";
 }
 
 // Rdma-Write the content of the buffer
@@ -887,7 +891,9 @@ void RdmaMessageBuffer::SendNextItem() {
   if (!queue_.empty() && (local_status_ == idle) && (remote_status_ == idle)) {
     local_status_ = busy;
     remote_status_ = busy;
-    string message = queue_.front();
+    auto item = queue_.front();
+    auto qid = item.first;
+    string message = item.second;
     queue_.pop();
     // local/remote_status_ won't be set back to idle
     // unitl Write() is successful
@@ -895,6 +901,7 @@ void RdmaMessageBuffer::SendNextItem() {
     memcpy(buffer_, message.data(), message.size());
     RDMA_LOG(1) << "SendNextItem(this=" << this << ") calling Write"
                 << " queue_.size()=" << queue_.size()
+                << " qid=" << qid
                 << " message=" << message
                 << " message.size()=" << message.size();
     Write(imm_data, message.size());

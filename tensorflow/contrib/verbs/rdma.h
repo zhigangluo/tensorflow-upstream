@@ -519,7 +519,8 @@ class RdmaMessageBuffer {
   ibv_mr* self_ = nullptr;
   mutex mu_;
   RemoteMR remote_;
-  std::queue<string> queue_ GUARDED_BY(mu_);
+  size_t qid_ GUARDED_BY(mu_);
+  std::queue<std::pair<size_t,string> > queue_ GUARDED_BY(mu_);
   BufferStatus local_status_ GUARDED_BY(mu_) = none;
   BufferStatus remote_status_ GUARDED_BY(mu_) = none;
 };
