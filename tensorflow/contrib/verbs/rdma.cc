@@ -1007,7 +1007,7 @@ RdmaTensorResponse* RdmaChannel::UpdateTensorResponse(const RdmaMessage& rm) {
 void RdmaChannel::RemoveTensorResponse(uint32_t request_index) {
   mutex_lock lock{mu_};
   auto erased_index_count = responses_table_.erase(request_index);
-  CHECK(erased_index_count == 0) << "RemoveTensorResponse request_index not found";
+  CHECK(erased_index_count == 1) << "RemoveTensorResponse request_index not found";
 }
 
 void RdmaTensorResponse::Start() {
