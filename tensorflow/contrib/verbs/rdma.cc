@@ -828,12 +828,12 @@ void RdmaMessageBuffer::EnqueueItem(string item) {
 
 // Rdma-Write the content of the buffer
 void RdmaMessageBuffer::Write(uint32_t imm_data, size_t buffer_size) {
-  Write(channel_, imm_data, buffer_size, (uint64_t)buffer_, self_->lkey,
+  Write(this, channel_, imm_data, buffer_size, (uint64_t)buffer_, self_->lkey,
         remote_.remote_addr, remote_.rkey, RDMA_WRITE_ID_MESSAGE, this);
 }
 
 // Generalized Write method
-void RdmaMessageBuffer::Write(const RdmaChannel* channel, uint32_t imm_data,
+void RdmaMessageBuffer::Write(void *thiz, const RdmaChannel* channel, uint32_t imm_data,
                               size_t buffer_size, uint64_t src_addr,
                               uint32_t lkey, uint64_t remote_addr,
                               uint32_t rkey, RdmaWriteIDType write_type,
@@ -854,13 +854,25 @@ void RdmaMessageBuffer::Write(const RdmaChannel* channel, uint32_t imm_data,
   wr.wr.rdma.remote_addr = remote_addr;
   wr.wr.rdma.rkey = rkey;
 
+  RDMA_LOG(1) << "Write(this=" << thiz
+      << ", channel=" << channel
+      << ", imm_data=" << imm_data
+      << ", buffer_size=" << buffer_size
+      << ", src_addr=" << src_addr
+      << ", lkey=" << lkey
+      << ", remote_addr=" << remote_addr
+      << ", rkey=" << rkey
+      << ", write_type=" << write_type
+      << ", write_context=" << write_context
+      << ")";
+
   struct ibv_send_wr* bad_wr;
   CHECK(!ibv_post_send(channel->qp_, &wr, &bad_wr)) << "Failed to post send";
 }
 
 // Send the next ack from the buffer's job queue.
 void RdmaMessageBuffer::SendAck(const RdmaChannel* channel) {
-  Write(channel, RDMA_IMM_DATA_ACK, 0, 0, 0, 0, 0, RDMA_WRITE_ID_ACK, nullptr);
+  Write(nullptr, channel, RDMA_IMM_DATA_ACK, 0, 0, 0, 0, 0, RDMA_WRITE_ID_ACK, nullptr);
 }
 
 // Send the next message from the buffer's job queue.
@@ -1244,7 +1256,7 @@ void RdmaTensorResponse::SendContent(const Tensor& in, const TensorProto& proto,
               << "): " << rm_.name_ << " (size: 0x" << std::hex << tensor_bytes
               << ")";
 
-  RdmaMessageBuffer::Write(channel_, imm_data, tensor_bytes,
+  RdmaMessageBuffer::Write(nullptr, channel_, imm_data, tensor_bytes,
                            (uint64_t)src_addr_, lkey, rm_.remote_addr_,
                            rm_.rkey_, RDMA_WRITE_ID_TENSOR_WRITE, this);
 }

@@ -503,7 +503,7 @@ class RdmaMessageBuffer {
   void CreateCPUBuffer(size_t size, bool lock = true);
   void SetRemoteMR(RemoteMR rmi, bool override);
   void Write(uint32_t imm_data, size_t buffer_size);
-  static void Write(const RdmaChannel* channel, uint32_t imm_data,
+  static void Write(void * thiz, const RdmaChannel* channel, uint32_t imm_data,
                     size_t buffer_size, uint64_t src_addr, uint32_t lkey,
                     uint64_t remote_addr, uint32_t rkey,
                     RdmaWriteIDType write_type, void* write_context);
