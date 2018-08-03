@@ -467,7 +467,9 @@ class RdmaChannel {
   uint32_t request_serial_ GUARDED_BY(ct_mu_);
   mutex responses_mu_;
   typedef std::unordered_map<uint32_t, RdmaTensorResponse> ResponsesTable;
+  typedef std::unordered_map<uint32_t, uint32_t> ResponsesCheck;
   ResponsesTable responses_table_ GUARDED_BY(responses_mu_);
+  ResponsesCheck responses_check_ GUARDED_BY(responses_mu_);
   RdmaMessageBuffer* tx_message_buffer_;
   RdmaMessageBuffer* rx_message_buffer_;
   std::vector<RdmaMessageBuffer*> message_buffers_;

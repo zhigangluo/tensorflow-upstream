@@ -976,12 +976,28 @@ RdmaTensorResponse* RdmaChannel::AddTensorResponse(const RdmaMessage& rm) {
       responses_table_.emplace(rm.request_index_, RdmaTensorResponse(this, rm));
   CHECK(it.second) << "Response with the ID " << rm.request_index_
                    << " already exists.";
+  if (0 == responses_check_.count(rm.request_index_)) {
+    responses_check_.emplace(rm.request_index_, 1);
+  }
+  else {
+    ++responses_check_[rm.request_index_];
+  }
   return &it.first->second;
 }
 
 RdmaTensorResponse* RdmaChannel::UpdateTensorResponse(const RdmaMessage& rm) {
   mutex_lock lock{mu_};
   auto it = responses_table_.find(rm.request_index_);
+  if (it == responses_table_.end()) {
+    auto id = responses_check_.find(rm.request_index_);
+    if (id != responses_check_.end()) {
+      LOG(INFO) << "No response found."
+                << " responses_check_[" << id->first << "]=" << id->second;
+    }
+    else {
+      LOG(INFO) << "No response found and no check found.";
+    }
+  }
   CHECK(it != responses_table_.end()) << "No response found.";
   RdmaTensorResponse* response = &it->second;
   response->Update(rm);
@@ -990,7 +1006,8 @@ RdmaTensorResponse* RdmaChannel::UpdateTensorResponse(const RdmaMessage& rm) {
 
 void RdmaChannel::RemoveTensorResponse(uint32_t request_index) {
   mutex_lock lock{mu_};
-  responses_table_.erase(request_index);
+  auto erased_index_count = responses_table_.erase(request_index);
+  CHECK(erased_index_count == 0) << "RemoveTensorResponse request_index not found";
 }
 
 void RdmaTensorResponse::Start() {
