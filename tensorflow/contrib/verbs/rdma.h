@@ -489,7 +489,7 @@ class RdmaMessageBuffer {
   inline void* buffer() const { return buffer_; }
   inline ibv_mr* self() const { return self_; }
   inline void SetBufferStatus(Location loc, BufferStatus status) {
-    RDMA_LOG(1) << "SetBufferStatus(loc=" << loc << ", status=" << status << ")";
+    RDMA_LOG(1) << "SetBufferStatus(this=" << this << ", loc=" << loc << ", status=" << status << ")";
     mu_.lock();
     if (loc == local) {
       local_status_ = status;
