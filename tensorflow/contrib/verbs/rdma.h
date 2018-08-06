@@ -136,7 +136,7 @@ struct RdmaMessage {
   static const size_t kRdmaMessageBufferSize =
       kMessageTotalBytes + kErrorStatusMaxSize;
   static string CreateMessage(const RdmaMessage& rm);
-  static void ParseMessage(RdmaMessage& rm, void* buffer);
+  static void ParseMessage(RdmaMessage& rm, const void* buffer);
 };
 
 // Immediate types for RDMA write

@@ -768,7 +768,7 @@ void RdmaChannel::Connect(const RdmaAddress& remoteAddr) {
 }
 
 RdmaMessageBuffer::RdmaMessageBuffer(RdmaChannel* channel, string name)
-    : channel_(channel), name_(name) {}
+    : channel_(channel), name_(name), qid_(0) {}
 
 RdmaMessageBuffer::~RdmaMessageBuffer() {
   CHECK(!ibv_dereg_mr(self_)) << "ibv_dereg_mr failed";
@@ -835,12 +835,26 @@ void RdmaMessageBuffer::SetRemoteMR(RemoteMR rmr, bool override) {
 // Put a task in the buffer's job queue
 void RdmaMessageBuffer::EnqueueItem(string item) {
   mutex_lock lock{mu_};
+  static bool maybe_log_send = !get_env_var("RDMA_LOG_SEND").empty();
   auto qid = qid_++;
   queue_.push(make_pair(qid,item));
-  RDMA_LOG(1) << "EnqueueItem(this=" << this
-              << ", qid=" << qid
-              << ", item=" << item
-              << ")";
+  if (maybe_log_send) {
+    RdmaMessage rm;
+    RdmaMessage::ParseMessage(rm, item.data());
+    RDMA_LOG(1) << "EnqueueItem(this=" << this
+                << ", queue_.size()=" << queue_.size()
+                << ", qid=" << qid
+                << " Step 0x" << std::hex << rm.step_id_ << std::dec
+                << ": Writing  " << MessageTypeToString(rm.type_) << " #"
+                << rm.request_index_ << ": " << rm.name_ << " on " << rm.remote_addr_
+                << " (rkey: 0x" << std::hex << rm.rkey_ << ")";
+  }
+  else {
+    RDMA_LOG(1) << "EnqueueItem(this=" << this
+                << ", queue_.size()=" << queue_.size()
+                << ", qid=" << qid
+                << ")";
+  }
 }
 
 // Rdma-Write the content of the buffer
@@ -920,7 +934,7 @@ void RdmaMessageBuffer::SendNextItem() {
     memcpy(buffer_, message.data(), message.size());
     if (maybe_log_send) {
       RdmaMessage rm;
-      RdmaMessage::ParseMessage(rm, buffer_);
+      RdmaMessage::ParseMessage(rm, message.data());
       RDMA_LOG(1) << "SendNextItem(this=" << this << ") calling Write"
                   << " queue_.size()=" << queue_.size()
                   << " qid=" << qid
@@ -1437,8 +1451,8 @@ string RdmaMessage::CreateMessage(const RdmaMessage& rm) {
 //   buffer: the place where the raw message is stored
 // Returns:
 //   None
-void RdmaMessage::ParseMessage(RdmaMessage& rm, void* buffer) {
-  char* message = static_cast<char*>(buffer);
+void RdmaMessage::ParseMessage(RdmaMessage& rm, const void* buffer) {
+  const char* message = static_cast<const char*>(buffer);
   // type
   rm.type_ = static_cast<RdmaMessageType>(message[kTypeStartIndex]);
   // request index
