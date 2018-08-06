@@ -938,7 +938,7 @@ void RdmaMessageBuffer::SendNextItem() {
     // unitl Write() is successful
     mu_.unlock();
     if (maybe_clear) {
-      memset(buffer_, 0, message.size());
+      memset(buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
     }
     memcpy(buffer_, message.data(), message.size());
     if (maybe_log_send) {
@@ -1666,6 +1666,7 @@ bool RdmaTensorRequest::AllocateTensors() {
   }
   CHECK(mr_ != nullptr) << " No memory region found for address " << rdma_addr_
                         << ": " << key_;
+  LOG(INFO) << "AllocateTensors this=" << this << " rdma_addr_=" << rdma_addr_;
   return true;
 }
 
@@ -1719,7 +1720,11 @@ void RdmaTensorRequest::RecvTensorMetaData(DataType dtype, TensorShape shape,
 
   DeallocateTensors();
   AllocateTensorsAsync(
-      [this](const Status& s) { Send(RDMA_MESSAGE_TENSOR_RE_REQUEST); });
+      [this](const Status& s) {
+      LOG(INFO) << "RdmaTensorRequest::RecvTensorMetaData this=" << this;
+      CHECK(s.ok()) << "AllocateTensorsAsync";
+      Send(RDMA_MESSAGE_TENSOR_RE_REQUEST);
+      });
 }
 
 void RdmaTensorRequest::RecvTensorContent() {
@@ -1775,7 +1780,11 @@ void RdmaTensorRequest::Start() {
   meta_data_ = RdmaMemoryMgr::Singleton().GetTensorMetaData(key_);
   if (meta_data_ != nullptr) {
     AllocateTensorsAsync(
-        [this](const Status& s) { Send(RDMA_MESSAGE_TENSOR_REQUEST); });
+        [this](const Status& s) {
+        LOG(INFO) << "RdmaTensorRequest::Start this=" << this;
+        CHECK(s.ok()) << "AllocateTensorsAsync";
+        Send(RDMA_MESSAGE_TENSOR_REQUEST);
+        });
   } else {
     Send(RDMA_MESSAGE_TENSOR_REQUEST);
   }
