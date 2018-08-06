@@ -501,7 +501,9 @@ void RdmaAdapter::Process_CQ() {
 #endif
         } else if (rm.type_ == RDMA_MESSAGE_TENSOR_RE_REQUEST) {
           RdmaTensorResponse* response = rc->UpdateTensorResponse(rm);
-          response->Resume();
+          if (response) {
+            response->Resume();
+          }
         } else if (rm.type_ == RDMA_MESSAGE_ERROR_STATUS) {
           RdmaTensorRequest* request = rc->GetTensorRequest(rm.request_index_);
           request->RecvErrorStatus(rm.status_);
@@ -1066,13 +1068,17 @@ RdmaTensorResponse* RdmaChannel::AddTensorResponse(const RdmaMessage& rm) {
 }
 
 RdmaTensorResponse* RdmaChannel::UpdateTensorResponse(const RdmaMessage& rm) {
+  static bool maybe_skip_dup = !get_env_var("RDMA_SKIP_DUP").empty();
   mutex_lock lock{mu_};
   auto it = responses_table_.find(rm.request_index_);
   if (it == responses_table_.end()) {
     auto id = responses_check_.find(rm.request_index_);
     if (id != responses_check_.end()) {
       LOG(INFO) << "No response found."
-                << " responses_check_[" << id->first << "]=" << id->second;
+                << " but responses_check_[" << id->first << "]=" << id->second;
+      if (maybe_skip_dup) {
+        return nullptr;
+      }
     }
     else {
       LOG(INFO) << "No response found and no check found.";
