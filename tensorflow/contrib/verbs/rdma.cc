@@ -790,6 +790,8 @@ void RdmaMessageBuffer::FreeBuffer() {
 // Returns:
 //   None
 void RdmaMessageBuffer::CreateCPUBuffer(size_t size, bool lock) {
+  LOG(INFO) << "CreateCPUBuffer(size=" << size << ", lock=" << lock << ")"
+            << " local_status_=" << local_status_;
   CHECK(size > 0);
   if (lock) {
     mu_.lock();
@@ -819,7 +821,8 @@ void RdmaMessageBuffer::CreateCPUBuffer(size_t size, bool lock) {
 //   None
 void RdmaMessageBuffer::SetRemoteMR(RemoteMR rmr, bool override) {
   mutex_lock lock{mu_};
-  LOG(INFO) << "SetRemoteMR(override=" << override
+  LOG(INFO) << "SetRemoteMR(name=" << name_
+            << ", override=" << override
             << ", remote_status_=" << remote_status_
             << ", rmr.remote_addr=" << rmr.remote_addr
             << ", rmr.rkey=" << rmr.rkey
