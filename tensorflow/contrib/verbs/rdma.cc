@@ -529,6 +529,9 @@ void RdmaAdapter::Process_CQ() {
         }
         delete wr_id;
       }
+      else {
+        LOG(ERROR) << "Unknown work completion opcode";
+      }
     }
   }
 }
@@ -892,6 +895,7 @@ void RdmaMessageBuffer::SendAck(const RdmaChannel* channel) {
 
 // Send the next message from the buffer's job queue.
 void RdmaMessageBuffer::SendNextItem() {
+  static bool maybe_clear = !get_env_var("RDMA_MEMSET").empty();
   uint32_t imm_data = RDMA_IMM_DATA_MESSAGE;
   mu_.lock();
   if (!queue_.empty() && (local_status_ == idle) && (remote_status_ == idle)) {
@@ -904,6 +908,9 @@ void RdmaMessageBuffer::SendNextItem() {
     // local/remote_status_ won't be set back to idle
     // unitl Write() is successful
     mu_.unlock();
+    if (maybe_clear) {
+      memset(buffer_, 0, message.size());
+    }
     memcpy(buffer_, message.data(), message.size());
     RDMA_LOG(1) << "SendNextItem(this=" << this << ") calling Write"
                 << " queue_.size()=" << queue_.size()
