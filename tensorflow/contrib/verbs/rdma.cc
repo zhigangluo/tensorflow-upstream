@@ -437,6 +437,7 @@ string RdmaAdapter::name() const { return string(context_->device->name); }
 // 1. IBV_WC_RECV_RDMA_WITH_IMM (receive)
 // 2. IBV_WC_RDMA_WRITE (send))
 void RdmaAdapter::Process_CQ() {
+  static bool maybe_clear = !get_env_var("RDMA_MEMSET").empty();
   while (true) {
     ibv_cq* cq;
     void* cq_context;
@@ -445,8 +446,7 @@ void RdmaAdapter::Process_CQ() {
     ibv_ack_cq_events(cq, 1);
     CHECK(!ibv_req_notify_cq(cq_, 0));
 
-    int ne =
-        ibv_poll_cq(cq_, MAX_CONCURRENT_WRITES * 2, static_cast<ibv_wc*>(wc_));
+    int ne = ibv_poll_cq(cq_, MAX_CONCURRENT_WRITES * 2, wc_);
     CHECK_GE(ne, 0);
     for (int i = 0; i < ne; ++i) {
       CHECK(wc_[i].status == IBV_WC_SUCCESS)
@@ -483,6 +483,10 @@ void RdmaAdapter::Process_CQ() {
         // receive a control message
         rb = rc->rx_message_buffer_;
         RdmaMessage::ParseMessage(rm, rb->buffer_);
+        if (maybe_clear) {
+          // clear the buffer for next message
+          memset(rb->buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
+        }
         RdmaMessageBuffer::SendAck(rc);
         RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
                     << "Step 0x" << std::hex << rm.step_id_ << std::dec
