@@ -817,6 +817,11 @@ void RdmaMessageBuffer::CreateCPUBuffer(size_t size, bool lock) {
 //   None
 void RdmaMessageBuffer::SetRemoteMR(RemoteMR rmr, bool override) {
   mutex_lock lock{mu_};
+  LOG(INFO) << "SetRemoteMR(override=" << override
+            << ", remote_status_=" << remote_status_
+            << ", rmr.remote_addr=" << rmr.remote_addr
+            << ", rmr.rkey=" << rmr.rkey
+            << ")";
   if ((override) || (remote_status_ == none)) {
     remote_.remote_addr = rmr.remote_addr;
     remote_.rkey = rmr.rkey;
