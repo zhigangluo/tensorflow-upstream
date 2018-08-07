@@ -467,7 +467,8 @@ void RdmaAdapter::Process_CQ() {
           // receive an ack to a message
           RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": receive an ack to a message";
           rb = rc->tx_message_buffer_;
-          rb->SetBufferStatus(remote, idle);
+          rb->SetBufferStatus(remote, idle); // remote completion implies local
+          rb->SetBufferStatus(local, idle);
           rb->SendNextItem();
           continue;
         }
@@ -528,15 +529,15 @@ void RdmaAdapter::Process_CQ() {
           case RDMA_WRITE_ID_ACK:
             break;
           case RDMA_WRITE_ID_MESSAGE: {
-            RdmaMessageBuffer* rb =
-                reinterpret_cast<RdmaMessageBuffer*>(wr_id->write_context);
-            if (maybe_clear) {
-              // clear the buffer for next message
-              LOG(INFO) << "clearing TX buffer";
-              memset(rb->buffer_, 6, RdmaMessage::kRdmaMessageBufferSize);
-            }
-            rb->SetBufferStatus(local, idle);
-            rb->SendNextItem();
+            //RdmaMessageBuffer* rb =
+            //    reinterpret_cast<RdmaMessageBuffer*>(wr_id->write_context);
+            //if (maybe_clear) {
+            //  // clear the buffer for next message
+            //  LOG(INFO) << "clearing TX buffer";
+            //  memset(rb->buffer_, 6, RdmaMessage::kRdmaMessageBufferSize);
+            //}
+            //rb->SetBufferStatus(local, idle);
+            //rb->SendNextItem();
             break;
           }
           case RDMA_WRITE_ID_TENSOR_WRITE: {
