@@ -467,11 +467,6 @@ void RdmaAdapter::Process_CQ() {
           // receive an ack to a message
           RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": receive an ack to a message";
           rb = rc->tx_message_buffer_;
-          if (maybe_clear) {
-            // clear the buffer for next message
-            LOG(INFO) << "clearing RX buffer";
-            memset(rb->buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
-          }
           rb->SetBufferStatus(remote, idle);
           rb->SendNextItem();
           continue;
@@ -487,6 +482,8 @@ void RdmaAdapter::Process_CQ() {
         }
 
         // receive a control message
+        LOG(INFO) << "receive a control message with imm_data=" << imm_data;
+        CHECK(imm_data == RDMA_IMM_DATA_MESSAGE);
         rb = rc->rx_message_buffer_;
         RdmaMessage::ParseMessage(rm, rb->buffer_);
         if (maybe_clear) {
