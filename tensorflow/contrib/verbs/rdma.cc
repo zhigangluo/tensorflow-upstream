@@ -469,6 +469,11 @@ void RdmaAdapter::Process_CQ() {
           rb = rc->tx_message_buffer_;
           rb->SetBufferStatus(remote, idle); // remote completion implies local
           rb->SetBufferStatus(local, idle);
+          if (maybe_clear) {
+            // clear the buffer for next message
+            LOG(INFO) << "clearing TX buffer";
+            memset(rb->buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
+          }
           rb->SendNextItem();
           continue;
         }
