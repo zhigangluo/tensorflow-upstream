@@ -516,6 +516,9 @@ void RdmaAdapter::Process_CQ() {
           RdmaTensorRequest* request = rc->GetTensorRequest(rm.request_index_);
           request->RecvErrorStatus(rm.status_);
         }
+        else {
+          LOG(ERROR) << "Unknown rm.type_=" << rm.type_;
+        }
       } else if (wc_[i].opcode == IBV_WC_RDMA_WRITE) {
         RdmaWriteID* wr_id = reinterpret_cast<RdmaWriteID*>(wc_[i].wr_id);
         RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
@@ -530,7 +533,7 @@ void RdmaAdapter::Process_CQ() {
             if (maybe_clear) {
               // clear the buffer for next message
               LOG(INFO) << "clearing TX buffer";
-              memset(rb->buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
+              memset(rb->buffer_, 6, RdmaMessage::kRdmaMessageBufferSize);
             }
             rb->SetBufferStatus(local, idle);
             rb->SendNextItem();
@@ -944,8 +947,8 @@ void RdmaMessageBuffer::SendNextItem() {
     queue_.pop();
     // local/remote_status_ won't be set back to idle
     // unitl Write() is successful
-    mu_.unlock();
     memcpy(buffer_, message.data(), message.size());
+    mu_.unlock();
     if (maybe_log_send) {
       RdmaMessage rm;
       RdmaMessage::ParseMessage(rm, message.data());
