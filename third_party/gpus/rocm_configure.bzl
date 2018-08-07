@@ -392,6 +392,11 @@ def _find_libs(repository_ctx, rocm_config):
             cpu_value,
             rocm_config.rocm_toolkit_path + "/miopen",
         ),
+        "roctracer64": _find_rocm_lib(
+            "roctracer64",
+            repository_ctx,
+            cpu_value,
+            rocm_config.rocm_toolkit_path + "/roctracer"),
     }
 
 def _get_rocm_config(repository_ctx):
