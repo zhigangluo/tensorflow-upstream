@@ -438,6 +438,7 @@ string RdmaAdapter::name() const { return string(context_->device->name); }
 // 2. IBV_WC_RDMA_WRITE (send))
 void RdmaAdapter::Process_CQ() {
   static bool maybe_clear = !get_env_var("RDMA_MEMSET").empty();
+  LOG(INFO) << "RDMA_MEMSET=" << maybe_clear;
   while (true) {
     ibv_cq* cq;
     void* cq_context;
@@ -485,6 +486,7 @@ void RdmaAdapter::Process_CQ() {
         RdmaMessage::ParseMessage(rm, rb->buffer_);
         if (maybe_clear) {
           // clear the buffer for next message
+          LOG(INFO) << "clearing RX buffer";
           memset(rb->buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
         }
         RdmaMessageBuffer::SendAck(rc);
@@ -523,6 +525,11 @@ void RdmaAdapter::Process_CQ() {
           case RDMA_WRITE_ID_MESSAGE: {
             RdmaMessageBuffer* rb =
                 reinterpret_cast<RdmaMessageBuffer*>(wr_id->write_context);
+            if (maybe_clear) {
+              // clear the buffer for next message
+              LOG(INFO) << "clearing TX buffer";
+              memset(rb->buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
+            }
             rb->SetBufferStatus(local, idle);
             rb->SendNextItem();
             break;
@@ -923,7 +930,6 @@ void RdmaMessageBuffer::SendAck(const RdmaChannel* channel) {
 
 // Send the next message from the buffer's job queue.
 void RdmaMessageBuffer::SendNextItem() {
-  static bool maybe_clear = !get_env_var("RDMA_MEMSET").empty();
   static bool maybe_log_send = !get_env_var("RDMA_LOG_SEND").empty();
   uint32_t imm_data = RDMA_IMM_DATA_MESSAGE;
   mu_.lock();
@@ -937,9 +943,6 @@ void RdmaMessageBuffer::SendNextItem() {
     // local/remote_status_ won't be set back to idle
     // unitl Write() is successful
     mu_.unlock();
-    if (maybe_clear) {
-      memset(buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
-    }
     memcpy(buffer_, message.data(), message.size());
     if (maybe_log_send) {
       RdmaMessage rm;
