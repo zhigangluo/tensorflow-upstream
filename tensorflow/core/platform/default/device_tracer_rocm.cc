@@ -1,4 +1,4 @@
-/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2018 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -357,12 +357,8 @@ void DeviceTracerBase::AddApiRecord(uint32_t cid, const hip_cb_data_t* data) {
     case HIP_API_ID_hipModuleLaunchKernel:
     case HIP_API_ID_hipHccModuleLaunchKernel:
       {
-#if 0
-        const string annotation = hipKernelNameRef(data->args.hipModuleLaunchKernel.f);
-#else
         const string annotation = 
           tls_annotation ? string(tls_annotation) : string(hipKernelNameRef(data->args.hipModuleLaunchKernel.f)) + ":kernel";
-#endif
         AddCorrelationId(data->correlation_id, annotation);
       }
       break;
@@ -404,7 +400,6 @@ void DeviceTracerBase::AddActivityRecord(const roctracer_async_record_t* record)
 
   const char* name = roctracer_id_string(record->domain, record->activity_kind);
   (void)name;
-//  DT_LOG("Activity " << name << ", op(" << record->op_id << ")");
 
   switch (record->op_id) {
     // Kernel activity
@@ -443,8 +438,6 @@ class DeviceTracerRocm : public TraceMgr {
   public:
   DeviceTracerRocm() {
     device_ = NULL;
-    // Check tracer domains consitency
-    ROCTRACER_CALL(roctracer_validate_domains());
     // Creating tracer pool
     roctracer_properties_t properties{};
     properties.buffer_size = 12;
@@ -469,9 +462,9 @@ class DeviceTracerRocm : public TraceMgr {
     device_ = device;
 
     // Enable HIP API callbacks
-    ROCTRACER_CALL(roctracer_enable_api_callback(ROCTRACER_DOMAIN_ANY, HIP_API_ID_ANY, hip_api_callback, this));
+    ROCTRACER_CALL(roctracer_enable_api_callback(ROCTRACER_DOMAIN_ANY, 0, hip_api_callback, this));
     // Enable HIP activity tracing
-    ROCTRACER_CALL(roctracer_enable_api_activity(ROCTRACER_DOMAIN_ANY, HIP_API_ID_ANY));
+    ROCTRACER_CALL(roctracer_enable_api_activity(ROCTRACER_DOMAIN_ANY, 0));
     DT_LOG("DeviceTracerRocm::Start DONE");
     return true;
   }
@@ -484,12 +477,6 @@ class DeviceTracerRocm : public TraceMgr {
     }
     DT_LOG("DeviceTracerRocm::Stop");
     device_ = NULL;
-#if 0
-    // Disable HIP API callbacks
-    ROCTRACER_CALL(roctracer_disable_api_callback(ROCTRACER_DOMAIN_ANY, HIP_API_ID_ANY));
-    // Disable HIP activity tracing
-    ROCTRACER_CALL(roctracer_disable_api_activity(ROCTRACER_DOMAIN_ANY, HIP_API_ID_ANY));
-#endif
     // Flush buffered atcivity
     ROCTRACER_CALL(roctracer_flush_api_activity());
     DT_LOG("DeviceTracerRocm::Stop DONE");
@@ -511,7 +498,6 @@ class DeviceTracerRocm : public TraceMgr {
     if (data->phase == ROCTRACER_API_PHASE_ENTER) {
       DeviceTracerRocm* tracer = reinterpret_cast<DeviceTracerRocm*>(arg);
       DeviceTracerBase* device = tracer->device_;
-//      DT_LOG("API: " << name << "(" << data->correlation_id << ")");
       DeviceTracerBase::AddCorrelationId(data->correlation_id, string(name));
       if (device != NULL) device->AddApiRecord(cid, data);
     }
@@ -525,8 +511,6 @@ class DeviceTracerRocm : public TraceMgr {
       const roctracer_record_t* record = reinterpret_cast<const roctracer_record_t*>(begin);
       const roctracer_record_t* end_record = reinterpret_cast<const roctracer_record_t*>(end);
       while (record < end_record) {
-//        const char* name = roctracer_id_string(record->domain, record->activity_kind);
-//        DT_LOG("Activity Callback " << name << " " << record->correlation_id << ", op(" << record->op_id << "), tracer " << tracer << ", device " << device);
         if (record->op_id != 0) {
           const roctracer_async_record_t* async_record = reinterpret_cast<const roctracer_async_record_t*>(record);
           device->AddActivityRecord(async_record);
