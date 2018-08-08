@@ -471,9 +471,7 @@ string RdmaAdapter::name() const { return string(context_->device->name); }
 // 1. IBV_WC_RECV (receive with immediate)
 // 2. IBV_WC_RDMA_WRITE (send))
 void RdmaAdapter::Process_CQ() {
-  static bool maybe_clear = !get_env_var("RDMA_MEMSET").empty();
   static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
-  LOG(INFO) << "RDMA_MEMSET=" << maybe_clear;
   while (true) {
     ibv_cq* cq;
     void* cq_context;
