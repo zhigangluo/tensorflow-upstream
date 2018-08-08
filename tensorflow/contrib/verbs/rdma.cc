@@ -539,9 +539,16 @@ void RdmaAdapter::Process_CQ() {
           request->RecvErrorStatus(rm.status_);
         }
         else {
-          LOG(FATAL) << "Unknown rm.type_=" << rm.type_;
+          RdmaMessage rm;
+          rm.type_ = RDMA_MESSAGE_ERROR_STATUS;
+          LOG(ERROR) << "Sending RDMA_MESSAGE_ERROR_STATUS: "
+                     << "Unknown rm.type_=" << rm.type_;
+          string message = RdmaMessage::CreateMessage(rm);
+          channel_->message_buffers_->EnqueueItem(message);
+          channel_->message_buffers_->SendNextItem();
         }
-      } else if (wc_[i].opcode == IBV_WC_SEND
+      }
+      else if (wc_[i].opcode == IBV_WC_SEND
               || wc_[i].opcode == IBV_WC_RDMA_WRITE) {
         RdmaWriteID* wr_id = reinterpret_cast<RdmaWriteID*>(wc_[i].wr_id);
         RDMA_LOG(1) << "Write complete of type " << wr_id->write_type
@@ -565,7 +572,7 @@ void RdmaAdapter::Process_CQ() {
         delete wr_id;
       }
       else {
-        LOG(FATAL) << "Unknown work completion opcode: "
+        LOG(ERROR) << "Unknown work completion opcode: "
                    << OpcodeToString(wc_[i].opcode);
       }
     }
@@ -1023,9 +1030,10 @@ static uint64_t Checksum(Device* device, const DeviceContext* device_context,
   return checksum;
 }
 
-static void ValidateChecksum(uint64_t expected, uint64_t actual,
-                             const Tensor& in, uint32_t request_index,
-                             const std::string& key, const std::string& msg) {
+static void ValidateChecksum(RdmaChannel *channel, uint64_t expected,
+                             uint64_t actual, const Tensor& in,
+                             uint32_t request_index, const std::string& key,
+                             const std::string& msg) {
   RDMA_LOG(2) << "Request #" << request_index << ": " << key
               << ": Checksum: " << std::hex << " Expected = 0x" << expected
               << ". Actual = 0x" << actual << ".";
@@ -1041,12 +1049,19 @@ static void ValidateChecksum(uint64_t expected, uint64_t actual,
       actual = Hash64((const char*)&prev_val, 8, 0);
     }
     if (expected != actual) {
-      LOG(FATAL) << "[" << msg << "]: Checksum validation failed for request #"
+      LOG(ERROR) << "[" << msg << "]: Checksum validation failed for request #"
                  << request_index << ": " << key << std::hex << " "
                  << DataTypeString(in.dtype()) << " "
                  << in.shape().DebugString() << " (0x" << in.TotalBytes()
                  << " bytes): "
                  << " Expected 0x" << expected << ". Got 0x" << actual << ".";
+      RdmaMessage rm;
+      rm.type_ = RDMA_MESSAGE_ERROR_STATUS;
+      LOG(ERROR) << "Sending RDMA_MESSAGE_ERROR_STATUS: "
+                 << "Checksum validation failed";
+      string message = RdmaMessage::CreateMessage(rm);
+      channel->message_buffers_->EnqueueItem(message);
+      channel->message_buffers_->SendNextItem();
     }
   }
 }
@@ -1611,7 +1626,7 @@ void RdmaTensorRequest::Done(const Status& s) {
     uint64_t checksum = (proxy_tensor_ != nullptr)
                             ? Checksum(nullptr, nullptr, *proxy_tensor_)
                             : Checksum(dst_dev_, recv_args_.device_context, val);
-    ValidateChecksum(checksum_, checksum, val, index_, key_, "RDMA");
+    ValidateChecksum(channel_, checksum_, checksum, val, index_, key_, "RDMA");
   }
 #endif
 
