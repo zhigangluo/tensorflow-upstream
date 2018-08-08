@@ -496,8 +496,8 @@ void RdmaAdapter::Process_CQ() {
 
         if (imm_data <= RDMA_IMM_MAX_REQUEST_ID) {
           // receive a tensor RDMA write
-          RDMA_LOG(1) << "receive a tensor RDMA write";
           uint32_t request_index = imm_data;
+          RDMA_LOG(1) << "receive a tensor RDMA write for " << request_index;
           RdmaTensorRequest* request = rc->GetTensorRequest(request_index);
           request->RecvTensorContent();
           // put back a recv wr.
@@ -737,7 +737,8 @@ void RdmaChannel::RemoveTensorRequest(uint32_t request_index) {
 RdmaTensorRequest* RdmaChannel::GetTensorRequest(uint32_t request_index) {
   mutex_lock lock{ct_mu_};
   RequestTable::iterator iter = request_table_.find(request_index);
-  CHECK(iter != request_table_.end());
+  CHECK(iter != request_table_.end() << "No request found for index "
+                                     << request_index;
   return &iter->second;
 }
 
@@ -1091,7 +1092,8 @@ RdmaTensorResponse* RdmaChannel::UpdateTensorResponse(const RdmaMessage& rm) {
   static bool maybe_skip_dup = !get_env_var("RDMA_SKIP_DUP").empty();
   mutex_lock lock{mu_};
   auto it = responses_table_.find(rm.request_index_);
-  CHECK(it != responses_table_.end()) << "No response found.";
+  CHECK(it != responses_table_.end()) << "No response found for index "
+                                      << rm.request_index_;
   RdmaTensorResponse* response = &it->second;
   response->Update(rm);
   return response;
