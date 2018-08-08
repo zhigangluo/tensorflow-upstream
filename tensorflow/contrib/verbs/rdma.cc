@@ -1089,7 +1089,6 @@ RdmaTensorResponse* RdmaChannel::AddTensorResponse(const RdmaMessage& rm) {
 }
 
 RdmaTensorResponse* RdmaChannel::UpdateTensorResponse(const RdmaMessage& rm) {
-  static bool maybe_skip_dup = !get_env_var("RDMA_SKIP_DUP").empty();
   mutex_lock lock{mu_};
   auto it = responses_table_.find(rm.request_index_);
   CHECK(it != responses_table_.end()) << "No response found for index "
@@ -1108,6 +1107,7 @@ void RdmaChannel::RemoveTensorResponse(uint32_t request_index) {
 void RdmaTensorResponse::Start() {
   Rendezvous::ParsedKey parsed;
   Status s = Rendezvous::ParseKey(rm_.name_, &parsed);
+  // JEFF
   if (!s.ok()) {
     SendErrorStatus(s);
     return;
@@ -1423,6 +1423,7 @@ string RdmaMessage::CreateMessage(const RdmaMessage& rm) {
     memcpy(&message[kNameSizeStartIndex], &rm.name_size_,
            sizeof(rm.name_size_));
     memcpy(&message[kNameStartIndex], rm.name_.data(), rm.name_.size());
+    CHECK(rm.name_.size() <= kNameCapacity);
     memcpy(&message[kRemoteAddrStartIndex], &rm.remote_addr_,
            sizeof(rm.remote_addr_));
     memcpy(&message[kRkeyStartIndex], &rm.rkey_, sizeof(rm.rkey_));
@@ -1489,6 +1490,7 @@ void RdmaMessage::ParseMessage(RdmaMessage& rm, const void* buffer) {
     memcpy(&rm.name_size_, &message[kNameSizeStartIndex],
            sizeof(rm.name_size_));
     rm.name_ = string(&message[kNameStartIndex], rm.name_size_);
+    CHECK(rm.name_size_ <= kNameCapacity);
     memcpy(&rm.remote_addr_, &message[kRemoteAddrStartIndex],
            sizeof(rm.remote_addr_));
     memcpy(&rm.rkey_, &message[kRkeyStartIndex], sizeof(rm.rkey_));
@@ -1707,6 +1709,7 @@ void RdmaTensorRequest::Send(RdmaMessageType message_type) {
   rm.type_ = message_type;
   rm.request_index_ = index_;
   rm.name_size_ = key_.size();
+  CHECK(key_.size() <= RdmaMessage::kNameCapacity);
   rm.name_ = key_;
   rm.step_id_ = step_id_;
   rm.remote_addr_ = (uint64_t)rdma_addr_;
