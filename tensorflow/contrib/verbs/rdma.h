@@ -48,6 +48,7 @@ namespace tensorflow {
 #define RDMA_LOG_1 LOG(INFO)
 #define RDMA_LOG_2 VLOG(2)
 #define RDMA_LOG(LEVEL) RDMA_LOG_##LEVEL
+#define RDMA_DATA_VALIDATION
 
 struct RdmaParams {
   uint8_t port_num;

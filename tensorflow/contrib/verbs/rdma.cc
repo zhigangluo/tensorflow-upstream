@@ -472,6 +472,7 @@ string RdmaAdapter::name() const { return string(context_->device->name); }
 // 2. IBV_WC_RDMA_WRITE (send))
 void RdmaAdapter::Process_CQ() {
   static bool maybe_clear = !get_env_var("RDMA_MEMSET").empty();
+  static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
   LOG(INFO) << "RDMA_MEMSET=" << maybe_clear;
   while (true) {
     ibv_cq* cq;
@@ -537,7 +538,9 @@ void RdmaAdapter::Process_CQ() {
           request->RecvTensorMetaData(rm.data_type_, rm.tensor_shape_,
                                       rm.is_dead_, rm.tensor_bytes_);
 #ifdef RDMA_DATA_VALIDATION
-          request->RecvTensorChecksum(rm.checksum_);
+          if (maybe_checksum) {
+            request->RecvTensorChecksum(rm.checksum_);
+          }
 #endif
         } else if (rm.type_ == RDMA_MESSAGE_TENSOR_RE_REQUEST) {
           RdmaTensorResponse* response = rc->UpdateTensorResponse(rm);
@@ -966,7 +969,7 @@ RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
   CHECK(!free_recv_.empty());
   RdmaMR rmr = free_recv_.front();
   free_recv_.pop();
-  LOG(INFO) << "AcquireRecvBuffer" << rmr.id_;
+  LOG(INFO) << "AcquireRecvBuffer " << rmr.id_;
   mu_.unlock();
   return rmr;
 }
@@ -1167,6 +1170,7 @@ void RdmaTensorResponse::RecvHandler(Rendezvous::ParsedKey parsed,
                                      const Rendezvous::Args& send_args,
                                      const Rendezvous::Args& recv_args,
                                      const Tensor& in, bool is_dead) {
+  static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
   Status s = PrepareRecvTensor(parsed, &src_dev_);
   if (!s.ok()) {
     SendErrorStatus(s);
@@ -1175,9 +1179,11 @@ void RdmaTensorResponse::RecvHandler(Rendezvous::ParsedKey parsed,
 
   meta_data_changed_ = TensorMetaDataChanged(in, is_dead);
 #ifdef RDMA_DATA_VALIDATION
-  // Always send a meta data message with the source checksum
-  meta_data_changed_ = rm_.type_ == RDMA_MESSAGE_TENSOR_REQUEST;
-  checksum_ = Checksum(src_dev_, send_args.device_context, in);
+  if (maybe_checksum) {
+    // Always send a meta data message with the source checksum
+    meta_data_changed_ = rm_.type_ == RDMA_MESSAGE_TENSOR_REQUEST;
+    checksum_ = Checksum(src_dev_, send_args.device_context, in);
+  }
 #endif
   bool can_memcpy = DataTypeCanUseMemcpy(in.dtype());
   // string tensor needs to be serialized
@@ -1288,6 +1294,7 @@ void RdmaTensorResponse::Clone(const Tensor& in, const TensorProto& proto,
 
 void RdmaTensorResponse::SendMetaData(const Tensor& in,
                                       const TensorProto& proto, bool is_dead) {
+  static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
   RDMA_LOG(2) << "Request #" << rm_.request_index_
               << ": Meta data changed: " << rm_.name_;
   bool can_memcpy = DataTypeCanUseMemcpy(in.dtype());
@@ -1305,7 +1312,9 @@ void RdmaTensorResponse::SendMetaData(const Tensor& in,
   rm.tensor_bytes_ = tensor_bytes;
   rm.request_index_ = rm_.request_index_;
 #ifdef RDMA_DATA_VALIDATION
-  rm.checksum_ = checksum_;
+  if (maybe_checksum) {
+    rm.checksum_ = checksum_;
+  }
 #endif
   RDMA_LOG(1) << "Step 0x" << std::hex << rm.step_id_ << std::dec
               << ": Sending RDMA_MESSAGE_META_DATA_UPDATE #"
@@ -1419,6 +1428,7 @@ string RdmaMessage::CreateMessage(const RdmaMessage& rm) {
   // ERROR_STATUS:    Imm-type: MESSAGE
   //                  Fields: type, request_index, name, step_id, error_status
   // Tensor content:  Imm-type: request_index
+  static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
   size_t message_size = kMessageTotalBytes;
   char message[kMessageTotalBytes + kErrorStatusMaxSize];
   // type
@@ -1452,7 +1462,9 @@ string RdmaMessage::CreateMessage(const RdmaMessage& rm) {
   }
   // checksum
 #ifdef RDMA_DATA_VALIDATION
-  memcpy(&message[kChecksumStartIndex], &rm.checksum_, sizeof(rm.checksum_));
+  if (maybe_checksum) {
+    memcpy(&message[kChecksumStartIndex], &rm.checksum_, sizeof(rm.checksum_));
+  }
 #endif
   // error status
   if (rm.type_ == RDMA_MESSAGE_ERROR_STATUS) {
@@ -1483,6 +1495,7 @@ string RdmaMessage::CreateMessage(const RdmaMessage& rm) {
 // Returns:
 //   None
 void RdmaMessage::ParseMessage(RdmaMessage& rm, const void* buffer) {
+  static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
   const char* message = static_cast<const char*>(buffer);
   // type
   rm.type_ = static_cast<RdmaMessageType>(message[kTypeStartIndex]);
@@ -1514,7 +1527,9 @@ void RdmaMessage::ParseMessage(RdmaMessage& rm, const void* buffer) {
   }
   // checksum
 #ifdef RDMA_DATA_VALIDATION
-  memcpy(&rm.checksum_, &message[kChecksumStartIndex], sizeof(rm.checksum_));
+  if (maybe_checksum) {
+    memcpy(&rm.checksum_, &message[kChecksumStartIndex], sizeof(rm.checksum_));
+  }
 #endif
   // error status
   if (rm.type_ == RDMA_MESSAGE_ERROR_STATUS) {
@@ -1619,18 +1634,21 @@ RdmaTensorRequest::RdmaTensorRequest(
 RdmaTensorRequest::~RdmaTensorRequest() { DeallocateTensors(); }
 
 void RdmaTensorRequest::Done(const Status& s) {
+  static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
   Tensor val = std::move(*result_tensor_);
 
 #ifdef RDMA_DATA_VALIDATION
-  // Validate checksum
-  // Unfortunately we can't always do a Checksum directly on the result tensor.
-  // If the result tensor is on GPU, then we need to copy it back to CPU. If
-  // we happen to be in the midst of a proxy callback, then the copying will
-  // get stuck.
-  uint64_t checksum = (proxy_tensor_ != nullptr)
-                          ? Checksum(nullptr, nullptr, *proxy_tensor_)
-                          : Checksum(dst_dev_, recv_args_.device_context, val);
-  ValidateChecksum(checksum_, checksum, val, index_, key_, "RDMA");
+  if (maybe_checksum) {
+    // Validate checksum
+    // Unfortunately we can't always do a Checksum directly on the result tensor.
+    // If the result tensor is on GPU, then we need to copy it back to CPU. If
+    // we happen to be in the midst of a proxy callback, then the copying will
+    // get stuck.
+    uint64_t checksum = (proxy_tensor_ != nullptr)
+                            ? Checksum(nullptr, nullptr, *proxy_tensor_)
+                            : Checksum(dst_dev_, recv_args_.device_context, val);
+    ValidateChecksum(checksum_, checksum, val, index_, key_, "RDMA");
+  }
 #endif
 
   Rendezvous::Args recv_args = std::move(recv_args_);
