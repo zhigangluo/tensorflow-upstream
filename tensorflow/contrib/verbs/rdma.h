@@ -44,8 +44,8 @@ namespace tensorflow {
 #define SL_DEFAULT 0
 #define TRAFFIC_CLASS 0
 
-#define RDMA_LOG_0 LOG(INFO)
-#define RDMA_LOG_1 LOG(INFO)
+#define RDMA_LOG_0 VLOG(0)
+#define RDMA_LOG_1 VLOG(1)
 #define RDMA_LOG_2 VLOG(2)
 #define RDMA_LOG(LEVEL) RDMA_LOG_##LEVEL
 #define RDMA_DATA_VALIDATION
@@ -149,7 +149,6 @@ enum RdmaImmDataType {
 
 // Write types for RDMA write-complete events
 enum RdmaWriteIDType {
-  RDMA_WRITE_ID_ACK,
   RDMA_WRITE_ID_MESSAGE,
   RDMA_WRITE_ID_TENSOR_WRITE
 };

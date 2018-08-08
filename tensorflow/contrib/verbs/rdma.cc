@@ -505,7 +505,7 @@ void RdmaAdapter::Process_CQ() {
 
         if (imm_data <= RDMA_IMM_MAX_REQUEST_ID) {
           // receive a tensor RDMA write
-          RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": receive a tensor RDMA write";
+          RDMA_LOG(1) << "receive a tensor RDMA write";
           uint32_t request_index = imm_data;
           RdmaTensorRequest* request = rc->GetTensorRequest(request_index);
           request->RecvTensorContent();
@@ -516,13 +516,11 @@ void RdmaAdapter::Process_CQ() {
         }
 
         // receive a control message
-        LOG(INFO) << "receive a control message with imm_data=" << imm_data;
         CHECK(imm_data == RDMA_IMM_DATA_MESSAGE);
         RdmaMessage rm;
         RdmaMessage::ParseMessage(rm, rmr.buffer_);
         rc->message_buffers_->ReleaseRecvBuffer(rmr);
-        RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
-                    << "Step 0x" << std::hex << rm.step_id_ << std::dec
+        RDMA_LOG(1) << "Step 0x" << std::hex << rm.step_id_ << std::dec
                     << ": Received " << MessageTypeToString(rm.type_) << " "
                     << "#" << rm.request_index_ << ": " << rm.name_;
         // put back a recv wr.
@@ -550,18 +548,14 @@ void RdmaAdapter::Process_CQ() {
           request->RecvErrorStatus(rm.status_);
         }
         else {
-          LOG(ERROR) << "Unknown rm.type_=" << rm.type_;
+          LOG(FATAL) << "Unknown rm.type_=" << rm.type_;
         }
       } else if (wc_[i].opcode == IBV_WC_SEND
               || wc_[i].opcode == IBV_WC_RDMA_WRITE) {
         RdmaWriteID* wr_id = reinterpret_cast<RdmaWriteID*>(wc_[i].wr_id);
-        RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
-                    << "Write complete of type " << wr_id->write_type
+        RDMA_LOG(1) << "Write complete of type " << wr_id->write_type
                     << " and id " << wr_id->id;
-        CHECK(wr_id->write_type != RDMA_WRITE_ID_ACK);
         switch (wr_id->write_type) {
-          case RDMA_WRITE_ID_ACK:
-            break;
           case RDMA_WRITE_ID_MESSAGE: {
             RdmaChannelAndMR* rid =
               reinterpret_cast<RdmaChannelAndMR*>(wr_id->write_context);
@@ -580,7 +574,7 @@ void RdmaAdapter::Process_CQ() {
         delete wr_id;
       }
       else {
-        LOG(ERROR) << "Unknown work completion opcode: "
+        LOG(FATAL) << "Unknown work completion opcode: "
                    << OpcodeToString(wc_[i].opcode);
       }
     }
@@ -936,7 +930,7 @@ void RdmaMessageBuffers::SendNextItem() {
     queue_.pop();
     RdmaMR rmr = free_send_.front();
     free_send_.pop();
-    LOG(INFO) << "SendNextItem using RdmaMR " << rmr.id_;
+    RDMA_LOG(1) << "SendNextItem using RdmaMR " << rmr.id_;
     memcpy(rmr.buffer_, message.data(), message.size());
     if (maybe_log_send) {
       RdmaMessage rm;
@@ -967,7 +961,7 @@ RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
   CHECK(!free_recv_.empty());
   RdmaMR rmr = free_recv_.front();
   free_recv_.pop();
-  LOG(INFO) << "AcquireRecvBuffer " << rmr.id_;
+  RDMA_LOG(1) << "AcquireRecvBuffer " << rmr.id_;
   mu_.unlock();
   return rmr;
 }
@@ -976,7 +970,7 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr) {
   mu_.lock();
   memset(rmr.buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
   free_recv_.push(rmr);
-  LOG(INFO) << "ReleaseRecvBuffer " << rmr.id_;
+  RDMA_LOG(1) << "ReleaseRecvBuffer " << rmr.id_;
   mu_.unlock();
 }
 
@@ -984,7 +978,7 @@ void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr) {
   mu_.lock();
   memset(rmr.buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
   free_send_.push(rmr);
-  LOG(INFO) << "ReleaseSendBuffer " << rmr.id_;
+  RDMA_LOG(1) << "ReleaseSendBuffer " << rmr.id_;
   mu_.unlock();
 }
 
@@ -1084,12 +1078,6 @@ RdmaTensorResponse* RdmaChannel::AddTensorResponse(const RdmaMessage& rm) {
       responses_table_.emplace(rm.request_index_, RdmaTensorResponse(this, rm));
   CHECK(it.second) << "Response with the ID " << rm.request_index_
                    << " already exists.";
-  if (0 == responses_check_.count(rm.request_index_)) {
-    responses_check_.emplace(rm.request_index_, 1);
-  }
-  else {
-    ++responses_check_[rm.request_index_];
-  }
   return &it.first->second;
 }
 
@@ -1097,19 +1085,6 @@ RdmaTensorResponse* RdmaChannel::UpdateTensorResponse(const RdmaMessage& rm) {
   static bool maybe_skip_dup = !get_env_var("RDMA_SKIP_DUP").empty();
   mutex_lock lock{mu_};
   auto it = responses_table_.find(rm.request_index_);
-  if (it == responses_table_.end()) {
-    auto id = responses_check_.find(rm.request_index_);
-    if (id != responses_check_.end()) {
-      LOG(INFO) << "No response found."
-                << " but responses_check_[" << id->first << "]=" << id->second;
-      if (maybe_skip_dup) {
-        return nullptr;
-      }
-    }
-    else {
-      LOG(INFO) << "No response found and no check found.";
-    }
-  }
   CHECK(it != responses_table_.end()) << "No response found.";
   RdmaTensorResponse* response = &it->second;
   response->Update(rm);
@@ -1700,7 +1675,6 @@ bool RdmaTensorRequest::AllocateTensors() {
   }
   CHECK(mr_ != nullptr) << " No memory region found for address " << rdma_addr_
                         << ": " << key_;
-  LOG(INFO) << "AllocateTensors this=" << this << " rdma_addr_=" << rdma_addr_;
   return true;
 }
 
@@ -1755,7 +1729,6 @@ void RdmaTensorRequest::RecvTensorMetaData(DataType dtype, TensorShape shape,
   DeallocateTensors();
   AllocateTensorsAsync(
       [this](const Status& s) {
-      LOG(INFO) << "RdmaTensorRequest::RecvTensorMetaData this=" << this;
       CHECK(s.ok()) << "AllocateTensorsAsync";
       Send(RDMA_MESSAGE_TENSOR_RE_REQUEST);
       });
@@ -1815,7 +1788,6 @@ void RdmaTensorRequest::Start() {
   if (meta_data_ != nullptr) {
     AllocateTensorsAsync(
         [this](const Status& s) {
-        LOG(INFO) << "RdmaTensorRequest::Start this=" << this;
         CHECK(s.ok()) << "AllocateTensorsAsync";
         Send(RDMA_MESSAGE_TENSOR_REQUEST);
         });
