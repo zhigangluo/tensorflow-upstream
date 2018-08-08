@@ -74,8 +74,6 @@ struct RemoteMR {
   uint64_t remote_addr;
   uint32_t rkey;
 };
-enum BufferStatus { none, idle, busy };
-enum Location { local, remote };
 
 enum RdmaMessageType {
   RDMA_MESSAGE_META_DATA_UPDATE,
@@ -90,6 +88,7 @@ struct RdmaMessage {
   string name_;
   int64 step_id_;
   uint64_t request_index_;
+  uint64_t message_index_;
   union {
     uint64_t remote_addr_;
 #ifdef RDMA_DATA_VALIDATION
@@ -105,10 +104,12 @@ struct RdmaMessage {
   // For error status:
   Status status_;
 
-  // type|name_size|name|step_id|request_index|remote_addr/checksum|rkey|...
-  //   1B|    2B   | 512|  8B   |     8B      |       8B           | 4B |...
-  // ...|is_dead|data_type|tensor_shape|tensor_bytes|error_status          |
-  // ...|    1B |   XB    |    XB      |    8B      |size - 4B, proto - XB |
+  // type|name_size|name|step_id|request_index|message_index|...
+  //   1B|    2B   | 512|  8B   |     8B      |     8B      |...
+  // ...|remote_addr/checksum|rkey|is_dead|data_type|tensor_shape|...
+  // ...|       8B           | 4B |    1B |   XB    |    XB      |...
+  // ...|tensor_bytes|error_status          |
+  // ...|    8B      |size - 4B, proto - XB |
   static const size_t kNameCapacity = 512;
   static const size_t kTypeStartIndex = 0;
   static const size_t kNameSizeStartIndex = kTypeStartIndex + sizeof(type_);
@@ -117,8 +118,10 @@ struct RdmaMessage {
   static const size_t kStepIdStartIndex = kNameStartIndex + kNameCapacity;
   static const size_t kRequestIndexStartIndex =
       kStepIdStartIndex + sizeof(step_id_);
-  static const size_t kRemoteAddrStartIndex =
+  static const size_t kMessageIndexStartIndex =
       kRequestIndexStartIndex + sizeof(request_index_);
+  static const size_t kRemoteAddrStartIndex =
+      kMessageIndexStartIndex + sizeof(message_index_);
   static const size_t kChecksumStartIndex = kRemoteAddrStartIndex;
   static const size_t kRkeyStartIndex =
       kRemoteAddrStartIndex + sizeof(remote_addr_);
@@ -136,7 +139,7 @@ struct RdmaMessage {
   static const size_t kMessageTotalBytes = kErrorStatusStartIndex;
   static const size_t kRdmaMessageBufferSize =
       kMessageTotalBytes + kErrorStatusMaxSize;
-  static string CreateMessage(const RdmaMessage& rm);
+  static string CreateMessage(RdmaMessage& rm);
   static void ParseMessage(RdmaMessage& rm, const void* buffer);
 };
 

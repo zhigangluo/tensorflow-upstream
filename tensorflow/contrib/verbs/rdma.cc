@@ -513,7 +513,8 @@ void RdmaAdapter::Process_CQ() {
         rc->message_buffers_->ReleaseRecvBuffer(rmr);
         RDMA_LOG(1) << "Step 0x" << std::hex << rm.step_id_ << std::dec
                     << ": Received " << MessageTypeToString(rm.type_) << " "
-                    << "#" << rm.request_index_ << ": " << rm.name_;
+                    << "#" << rm.request_index_ << ": "
+                    << "##" << rm.message_index_ << ": " << rm.name_;
         // put back a recv wr.
         rc->Recv();
 
@@ -859,8 +860,10 @@ void RdmaMessageBuffers::EnqueueItem(string item) {
                 << ", queue_.size()=" << queue_.size()
                 << ", qid=" << qid
                 << " Step 0x" << std::hex << rm.step_id_ << std::dec
-                << ": Writing  " << MessageTypeToString(rm.type_) << " #"
-                << rm.request_index_ << ": " << rm.name_ << " on " << rm.remote_addr_
+                << ": Writing  " << MessageTypeToString(rm.type_)
+                << " #" << rm.request_index_ << ": "
+                << " ##" << rm.message_index_ << ": "
+                << rm.name_ << " on " << rm.remote_addr_
                 << " (rkey: 0x" << std::hex << rm.rkey_ << ")";
   }
   else {
@@ -938,8 +941,10 @@ void RdmaMessageBuffers::SendNextItem() {
                   << " queue_.size()=" << queue_.size()
                   << " qid=" << qid
                   << " Step 0x" << std::hex << rm.step_id_ << std::dec
-                  << ": Writing  " << MessageTypeToString(rm.type_) << " #"
-                  << rm.request_index_ << ": " << rm.name_ << " on " << rm.remote_addr_
+                  << ": Writing  " << MessageTypeToString(rm.type_)
+                  << " #" << rm.request_index_ << ": "
+                  << " ##" << rm.message_index_ << ": "
+                  << rm.name_ << " on " << rm.remote_addr_
                   << " (rkey: 0x" << std::hex << rm.rkey_ << ")";
     }
     else {
@@ -1107,7 +1112,6 @@ void RdmaChannel::RemoveTensorResponse(uint32_t request_index) {
 void RdmaTensorResponse::Start() {
   Rendezvous::ParsedKey parsed;
   Status s = Rendezvous::ParseKey(rm_.name_, &parsed);
-  // JEFF
   if (!s.ok()) {
     SendErrorStatus(s);
     return;
@@ -1276,7 +1280,7 @@ void RdmaTensorResponse::Clone(const Tensor& in, const TensorProto& proto,
 void RdmaTensorResponse::SendMetaData(const Tensor& in,
                                       const TensorProto& proto, bool is_dead) {
   static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
-  RDMA_LOG(2) << "Request #" << rm_.request_index_
+  RDMA_LOG(1) << "Request #" << rm_.request_index_
               << ": Meta data changed: " << rm_.name_;
   bool can_memcpy = DataTypeCanUseMemcpy(in.dtype());
   size_t tensor_bytes = (can_memcpy) ? in.TotalBytes() : proto.ByteSize();
@@ -1389,27 +1393,31 @@ void RdmaTensorResponse::Destroy() {
 //   rm: the message structure
 // Returns:
 //   message in string format
-string RdmaMessage::CreateMessage(const RdmaMessage& rm) {
+string RdmaMessage::CreateMessage(RdmaMessage& rm) {
   // Rdma Message format
   // type|name_size|name|step_id|request_index|remote_addr|rkey|is_dead|...
   //   1B|    2B   | 512|  8B   |     8B      |       8B  | 4B |    1B |...
   // ...|data_type|tensor_shape|tensor_bytes|error_status          |
   // ...|   XB    |    XB      |    8B      |size - 4B, proto - XB |
   //
-  // ACK:             Imm-type: ACK
   // TENSOR_REQUEST:  Imm-type: MESSAGE
   //                  Fields: type, request_index, name, step_id, remote_addr,
-  //                      rkey, is_dead, data_type, tensor_shape, tensor_bytes
+  //                      rkey, is_dead, data_type, tensor_shape, tensor_bytes,
+  //                      message_index
   // META_DATA_UPDATE: Imm-type: MESSAGE
   //                  Fields: type, request_index, is_dead, data_type,
-  //                      tensor_shape, tensor_bytes
+  //                      tensor_shape, tensor_bytes, message_index
   // TENSOR_RE_REQUST: Imm-type: MESSAGE
   //                  Fields: type, request_index, name, step_id, remote_addr,
-  //                      rkey, is_dead, data_type, tensor_shape, tensor_bytes
+  //                      rkey, is_dead, data_type, tensor_shape, tensor_bytes,
+  //                      message_index
   // ERROR_STATUS:    Imm-type: MESSAGE
-  //                  Fields: type, request_index, name, step_id, error_status
+  //                  Fields: type, request_index, name, step_id, error_status,
+  //                      message_index
   // Tensor content:  Imm-type: request_index
+  static uint64_t counter = 0;
   static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
+  rm.message_index_ = counter++;
   size_t message_size = kMessageTotalBytes;
   char message[kMessageTotalBytes + kErrorStatusMaxSize];
   // type
@@ -1417,6 +1425,9 @@ string RdmaMessage::CreateMessage(const RdmaMessage& rm) {
   // request index
   memcpy(&message[kRequestIndexStartIndex], &rm.request_index_,
          sizeof(rm.request_index_));
+  // message index
+  memcpy(&message[kMessageIndexStartIndex], &rm.message_index_,
+         sizeof(rm.message_index_));
   // name, step_id, remote_addr, rkey
   if ((rm.type_ == RDMA_MESSAGE_TENSOR_REQUEST) ||
       (rm.type_ == RDMA_MESSAGE_TENSOR_RE_REQUEST)) {
@@ -1484,6 +1495,9 @@ void RdmaMessage::ParseMessage(RdmaMessage& rm, const void* buffer) {
   // request index
   memcpy(&rm.request_index_, &message[kRequestIndexStartIndex],
          sizeof(rm.request_index_));
+  // message index
+  memcpy(&rm.message_index_, &message[kMessageIndexStartIndex],
+         sizeof(rm.message_index_));
   // name, step_id, remote_addr, rkey
   if ((rm.type_ == RDMA_MESSAGE_TENSOR_REQUEST) ||
       (rm.type_ == RDMA_MESSAGE_TENSOR_RE_REQUEST)) {
