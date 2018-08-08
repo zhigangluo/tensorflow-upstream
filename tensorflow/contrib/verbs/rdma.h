@@ -474,7 +474,7 @@ class RdmaMR {
     RdmaMR(void* buffer, ibv_mr* mr, int id)
       : buffer_(buffer), mr_(mr), id_(id) {}
     RdmaMR(const RdmaMR& other)
-      : buffer_(other.buffer_), mr_(other.mr_) {}
+      : buffer_(other.buffer_), mr_(other.mr_), id_(other.id_) {}
 
     void* buffer_;
     ibv_mr* mr_;
