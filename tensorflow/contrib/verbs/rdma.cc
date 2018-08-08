@@ -967,7 +967,7 @@ RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
 
 void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr) {
   mu_.lock();
-  memset(rmr.buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
+  memset(rmr.buffer_, 7, RdmaMessage::kRdmaMessageBufferSize);
   free_recv_.push(rmr);
   RDMA_LOG(1) << "ReleaseRecvBuffer " << rmr.id_;
   mu_.unlock();
@@ -975,7 +975,7 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr) {
 
 void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr) {
   mu_.lock();
-  memset(rmr.buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
+  memset(rmr.buffer_, 6, RdmaMessage::kRdmaMessageBufferSize);
   free_send_.push(rmr);
   RDMA_LOG(1) << "ReleaseSendBuffer " << rmr.id_;
   mu_.unlock();
