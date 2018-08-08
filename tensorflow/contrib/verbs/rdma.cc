@@ -539,11 +539,11 @@ void RdmaAdapter::Process_CQ() {
           request->RecvErrorStatus(rm.status_);
         }
         else {
-          RdmaMessage rm;
-          rm.type_ = RDMA_MESSAGE_ERROR_STATUS;
+          RdmaMessage err;
+          err.type_ = RDMA_MESSAGE_ERROR_STATUS;
           LOG(ERROR) << "Sending RDMA_MESSAGE_ERROR_STATUS: "
                      << "Unknown rm.type_=" << rm.type_;
-          string message = RdmaMessage::CreateMessage(rm);
+          string message = RdmaMessage::CreateMessage(err);
           rc->message_buffers_->EnqueueItem(message);
           rc->message_buffers_->SendNextItem();
         }
