@@ -365,13 +365,13 @@ class RdmaTensorResponse {
   bool is_dead_ = false;
 };
 
-class RdmaMessageBuffer;
+class RdmaMessageBuffers;
 // Class that represents the Rdma Adapter.
 // Responsible for creation of the completion queue, and handling
 // of work completions.
 class RdmaAdapter {
   friend class RdmaChannel;
-  friend class RdmaMessageBuffer;
+  friend class RdmaMessageBuffers;
   friend class RdmaTensorResponse;
   friend class RdmaMgr;
   friend class RdmaRemoteRendezvous;
@@ -385,7 +385,6 @@ class RdmaAdapter {
   void Process_CQ();
 
  protected:
-  static const int MAX_CONCURRENT_WRITES = 1000;
   ibv_context* context_;
   // RDMA configuration parameters
   RdmaParams params_;
@@ -396,7 +395,7 @@ class RdmaAdapter {
   // Completion queue, to poll on work completions
   ibv_cq* cq_;
   // Pre-allocated work completions array used for polling
-  ibv_wc wc_[MAX_CONCURRENT_WRITES * 2];
+  ibv_wc* wc_;
   // worker env for thread
   const WorkerEnv* worker_env_;
   // thread for cq.
@@ -407,7 +406,7 @@ class RdmaAdapter {
 // Responsible for connecting queue pairs.
 class RdmaChannel {
   friend class RdmaAdapter;
-  friend class RdmaMessageBuffer;
+  friend class RdmaMessageBuffers;
   friend class RdmaTensorBuffer;
   friend class RdmaTensorRequest;
   friend class RdmaTensorResponse;
@@ -420,9 +419,6 @@ class RdmaChannel {
   ~RdmaChannel();
   inline const RdmaAddress& self() { return self_; }
   RdmaAddress address() const;
-  inline const std::vector<RdmaMessageBuffer*>& message_buffers() const {
-    return message_buffers_;
-  }
   void Connect(const RdmaAddress& remoteAddr);
   void Connect();
   void Recv();
@@ -441,7 +437,6 @@ class RdmaChannel {
   RdmaTensorResponse* UpdateTensorResponse(const RdmaMessage& rm);
   void RemoveTensorResponse(uint32_t request_index);
 
-  static const int kNumMessageBuffers = 2;
   static const int kPingRecvWrid = 0;
 
  private:
@@ -471,62 +466,50 @@ class RdmaChannel {
   typedef std::unordered_map<uint32_t, uint32_t> ResponsesCheck;
   ResponsesTable responses_table_ GUARDED_BY(responses_mu_);
   ResponsesCheck responses_check_ GUARDED_BY(responses_mu_);
-  RdmaMessageBuffer* tx_message_buffer_;
-  RdmaMessageBuffer* rx_message_buffer_;
-  std::vector<RdmaMessageBuffer*> message_buffers_;
+  RdmaMessageBuffers* message_buffers_;
+};
+
+class RdmaMR {
+  public:
+    RdmaMR(void* buffer, ibv_mr* mr)
+      : buffer_(buffer), mr_(mr) {}
+    RdmaMR(const RdmaMR& other)
+      : buffer_(other.buffer_), mr_(other.mr_) {}
+
+    void* buffer_;
+    ibv_mr* mr_;
 };
 
 // Class that represents a buffer for Rdma message sending.
-class RdmaMessageBuffer {
+class RdmaMessageBuffers {
   friend class RdmaChannel;
   friend class RdmaAdapter;
   friend class RdmaMgr;
   friend class RdmaRemoteRendezvous;
 
  public:
-  explicit RdmaMessageBuffer(RdmaChannel* channel, string name);
-  ~RdmaMessageBuffer();
+  explicit RdmaMessageBuffers(RdmaChannel* channel);
+  ~RdmaMessageBuffers();
 
-  inline void* buffer() const { return buffer_; }
-  inline ibv_mr* self() const { return self_; }
-  inline void SetBufferStatus(Location loc, BufferStatus status) {
-    RDMA_LOG(1) << "SetBufferStatus(this=" << this
-                << ", name=" << name_
-                << ", loc=" << loc
-                << ", status=" << status << ")";
-    mu_.lock();
-    if (loc == local) {
-      local_status_ = status;
-    } else {
-      remote_status_ = status;
-    }
-    mu_.unlock();
-  }
-  void FreeBuffer();
   void EnqueueItem(string Item);
   void SendNextItem();
-  void CreateCPUBuffer(size_t size, bool lock = true);
-  void SetRemoteMR(RemoteMR rmi, bool override);
-  void Write(uint32_t imm_data, size_t buffer_size);
-  static void Write(void * thiz, const RdmaChannel* channel, uint32_t imm_data,
+  static void Write(void * thiz, RdmaChannel* channel, uint32_t imm_data,
                     size_t buffer_size, uint64_t src_addr, uint32_t lkey,
                     uint64_t remote_addr, uint32_t rkey,
                     RdmaWriteIDType write_type, void* write_context);
-  static void SendAck(const RdmaChannel* channel);
+  RdmaMR AcquireRecvBuffer();
+  void ReleaseRecvBuffer(RdmaMR rmr);
+  void ReleaseSendBuffer(RdmaMR rmr);
 
  protected:
-  const RdmaChannel* channel_;
-  void* buffer_ = nullptr;
-  bool buffer_on_host_ = true;
-  size_t size_ = 0;
-  const string name_;
-  ibv_mr* self_ = nullptr;
+  RdmaChannel* channel_;
+  std::vector<RdmaMR> mr_send_;
+  std::vector<RdmaMR> mr_recv_;
   mutex mu_;
-  RemoteMR remote_;
   size_t qid_ GUARDED_BY(mu_);
   std::queue<std::pair<size_t,string> > queue_ GUARDED_BY(mu_);
-  BufferStatus local_status_ GUARDED_BY(mu_) = none;
-  BufferStatus remote_status_ GUARDED_BY(mu_) = none;
+  std::queue<RdmaMR> free_send_ GUARDED_BY(mu_);
+  std::queue<RdmaMR> free_recv_ GUARDED_BY(mu_);
 };
 
 }  // namespace tensorflow

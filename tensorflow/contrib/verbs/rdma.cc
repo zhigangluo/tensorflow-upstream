@@ -402,21 +402,32 @@ ibv_pd* alloc_protection_domain(ibv_context* context) {
   return pd;
 }
 
+class RdmaChannelAndMR {
+  public:
+    RdmaChannelAndMR(RdmaChannel *channel, RdmaMR rmr)
+      : channel_(channel), rmr_(rmr) {}
+
+    RdmaChannel *channel_;
+    RdmaMR rmr_;
+};
+
 RdmaAdapter::RdmaAdapter(const WorkerEnv* worker_env)
     : context_(open_device(set_device())),
       params_(params_init(context_)),
       pd_(alloc_protection_domain(context_)),
+      wc_(new ibv_wc[params_.queue_depth*2]),
       worker_env_(worker_env) {
   event_channel_ = ibv_create_comp_channel(context_);
   CHECK(event_channel_) << "Failed to create completion channel";
-  cq_ = ibv_create_cq(context_, MAX_CONCURRENT_WRITES * 2, NULL, event_channel_,
-                      0);
+  cq_ = ibv_create_cq(context_, params_.queue_depth * 2, NULL,
+          event_channel_, 0);
   CHECK(cq_) << "Failed to create completion queue";
   CHECK(!ibv_req_notify_cq(cq_, 0)) << "Failed to request CQ notification";
 }
 
 RdmaAdapter::~RdmaAdapter() {
   polling_thread_.reset();
+  delete [] wc_;
   CHECK(!ibv_destroy_cq(cq_)) << "Failed to destroy CQ";
   CHECK(!ibv_destroy_comp_channel(event_channel_))
       << "Failed to destroy channel";
@@ -434,7 +445,7 @@ string RdmaAdapter::name() const { return string(context_->device->name); }
 
 // Function to process incoming messages
 // There are two types of messages:
-// 1. IBV_WC_RECV_RDMA_WITH_IMM (receive)
+// 1. IBV_WC_RECV (receive with immediate)
 // 2. IBV_WC_RDMA_WRITE (send))
 void RdmaAdapter::Process_CQ() {
   static bool maybe_clear = !get_env_var("RDMA_MEMSET").empty();
@@ -447,36 +458,25 @@ void RdmaAdapter::Process_CQ() {
     ibv_ack_cq_events(cq, 1);
     CHECK(!ibv_req_notify_cq(cq_, 0));
 
-    int ne = ibv_poll_cq(cq_, MAX_CONCURRENT_WRITES * 2, wc_);
+    int ne = ibv_poll_cq(cq_, params_.queue_depth * 2, wc_);
     CHECK_GE(ne, 0);
     for (int i = 0; i < ne; ++i) {
       CHECK(wc_[i].status == IBV_WC_SUCCESS)
           << "Failed status \n"
           << ibv_wc_status_str(wc_[i].status) << " " << wc_[i].status << " "
           << static_cast<int>(wc_[i].wr_id) << " " << wc_[i].vendor_err;
-      if (wc_[i].opcode == IBV_WC_RECV_RDMA_WITH_IMM) {
-        RdmaChannel* rc = reinterpret_cast<RdmaChannel*>(wc_[i].wr_id);
-        // put back a recv wr.
-        rc->Recv();
+      if (wc_[i].opcode == IBV_WC_RECV || wc_[i].opcode == IBV_WC_RECV_RDMA_WITH_IMM) {
+        CHECK(wc_[i].wc_flags & IBV_WC_WITH_IMM);
+        RdmaChannelAndMR* rid =
+          reinterpret_cast<RdmaChannelAndMR*>(wc_[i].wr_id);
+        RdmaChannel* rc = rid->channel_;
+        RdmaMR rmr = rid->rmr_;
+        delete rid;
+
         // imm_data is the index of RX buffer in the buffer table.
         uint32_t imm_data = wc_[i].imm_data;
-        RdmaMessageBuffer* rb;
-        RdmaMessage rm;
 
-        if (imm_data == RDMA_IMM_DATA_ACK) {
-          // receive an ack to a message
-          RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": receive an ack to a message";
-          rb = rc->tx_message_buffer_;
-          rb->SetBufferStatus(remote, idle); // remote completion implies local
-          rb->SetBufferStatus(local, idle);
-          if (maybe_clear) {
-            // clear the buffer for next message
-            LOG(INFO) << "clearing TX buffer";
-            memset(rb->buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
-          }
-          rb->SendNextItem();
-          continue;
-        }
+        CHECK(imm_data != RDMA_IMM_DATA_ACK);
 
         if (imm_data <= RDMA_IMM_MAX_REQUEST_ID) {
           // receive a tensor RDMA write
@@ -484,24 +484,24 @@ void RdmaAdapter::Process_CQ() {
           uint32_t request_index = imm_data;
           RdmaTensorRequest* request = rc->GetTensorRequest(request_index);
           request->RecvTensorContent();
+          // put back a recv wr.
+          rc->message_buffers_->ReleaseRecvBuffer(rmr);
+          rc->Recv();
           continue;
         }
 
         // receive a control message
         LOG(INFO) << "receive a control message with imm_data=" << imm_data;
         CHECK(imm_data == RDMA_IMM_DATA_MESSAGE);
-        rb = rc->rx_message_buffer_;
-        RdmaMessage::ParseMessage(rm, rb->buffer_);
-        if (maybe_clear) {
-          // clear the buffer for next message
-          LOG(INFO) << "clearing RX buffer";
-          memset(rb->buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
-        }
-        RdmaMessageBuffer::SendAck(rc);
+        RdmaMessage rm;
+        RdmaMessage::ParseMessage(rm, rmr.buffer_);
+        rc->message_buffers_->ReleaseRecvBuffer(rmr);
         RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
                     << "Step 0x" << std::hex << rm.step_id_ << std::dec
                     << ": Received " << MessageTypeToString(rm.type_) << " "
                     << "#" << rm.request_index_ << ": " << rm.name_;
+        // put back a recv wr.
+        rc->Recv();
 
         if (rm.type_ == RDMA_MESSAGE_TENSOR_REQUEST) {
           RdmaTensorResponse* response = rc->AddTensorResponse(rm);
@@ -530,19 +530,17 @@ void RdmaAdapter::Process_CQ() {
         RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
                     << "Write complete of type " << wr_id->write_type
                     << " and id " << wr_id->id;
+        CHECK(wr_id->write_type != RDMA_WRITE_ID_ACK);
         switch (wr_id->write_type) {
           case RDMA_WRITE_ID_ACK:
             break;
           case RDMA_WRITE_ID_MESSAGE: {
-            //RdmaMessageBuffer* rb =
-            //    reinterpret_cast<RdmaMessageBuffer*>(wr_id->write_context);
-            //if (maybe_clear) {
-            //  // clear the buffer for next message
-            //  LOG(INFO) << "clearing TX buffer";
-            //  memset(rb->buffer_, 6, RdmaMessage::kRdmaMessageBufferSize);
-            //}
-            //rb->SetBufferStatus(local, idle);
-            //rb->SendNextItem();
+            RdmaChannelAndMR* rid =
+              reinterpret_cast<RdmaChannelAndMR*>(wr_id->write_context);
+            RdmaChannel* rc = rid->channel_;
+            RdmaMR rmr = rid->rmr_;
+            rc->message_buffers_->ReleaseSendBuffer(rmr);
+            delete rid;
             break;
           }
           case RDMA_WRITE_ID_TENSOR_WRITE: {
@@ -647,18 +645,8 @@ RdmaChannel::RdmaChannel(const RdmaAdapter* adapter, const string local_name,
     self_.iid = gid.global.interface_id;
   }
 
-  // create message and ack buffers, then initialize the tables.
-  {
-    const string buffer_names[] = {"tx_message_buffer", "rx_message_buffer"};
-    tx_message_buffer_ = new RdmaMessageBuffer(this, buffer_names[0]);
-    rx_message_buffer_ = new RdmaMessageBuffer(this, buffer_names[1]);
-    message_buffers_.reserve(kNumMessageBuffers);
-    message_buffers_.push_back(tx_message_buffer_);
-    message_buffers_.push_back(rx_message_buffer_);
-    // create buffer on host
-    tx_message_buffer_->CreateCPUBuffer(RdmaMessage::kRdmaMessageBufferSize);
-    rx_message_buffer_->CreateCPUBuffer(RdmaMessage::kRdmaMessageBufferSize);
-  }
+  // create message buffers
+  message_buffers_ = new RdmaMessageBuffers(this);
   CHECK(PingPostRecv() == 0) << "Couldn't post receive from " << remote_name_
                              << " with error " << std::strerror(errno);
 }
@@ -666,8 +654,7 @@ RdmaChannel::RdmaChannel(const RdmaAdapter* adapter, const string local_name,
 RdmaChannel::~RdmaChannel() {
   ibv_dereg_mr(mr_);
   CHECK(!ibv_destroy_qp(qp_)) << "Failed to destroy QP";
-  delete tx_message_buffer_;
-  delete rx_message_buffer_;
+  delete message_buffers_;
 }
 
 void RdmaChannel::SetRemoteAddress(const RdmaAddress& ra, bool override) {
@@ -691,10 +678,18 @@ void RdmaChannel::SetRemoteAddress(const RdmaAddress& ra, bool override) {
 // Adding tokens to the completion queue
 // Tokens are needed to process future messages.
 void RdmaChannel::Recv() {
+  struct ibv_sge sg;
   struct ibv_recv_wr wr;
-  memset(&wr, 0, sizeof(wr));
-  wr.wr_id = (uint64_t)this;
   struct ibv_recv_wr* bad_wr;
+  memset(&sg, 0, sizeof(sg));
+  memset(&wr, 0, sizeof(wr));
+  RdmaMR rmr = message_buffers_->AcquireRecvBuffer();
+  sg.addr = (uintptr_t)rmr.buffer_;
+  sg.length = RdmaMessage::kRdmaMessageBufferSize;
+  sg.lkey = rmr.mr_->lkey;
+  wr.wr_id = (uint64_t) new RdmaChannelAndMR(this, rmr);
+  wr.sg_list = &sg;
+  wr.num_sge = 1;
   CHECK(!ibv_post_recv(qp_, &wr, &bad_wr)) << "Failed to post recv";
 }
 
@@ -791,76 +786,46 @@ void RdmaChannel::Connect(const RdmaAddress& remoteAddr) {
   }
 }
 
-RdmaMessageBuffer::RdmaMessageBuffer(RdmaChannel* channel, string name)
-    : channel_(channel), name_(name), qid_(0) {}
+RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
+    : channel_(channel), qid_(0) {
+  uint32_t depth = channel_->adapter_->params_.queue_depth;
+  // consider a single malloc and ibv_reg_mr
+  mr_send_.reserve(depth);
+  mr_recv_.reserve(depth);
+  for (uint32_t i=0; i<depth; ++i) {
+    void* buffer;
+    ibv_mr* mr;
 
-RdmaMessageBuffer::~RdmaMessageBuffer() {
-  CHECK(!ibv_dereg_mr(self_)) << "ibv_dereg_mr failed";
-  FreeBuffer();
-}
+    buffer = malloc(RdmaMessage::kRdmaMessageBufferSize);
+    CHECK(buffer) << "Failed to allocate memory region";
+    mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
+        IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
+    CHECK(mr) << "Failed to register memory region";
+    mr_send_.push_back(RdmaMR(buffer, mr));
+    free_send_.push(RdmaMR(buffer, mr));
 
-void RdmaMessageBuffer::FreeBuffer() {
-  if ((buffer_ != nullptr) && buffer_on_host_) {
-    free(buffer_);
+    buffer = malloc(RdmaMessage::kRdmaMessageBufferSize);
+    CHECK(buffer) << "Failed to allocate memory region";
+    mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
+        IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
+    CHECK(mr) << "Failed to register memory region";
+    mr_recv_.push_back(RdmaMR(buffer, mr));
+    free_recv_.push(RdmaMR(buffer, mr));
   }
 }
 
-// Allocate CPU memory for the Rdma buffer
-// Args:
-//   size: to-be-allocated memory size
-//   lock: whether or not mutex_lock the process to protect concurrency.
-// Returns:
-//   None
-void RdmaMessageBuffer::CreateCPUBuffer(size_t size, bool lock) {
-  LOG(INFO) << "CreateCPUBuffer(size=" << size << ", lock=" << lock << ")"
-            << " local_status_=" << local_status_;
-  CHECK(size > 0);
-  if (lock) {
-    mu_.lock();
-  }
-  if (local_status_ != none) {
-    // delete existing buffer
-    CHECK(!ibv_dereg_mr(self_)) << "ibv_dereg_mr failed";
-    FreeBuffer();
-  }
-  size_ = size;
-  buffer_ = malloc(size_);
-  self_ = ibv_reg_mr(channel_->adapter_->pd_, buffer_, size_,
-                     IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
-  CHECK(self_) << "Failed to register memory region";
-  buffer_on_host_ = true;
-  local_status_ = idle;
-  if (lock) {
-    mu_.unlock();
-  }
-}
-
-// Set address of remote memory region
-// Args:
-//   rmr: address of remote memory region
-//   override: whether override existing information
-// Returns:
-//   None
-void RdmaMessageBuffer::SetRemoteMR(RemoteMR rmr, bool override) {
-  mutex_lock lock{mu_};
-  LOG(INFO) << "SetRemoteMR(name=" << name_
-            << ", override=" << override
-            << ", remote_status_=" << remote_status_
-            << ", rmr.remote_addr=" << rmr.remote_addr
-            << ", rmr.rkey=" << rmr.rkey
-            << ")";
-  if ((override) || (remote_status_ == none)) {
-    remote_.remote_addr = rmr.remote_addr;
-    remote_.rkey = rmr.rkey;
-    remote_status_ = idle;
-  } else {
-    CHECK(remote_.remote_addr == rmr.remote_addr);
-    CHECK(remote_.rkey == rmr.rkey);
+RdmaMessageBuffers::~RdmaMessageBuffers() {
+  uint32_t depth = channel_->adapter_->params_.queue_depth;
+  for (uint32_t i=0; i<depth; ++i) {
+    CHECK(!ibv_dereg_mr(mr_send_[i].mr_));
+    CHECK(!ibv_dereg_mr(mr_recv_[i].mr_));
+    free(mr_send_[i].buffer_);
+    free(mr_recv_[i].buffer_);
   }
 }
 
 // Put a task in the buffer's job queue
-void RdmaMessageBuffer::EnqueueItem(string item) {
+void RdmaMessageBuffers::EnqueueItem(string item) {
   mutex_lock lock{mu_};
   static bool maybe_log_send = !get_env_var("RDMA_LOG_SEND").empty();
   auto qid = qid_++;
@@ -884,15 +849,8 @@ void RdmaMessageBuffer::EnqueueItem(string item) {
   }
 }
 
-// Rdma-Write the content of the buffer
-void RdmaMessageBuffer::Write(uint32_t imm_data, size_t buffer_size) {
-  RDMA_LOG(1) << "Write(imm_data=" << imm_data << ", buffer_size=" << buffer_size << ")";
-  Write(this, channel_, imm_data, buffer_size, (uint64_t)buffer_, self_->lkey,
-        remote_.remote_addr, remote_.rkey, RDMA_WRITE_ID_MESSAGE, this);
-}
-
 // Generalized Write method
-void RdmaMessageBuffer::Write(void *thiz, const RdmaChannel* channel, uint32_t imm_data,
+void RdmaMessageBuffers::Write(void *thiz, RdmaChannel* channel, uint32_t imm_data,
                               size_t buffer_size, uint64_t src_addr,
                               uint32_t lkey, uint64_t remote_addr,
                               uint32_t rkey, RdmaWriteIDType write_type,
@@ -910,7 +868,11 @@ void RdmaMessageBuffer::Write(void *thiz, const RdmaChannel* channel, uint32_t i
   wr.wr_id = (uint64_t) new RdmaWriteID(write_type, write_context, wkey);
   wr.sg_list = &list;
   wr.num_sge = 1;
-  wr.opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
+  if (write_type == RDMA_WRITE_ID_MESSAGE) {
+    wr.opcode = IBV_WR_SEND_WITH_IMM;
+  } else if (write_type == RDMA_WRITE_ID_TENSOR_WRITE) {
+    wr.opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
+  }
   wr.send_flags = IBV_SEND_SIGNALED;
   wr.imm_data = imm_data;
   wr.wr.rdma.remote_addr = remote_addr;
@@ -933,28 +895,19 @@ void RdmaMessageBuffer::Write(void *thiz, const RdmaChannel* channel, uint32_t i
   CHECK(!ibv_post_send(channel->qp_, &wr, &bad_wr)) << "Failed to post send";
 }
 
-// Send the next ack from the buffer's job queue.
-void RdmaMessageBuffer::SendAck(const RdmaChannel* channel) {
-  RDMA_LOG(1) << "SendAck(channel=" << channel << ")";
-  Write(nullptr, channel, RDMA_IMM_DATA_ACK, 0, 0, 0, 0, 0, RDMA_WRITE_ID_ACK, nullptr);
-}
-
 // Send the next message from the buffer's job queue.
-void RdmaMessageBuffer::SendNextItem() {
+void RdmaMessageBuffers::SendNextItem() {
   static bool maybe_log_send = !get_env_var("RDMA_LOG_SEND").empty();
   uint32_t imm_data = RDMA_IMM_DATA_MESSAGE;
   mu_.lock();
-  if (!queue_.empty() && (local_status_ == idle) && (remote_status_ == idle)) {
-    local_status_ = busy;
-    remote_status_ = busy;
+  while (!queue_.empty() && !free_send_.empty()) {
     auto item = queue_.front();
     auto qid = item.first;
     string message = item.second;
     queue_.pop();
-    // local/remote_status_ won't be set back to idle
-    // unitl Write() is successful
-    memcpy(buffer_, message.data(), message.size());
-    mu_.unlock();
+    RdmaMR rmr = free_send_.front();
+    free_send_.pop();
+    memcpy(rmr.buffer_, message.data(), message.size());
     if (maybe_log_send) {
       RdmaMessage rm;
       RdmaMessage::ParseMessage(rm, message.data());
@@ -973,14 +926,34 @@ void RdmaMessageBuffer::SendNextItem() {
                   << " message=" << message
                   << " message.size()=" << message.size();
     }
-    Write(imm_data, message.size());
-  } else {
-    RDMA_LOG(1) << "SendNextItem(this=" << this << ") no-op:"
-                << " queue_.size()=" << queue_.size()
-                << " local_status_=" << local_status_
-                << " remote_status_=" << remote_status_;
-    mu_.unlock();
+    Write(this, channel_, imm_data, RdmaMessage::kRdmaMessageBufferSize,
+        (uint64_t)rmr.buffer_, rmr.mr_->lkey,
+        0, 0, RDMA_WRITE_ID_MESSAGE, new RdmaChannelAndMR(channel_, rmr));
   }
+  mu_.unlock();
+}
+
+RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
+  mu_.lock();
+  CHECK(!free_recv_.empty());
+  RdmaMR rmr = free_recv_.front();
+  free_recv_.pop();
+  mu_.unlock();
+  return rmr;
+}
+
+void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr) {
+  mu_.lock();
+  memset(rmr.buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
+  free_recv_.push(rmr);
+  mu_.unlock();
+}
+
+void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr) {
+  mu_.lock();
+  memset(rmr.buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
+  free_send_.push(rmr);
+  mu_.unlock();
 }
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
@@ -1311,8 +1284,8 @@ void RdmaTensorResponse::SendMetaData(const Tensor& in,
               << " is-dead = " << rm.is_dead_ << ")";
 
   string message = RdmaMessage::CreateMessage(rm);
-  channel_->tx_message_buffer_->EnqueueItem(message);
-  channel_->tx_message_buffer_->SendNextItem();
+  channel_->message_buffers_->EnqueueItem(message);
+  channel_->message_buffers_->SendNextItem();
 }
 
 void RdmaTensorResponse::SendContent(const Tensor& in, const TensorProto& proto,
@@ -1349,7 +1322,7 @@ void RdmaTensorResponse::SendContent(const Tensor& in, const TensorProto& proto,
               << "): " << rm_.name_ << " (size: 0x" << std::hex << tensor_bytes
               << ")";
 
-  RdmaMessageBuffer::Write(nullptr, channel_, imm_data, tensor_bytes,
+  RdmaMessageBuffers::Write(nullptr, channel_, imm_data, tensor_bytes,
                            (uint64_t)src_addr_, lkey, rm_.remote_addr_,
                            rm_.rkey_, RDMA_WRITE_ID_TENSOR_WRITE, this);
 }
@@ -1367,8 +1340,8 @@ void RdmaTensorResponse::SendErrorStatus(const Status& status) {
              << ": " << rm.name_ << ". Status: " << status.ToString();
 
   string message = RdmaMessage::CreateMessage(rm);
-  channel_->tx_message_buffer_->EnqueueItem(message);
-  channel_->tx_message_buffer_->SendNextItem();
+  channel_->message_buffers_->EnqueueItem(message);
+  channel_->message_buffers_->SendNextItem();
 
   // Destroy the response.
   Destroy();
@@ -1699,7 +1672,7 @@ void RdmaTensorRequest::AllocateTensorsAsync(StatusCallback done) {
 }
 
 void RdmaTensorRequest::Send(RdmaMessageType message_type) {
-  RdmaMessageBuffer* rb = channel_->tx_message_buffer_;
+  RdmaMessageBuffers* rb = channel_->message_buffers_;
   RdmaMessage rm;
   rm.type_ = message_type;
   rm.request_index_ = index_;

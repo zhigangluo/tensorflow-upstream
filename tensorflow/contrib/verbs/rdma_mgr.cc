@@ -76,12 +76,12 @@ void RdmaMgr::SetupChannels() {
     channel_info->set_psn(rc->self_.psn);
     channel_info->set_snp(rc->self_.snp);
     channel_info->set_iid(rc->self_.iid);
-    for (int i = 0; i < RdmaChannel::kNumMessageBuffers; i++) {
-      MemoryRegion* mr = req.add_mr();
-      mr->set_remote_addr(
-          reinterpret_cast<uint64_t>(rc->message_buffers_[i]->buffer_));
-      mr->set_rkey(rc->message_buffers_[i]->self_->rkey);
-    }
+    //for (int i = 0; i < RdmaChannel::kNumMessageBuffers; i++) {
+    //  MemoryRegion* mr = req.add_mr();
+    //  mr->set_remote_addr(
+    //      reinterpret_cast<uint64_t>(rc->message_buffers_[i]->buffer_));
+    //  mr->set_rkey(rc->message_buffers_[i]->self_->rkey);
+    //}
     // synchronous call
     Status s;
     int attempts = 0;
@@ -100,21 +100,21 @@ void RdmaMgr::SetupChannels() {
         ra.iid = resp.channel().iid();
         rc->SetRemoteAddress(ra, false);
         rc->Connect();
-        int i = 0;
-        int idx[] = {1, 0};
-        for (const auto& mr : resp.mr()) {
-          // the connections are crossed, i.e.
-          // local tx_message_buffer <---> remote rx_message_buffer_
-          // local rx_message_buffer <---> remote tx_message_buffer_
-          // hence idx[] = {1, 0}.
-          RdmaMessageBuffer* rb = rc->message_buffers_[idx[i]];
-          RemoteMR rmr;
-          rmr.remote_addr = mr.remote_addr();
-          rmr.rkey = mr.rkey();
-          rb->SetRemoteMR(rmr, false);
-          i++;
-        }
-        CHECK(i == RdmaChannel::kNumMessageBuffers);
+        //int i = 0;
+        //int idx[] = {1, 0};
+        //for (const auto& mr : resp.mr()) {
+        //  // the connections are crossed, i.e.
+        //  // local tx_message_buffer <---> remote rx_message_buffer_
+        //  // local rx_message_buffer <---> remote tx_message_buffer_
+        //  // hence idx[] = {1, 0}.
+        //  RdmaMessageBuffer* rb = rc->message_buffers_[idx[i]];
+        //  RemoteMR rmr;
+        //  rmr.remote_addr = mr.remote_addr();
+        //  rmr.rkey = mr.rkey();
+        //  rb->SetRemoteMR(rmr, false);
+        //  i++;
+        //}
+        //CHECK(i == RdmaChannel::kNumMessageBuffers);
       } else {
         LOG(ERROR) << "Connecting to " << worker_name << ": Got "
                    << s.error_message() << ". Retrying (" << (attempts + 1)
