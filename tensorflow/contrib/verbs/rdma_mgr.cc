@@ -172,8 +172,6 @@ bool RdmaMgr::ConnectivityCheck() {
             << rdma_adapter_->wc_[i].status << ") to "
             << rc->channel_->remote_name_;
         ++scnt;
-        // put back a recv wr.
-        rc->channel_->Recv();
       }
     }  // for
   }    // while
