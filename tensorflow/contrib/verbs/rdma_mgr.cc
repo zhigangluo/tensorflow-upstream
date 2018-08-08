@@ -165,12 +165,15 @@ bool RdmaMgr::ConnectivityCheck() {
         ++rcnt;
         // send complete
       } else {
-        RdmaChannel* rc =
-            reinterpret_cast<RdmaChannel*>(rdma_adapter_->wc_[i].wr_id);
+        RdmaChannelAndMR* rc =
+            reinterpret_cast<RdmaChannelAndMR*>(rdma_adapter_->wc_[i].wr_id);
         CHECK(s == IBV_WC_SUCCESS)
             << ": " << ibv_wc_status_str(rdma_adapter_->wc_[i].status) << "("
-            << rdma_adapter_->wc_[i].status << ") to " << rc->remote_name_;
+            << rdma_adapter_->wc_[i].status << ") to "
+            << rc->channel_->remote_name_;
         ++scnt;
+        // put back a recv wr.
+        rc->channel_->Recv();
       }
     }  // for
   }    // while

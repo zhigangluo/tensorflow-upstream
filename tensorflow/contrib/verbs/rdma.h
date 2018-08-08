@@ -481,6 +481,15 @@ class RdmaMR {
     int id_;
 };
 
+class RdmaChannelAndMR {
+  public:
+    RdmaChannelAndMR(RdmaChannel *channel, RdmaMR rmr)
+      : channel_(channel), rmr_(rmr) {}
+
+    RdmaChannel *channel_;
+    RdmaMR rmr_;
+};
+
 // Class that represents a buffer for Rdma message sending.
 class RdmaMessageBuffers {
   friend class RdmaChannel;

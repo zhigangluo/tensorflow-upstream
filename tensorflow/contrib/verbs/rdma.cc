@@ -425,15 +425,6 @@ ibv_pd* alloc_protection_domain(ibv_context* context) {
   return pd;
 }
 
-class RdmaChannelAndMR {
-  public:
-    RdmaChannelAndMR(RdmaChannel *channel, RdmaMR rmr)
-      : channel_(channel), rmr_(rmr) {}
-
-    RdmaChannel *channel_;
-    RdmaMR rmr_;
-};
-
 RdmaAdapter::RdmaAdapter(const WorkerEnv* worker_env)
     : context_(open_device(set_device())),
       params_(params_init(context_)),
