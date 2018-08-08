@@ -488,7 +488,10 @@ void RdmaAdapter::Process_CQ() {
           << "Failed status \n"
           << ibv_wc_status_str(wc_[i].status) << " " << wc_[i].status << " "
           << static_cast<int>(wc_[i].wr_id) << " " << wc_[i].vendor_err;
-      if (wc_[i].opcode == IBV_WC_RECV || wc_[i].opcode == IBV_WC_RECV_RDMA_WITH_IMM) {
+      RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
+                  << OpcodeToString(wc_[i].opcode);
+      if (wc_[i].opcode == IBV_WC_RECV
+              || wc_[i].opcode == IBV_WC_RECV_RDMA_WITH_IMM) {
         CHECK(wc_[i].wc_flags & IBV_WC_WITH_IMM);
         RdmaChannelAndMR* rid =
           reinterpret_cast<RdmaChannelAndMR*>(wc_[i].wr_id);
@@ -548,7 +551,8 @@ void RdmaAdapter::Process_CQ() {
         else {
           LOG(ERROR) << "Unknown rm.type_=" << rm.type_;
         }
-      } else if (wc_[i].opcode == IBV_WC_RDMA_WRITE) {
+      } else if (wc_[i].opcode == IBV_WC_SEND
+              || wc_[i].opcode == IBV_WC_RDMA_WRITE) {
         RdmaWriteID* wr_id = reinterpret_cast<RdmaWriteID*>(wc_[i].wr_id);
         RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
                     << "Write complete of type " << wr_id->write_type
@@ -825,16 +829,16 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
     mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
-    mr_send_.push_back(RdmaMR(buffer, mr));
-    free_send_.push(RdmaMR(buffer, mr));
+    mr_send_.push_back(RdmaMR(buffer, mr, i));
+    free_send_.push(RdmaMR(buffer, mr, i));
 
     buffer = malloc(RdmaMessage::kRdmaMessageBufferSize);
     CHECK(buffer) << "Failed to allocate memory region";
     mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
-    mr_recv_.push_back(RdmaMR(buffer, mr));
-    free_recv_.push(RdmaMR(buffer, mr));
+    mr_recv_.push_back(RdmaMR(buffer, mr, i));
+    free_recv_.push(RdmaMR(buffer, mr, i));
   }
 }
 
@@ -931,6 +935,7 @@ void RdmaMessageBuffers::SendNextItem() {
     queue_.pop();
     RdmaMR rmr = free_send_.front();
     free_send_.pop();
+    LOG(INFO) << "SendNextItem using RdmaMR " << rmr.id_;
     memcpy(rmr.buffer_, message.data(), message.size());
     if (maybe_log_send) {
       RdmaMessage rm;
@@ -947,7 +952,6 @@ void RdmaMessageBuffers::SendNextItem() {
       RDMA_LOG(1) << "SendNextItem(this=" << this << ") calling Write"
                   << " queue_.size()=" << queue_.size()
                   << " qid=" << qid
-                  << " message=" << message
                   << " message.size()=" << message.size();
     }
     Write(this, channel_, imm_data, RdmaMessage::kRdmaMessageBufferSize,
@@ -962,6 +966,7 @@ RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
   CHECK(!free_recv_.empty());
   RdmaMR rmr = free_recv_.front();
   free_recv_.pop();
+  LOG(INFO) << "AcquireRecvBuffer" << rmr.id_;
   mu_.unlock();
   return rmr;
 }
@@ -970,6 +975,7 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr) {
   mu_.lock();
   memset(rmr.buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
   free_recv_.push(rmr);
+  LOG(INFO) << "ReleaseRecvBuffer " << rmr.id_;
   mu_.unlock();
 }
 
@@ -977,6 +983,7 @@ void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr) {
   mu_.lock();
   memset(rmr.buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
   free_send_.push(rmr);
+  LOG(INFO) << "ReleaseSendBuffer " << rmr.id_;
   mu_.unlock();
 }
 
