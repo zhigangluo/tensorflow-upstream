@@ -77,10 +77,10 @@ namespace devicetracer {
 TF_STATIC_THREAD_LOCAL_POD(const char *, tls_current_annotation);
 
 class DeviceTracerBase;
-class TraceMgr {
+class TraceAdapter {
   public:
-  TraceMgr() {}
-  virtual ~TraceMgr() {}
+  TraceAdapter() {}
+  virtual ~TraceAdapter() {}
   virtual bool Start(DeviceTracerBase*) = 0;
   virtual bool Stop() = 0;
 };
@@ -90,7 +90,7 @@ class DeviceTracerIf : public DeviceTracer,
 
 class DeviceTracerBase : public DeviceTracerIf {
  public:
-  DeviceTracerBase(TraceMgr* mgr);
+  DeviceTracerBase(TraceAdapter* adapter);
   ~DeviceTracerBase() override;
 
   // DeviceTracer interface:
@@ -129,8 +129,8 @@ class DeviceTracerBase : public DeviceTracerIf {
  private:
   // Internal struct to record kernel launches.
   struct KernelRecord {
-    int64_t start_timestamp;
-    int64_t end_timestamp;
+    int64_t start_timestamp_ns;
+    int64_t end_timestamp_ns;
     int device_id;
     uint64 stream_id;
     uint64 correlation_id;
@@ -139,8 +139,8 @@ class DeviceTracerBase : public DeviceTracerIf {
   };
   // Internal struct to record memcpy operations.
   struct MemcpyRecord {
-    int64_t start_timestamp;
-    int64_t end_timestamp;
+    int64_t start_timestamp_ns;
+    int64_t end_timestamp_ns;
     int device_id;
     uint64 stream_id;
     uint64 correlation_id;
@@ -152,21 +152,21 @@ class DeviceTracerBase : public DeviceTracerIf {
   typedef int64_t timestamp_t;
   typedef double freq_t;
 
-  timestamp_t GetTimestamp() {
+  timestamp_t GetTimestampNs() {
     timestamp_t timestamp_hz = 0;
     hsa_status_t status = hsa_system_get_info(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY, &timestamp_hz);
     if (status != HSA_STATUS_SUCCESS) {
       std::cerr << "hsa_system_get_info(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY) failed" << std::endl;
       abort();
     }
-    const freq_t timestamp_factor = (freq_t)1000000000 / (freq_t)timestamp_hz;
+    const freq_t timestamp_rate = (freq_t)1000000000 / (freq_t)timestamp_hz;
     timestamp_t timestamp = 0;
     status = hsa_system_get_info(HSA_SYSTEM_INFO_TIMESTAMP, &timestamp);
     if (status != HSA_STATUS_SUCCESS) {
       std::cerr << "hsa_system_get_info(HSA_SYSTEM_INFO_TIMESTAMP) failed" << std::endl;
       abort();
     }
-    const freq_t timestamp_ns = (freq_t)timestamp * timestamp_factor;
+    const freq_t timestamp_ns = (freq_t)timestamp * timestamp_rate;
     return (timestamp_t)timestamp_ns;
   }
 
@@ -182,11 +182,11 @@ class DeviceTracerBase : public DeviceTracerIf {
   bool enabled_ GUARDED_BY(mu_);
   int64_t start_walltime_us_ GUARDED_BY(mu_);
   int64_t end_walltime_us_ GUARDED_BY(mu_);
-  int64_t start_timestamp_ GUARDED_BY(mu_);
-  int64_t end_timestamp_ GUARDED_BY(mu_);
+  int64_t start_timestamp_ns_ GUARDED_BY(mu_);
+  int64_t end_timestamp_ns_ GUARDED_BY(mu_);
   static uint64_t step_;
 
-  TraceMgr* trace_mgr_;
+  TraceAdapter* adapter_;
 
   TF_DISALLOW_COPY_AND_ASSIGN(DeviceTracerBase);
 };
@@ -195,12 +195,12 @@ std::recursive_mutex DeviceTracerBase::trace_mu_;
 std::map<uint32, string>* DeviceTracerBase::correlations_ = NULL;
 uint64_t DeviceTracerBase::step_ = 0;
 
-DeviceTracerBase::DeviceTracerBase(TraceMgr* mgr) {
+DeviceTracerBase::DeviceTracerBase(TraceAdapter* adapter) {
   DT_LOG3("DeviceTracer created. " << this);
   enabled_ = false;
-  trace_mgr_ = mgr;
-  start_timestamp_ = 0;
-  end_timestamp_ = 0;
+  adapter_ = adapter;
+  start_timestamp_ns_ = 0;
+  end_timestamp_ns_ = 0;
 }
 
 DeviceTracerBase::~DeviceTracerBase() {
@@ -218,11 +218,11 @@ Status DeviceTracerBase::Start() {
   if (correlations_ == NULL) correlations_ = new std::map<uint32, string>;
 
   start_walltime_us_ = NowInUsec();
-  start_timestamp_ = GetTimestamp();
+  start_timestamp_ns_ = GetTimestampNs();
   ++step_;
-  DT_LOG2("DeviceTracer::Start(" << step_ << ") wt " << start_walltime_us_ << ", ts " << start_timestamp_ << " " << this);
+  DT_LOG2("DeviceTracer::Start(" << step_ << ") wt " << start_walltime_us_ << ", ts " << start_timestamp_ns_ << " " << this);
 
-  while(trace_mgr_->Start(this) != true) {}
+  while(adapter_->Start(this) != true) {}
   // Register as a TraceEngine to receive ScopedAnnotations.
   port::Tracing::RegisterEngine(this);
   enabled_ = true;
@@ -237,11 +237,11 @@ Status DeviceTracerBase::Stop() {
   }
 
   end_walltime_us_ = NowInUsec();
-  end_timestamp_ = GetTimestamp();
-  DT_LOG2("DeviceTracer::Stop(" << step_ << ") wt " << end_walltime_us_ << ", ts " << end_timestamp_ << " " << this);
+  end_timestamp_ns_ = GetTimestampNs();
+  DT_LOG2("DeviceTracer::Stop(" << step_ << ") wt " << end_walltime_us_ << ", ts " << end_timestamp_ns_ << " " << this);
 
   port::Tracing::RegisterEngine(nullptr);
-  trace_mgr_->Stop();
+  adapter_->Stop();
   enabled_ = false;
 
   return Status::OK();
@@ -261,7 +261,7 @@ Status DeviceTracerBase::Collect(StepStatsCollector *collector) {
   if (enabled_) {
     return errors::FailedPrecondition("DeviceTracer is still enabled.");
   }
-  DT_LOG2("DeviceTracer::Collect(" << step_ << ") wt " << start_walltime_us_ << " : " << end_walltime_us_ << ", ts " << start_timestamp_ << " : " << end_timestamp_ << " " << this);
+  DT_LOG2("DeviceTracer::Collect(" << step_ << ") wt " << start_walltime_us_ << " : " << end_walltime_us_ << ", ts " << start_timestamp_ns_ << " : " << end_timestamp_ns_ << " " << this);
 
   // TODO(pbar) Handle device IDs and prefix properly.
   const string prefix = "";
@@ -275,10 +275,10 @@ Status DeviceTracerBase::Collect(StepStatsCollector *collector) {
     const string name = (it != correlations_->cend()) ? it->second : (string("unknown:") + cmd_kind_string);
     NodeExecStats *ns = new NodeExecStats;
     ns->set_all_start_micros(start_walltime_us_ +
-                             ((rec.start_timestamp - start_timestamp_) / 1000));
+                             ((rec.start_timestamp_ns - start_timestamp_ns_) / 1000));
     ns->set_op_start_rel_micros(0);
     auto elapsed_us =
-        std::max<int64>((rec.end_timestamp - rec.start_timestamp) / 1000, 1);
+        std::max<int64>((rec.end_timestamp_ns - rec.start_timestamp_ns) / 1000, 1);
     ns->set_op_end_rel_micros(elapsed_us);
     ns->set_all_end_rel_micros(elapsed_us);
     ns->set_node_name(name);
@@ -292,7 +292,7 @@ Status DeviceTracerBase::Collect(StepStatsCollector *collector) {
       name <<
       ", " << strings::StrCat(stream_device, rec.stream_id) <<
       ", corrid " << rec.correlation_id <<
-      ", start " << (start_walltime_us_ + ((rec.start_timestamp - start_timestamp_) / 1000)) << "us" <<
+      ", start " << (start_walltime_us_ + ((rec.start_timestamp_ns - start_timestamp_ns_) / 1000)) << "us" <<
       ", elapsed " << elapsed_us << "us"
     );
     if (it == correlations_->cend()) {
@@ -310,10 +310,10 @@ Status DeviceTracerBase::Collect(StepStatsCollector *collector) {
     const string name = (it != correlations_->cend()) ? it->second : "unknown";
     NodeExecStats *ns = new NodeExecStats;
     ns->set_all_start_micros(start_walltime_us_ +
-                             ((rec.start_timestamp - start_timestamp_) / 1000));
+                             ((rec.start_timestamp_ns - start_timestamp_ns_) / 1000));
     ns->set_op_start_rel_micros(0);
     auto elapsed_us =
-        std::max<int64>((rec.end_timestamp - rec.start_timestamp) / 1000, 1);
+        std::max<int64>((rec.end_timestamp_ns - rec.start_timestamp_ns) / 1000, 1);
     ns->set_op_end_rel_micros(elapsed_us);
     ns->set_all_end_rel_micros(elapsed_us);
     const string details = strings::Printf(
@@ -331,7 +331,7 @@ Status DeviceTracerBase::Collect(StepStatsCollector *collector) {
       ", " << memcpy_device <<
       ", " << strings::StrCat(stream_device, rec.stream_id) <<
       ", corrid " << rec.correlation_id <<
-      ", start " << start_walltime_us_ + ((rec.start_timestamp - start_timestamp_) / 1000) << "us" <<
+      ", start " << start_walltime_us_ + ((rec.start_timestamp_ns - start_timestamp_ns_) / 1000) << "us" <<
       ", elapsed " << elapsed_us << "us"
     );
     if (it == correlations_->cend()) {
@@ -434,7 +434,7 @@ void DeviceTracerBase::AddActivityRecord(const roctracer_async_record_t* record)
   }
 }
 
-class DeviceTracerRocm : public TraceMgr {
+class DeviceTracerRocm : public TraceAdapter {
   public:
   DeviceTracerRocm() {
     device_ = NULL;
@@ -527,8 +527,8 @@ class DeviceTracerRocm : public TraceMgr {
 }  // namespace devicetracer
 
 std::unique_ptr<DeviceTracer> CreateDeviceTracer() {
-  static auto* tracer_mgr = new devicetracer::DeviceTracerRocm();
-  std::unique_ptr<DeviceTracer> tracer(new devicetracer::DeviceTracerBase(tracer_mgr));
+  static auto* adapter = new devicetracer::DeviceTracerRocm();
+  std::unique_ptr<DeviceTracer> tracer(new devicetracer::DeviceTracerBase(adapter));
   return tracer;
 }
 
