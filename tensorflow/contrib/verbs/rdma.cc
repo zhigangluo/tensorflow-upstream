@@ -62,6 +62,29 @@ string MessageTypeToString(RdmaMessageType rmt) {
       return "UNKNOWN MESSAGE";
   }
 }
+
+string OpcodeToString(enum ibv_wc_opcode opcode) {
+  switch (opcode) {
+    case IBV_WC_SEND:
+      return "IBV_WC_SEND"; break;
+    case IBV_WC_RDMA_WRITE:
+      return "IBV_WC_RDMA_WRITE"; break;
+    case IBV_WC_RDMA_READ:
+      return "IBV_WC_RDMA_READ"; break;
+    case IBV_WC_COMP_SWAP:
+      return "IBV_WC_COMP_SWAP"; break;
+    case IBV_WC_FETCH_ADD:
+      return "IBV_WC_FETCH_ADD"; break;
+    case IBV_WC_BIND_MW:
+      return "IBV_WC_BIND_MW"; break;
+    case IBV_WC_RECV:
+      return "IBV_WC_RECV"; break;
+    case IBV_WC_RECV_RDMA_WITH_IMM :
+      return "IBV_WC_RECV_RDMA_WITH_IMM"; break;
+    default: return "UNKNOWN OPCODE";
+  }
+}
+
 }  // namespace
 
 // Function to get environment variable
@@ -552,7 +575,8 @@ void RdmaAdapter::Process_CQ() {
         delete wr_id;
       }
       else {
-        LOG(ERROR) << "Unknown work completion opcode";
+        LOG(ERROR) << "Unknown work completion opcode: "
+                   << OpcodeToString(wc_[i].opcode);
       }
     }
   }
