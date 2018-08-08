@@ -737,8 +737,8 @@ void RdmaChannel::RemoveTensorRequest(uint32_t request_index) {
 RdmaTensorRequest* RdmaChannel::GetTensorRequest(uint32_t request_index) {
   mutex_lock lock{ct_mu_};
   RequestTable::iterator iter = request_table_.find(request_index);
-  CHECK(iter != request_table_.end() << "No request found for index "
-                                     << request_index;
+  CHECK(iter != request_table_.end()) << "No request found for index "
+                                      << request_index;
   return &iter->second;
 }
 
