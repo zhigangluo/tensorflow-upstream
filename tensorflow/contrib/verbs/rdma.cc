@@ -544,8 +544,8 @@ void RdmaAdapter::Process_CQ() {
           LOG(ERROR) << "Sending RDMA_MESSAGE_ERROR_STATUS: "
                      << "Unknown rm.type_=" << rm.type_;
           string message = RdmaMessage::CreateMessage(rm);
-          channel_->message_buffers_->EnqueueItem(message);
-          channel_->message_buffers_->SendNextItem();
+          rc->message_buffers_->EnqueueItem(message);
+          rc->message_buffers_->SendNextItem();
         }
       }
       else if (wc_[i].opcode == IBV_WC_SEND
@@ -1030,7 +1030,7 @@ static uint64_t Checksum(Device* device, const DeviceContext* device_context,
   return checksum;
 }
 
-static void ValidateChecksum(RdmaChannel *channel, uint64_t expected,
+static void ValidateChecksum(RdmaMessageBuffers *mb, uint64_t expected,
                              uint64_t actual, const Tensor& in,
                              uint32_t request_index, const std::string& key,
                              const std::string& msg) {
@@ -1060,8 +1060,8 @@ static void ValidateChecksum(RdmaChannel *channel, uint64_t expected,
       LOG(ERROR) << "Sending RDMA_MESSAGE_ERROR_STATUS: "
                  << "Checksum validation failed";
       string message = RdmaMessage::CreateMessage(rm);
-      channel->message_buffers_->EnqueueItem(message);
-      channel->message_buffers_->SendNextItem();
+      mb->EnqueueItem(message);
+      mb->SendNextItem();
     }
   }
 }
@@ -1626,7 +1626,8 @@ void RdmaTensorRequest::Done(const Status& s) {
     uint64_t checksum = (proxy_tensor_ != nullptr)
                             ? Checksum(nullptr, nullptr, *proxy_tensor_)
                             : Checksum(dst_dev_, recv_args_.device_context, val);
-    ValidateChecksum(channel_, checksum_, checksum, val, index_, key_, "RDMA");
+    ValidateChecksum(channel_->message_buffers_, checksum_, checksum,
+                     val, index_, key_, "RDMA");
   }
 #endif
 
