@@ -34,20 +34,14 @@ message Channel {
   uint64 iid = 5;
 }
 
-message MemoryRegion {
-  uint64 remote_addr = 1;
-  uint32 rkey = 2;
-}
 message GetRemoteAddressRequest {
   string host_name = 1;
   Channel channel = 2;
-  repeated MemoryRegion mr = 3;
 }
 
 message GetRemoteAddressResponse {
   string host_name = 1;
   Channel channel = 2;
-  repeated MemoryRegion mr = 3;
 }
 
 message ErrorStatusProto {
