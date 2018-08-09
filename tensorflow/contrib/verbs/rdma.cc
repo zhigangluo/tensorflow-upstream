@@ -993,6 +993,7 @@ RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
 }
 
 void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
+  static bool maybe_memset = !get_env_var("RDMA_MEMSET").empty();
   mu_.lock();
   if (is_message) {
     RdmaMessage rm;
@@ -1029,12 +1030,15 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
   for (size_t i=0; i<PAD_SIZE; ++i) {
     rmr.buffer_all_[PAD_SIZE+RdmaMessage::kRdmaMessageBufferSize+i] = PAD_BYTE;
   }
-  memset(rmr.buffer_, 7, RdmaMessage::kRdmaMessageBufferSize);
+  if (maybe_memset) {
+    memset(rmr.buffer_, 7, RdmaMessage::kRdmaMessageBufferSize);
+  }
   free_recv_.push(rmr);
   mu_.unlock();
 }
 
 void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
+  static bool maybe_memset = !get_env_var("RDMA_MEMSET").empty();
   mu_.lock();
   if (is_message) {
     RdmaMessage rm;
@@ -1071,7 +1075,9 @@ void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
   for (size_t i=0; i<PAD_SIZE; ++i) {
     rmr.buffer_all_[PAD_SIZE+RdmaMessage::kRdmaMessageBufferSize+i] = PAD_BYTE;
   }
-  memset(rmr.buffer_, 6, RdmaMessage::kRdmaMessageBufferSize);
+  if (maybe_memset) {
+    memset(rmr.buffer_, 6, RdmaMessage::kRdmaMessageBufferSize);
+  }
   free_send_.push(rmr);
   mu_.unlock();
 }
