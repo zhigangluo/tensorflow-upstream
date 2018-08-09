@@ -438,7 +438,7 @@ string RdmaAdapter::name() const { return string(context_->device->name); }
 // 2. IBV_WC_RDMA_WRITE (send))
 void RdmaAdapter::Process_CQ() {
   static bool maybe_clear = !get_env_var("RDMA_MEMSET").empty();
-  LOG(INFO) << "RDMA_MEMSET=" << maybe_clear;
+  RDMA_LOG(1) << "RDMA_MEMSET=" << maybe_clear;
   while (true) {
     ibv_cq* cq;
     void* cq_context;
@@ -471,7 +471,7 @@ void RdmaAdapter::Process_CQ() {
           rb->SetBufferStatus(local, idle);
           if (maybe_clear) {
             // clear the buffer for next message
-            LOG(INFO) << "clearing TX buffer";
+            RDMA_LOG(1) << "clearing TX buffer";
             memset(rb->buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
           }
           rb->SendNextItem();
@@ -488,13 +488,13 @@ void RdmaAdapter::Process_CQ() {
         }
 
         // receive a control message
-        LOG(INFO) << "receive a control message with imm_data=" << imm_data;
+        RDMA_LOG(1) << "receive a control message with imm_data=" << imm_data;
         CHECK(imm_data == RDMA_IMM_DATA_MESSAGE);
         rb = rc->rx_message_buffer_;
         RdmaMessage::ParseMessage(rm, rb->buffer_);
         if (maybe_clear) {
           // clear the buffer for next message
-          LOG(INFO) << "clearing RX buffer";
+          RDMA_LOG(1) << "clearing RX buffer";
           memset(rb->buffer_, 0, RdmaMessage::kRdmaMessageBufferSize);
         }
         RdmaMessageBuffer::SendAck(rc);
@@ -538,7 +538,7 @@ void RdmaAdapter::Process_CQ() {
             //    reinterpret_cast<RdmaMessageBuffer*>(wr_id->write_context);
             //if (maybe_clear) {
             //  // clear the buffer for next message
-            //  LOG(INFO) << "clearing TX buffer";
+            //  RDMA_LOG(1) << "clearing TX buffer";
             //  memset(rb->buffer_, 6, RdmaMessage::kRdmaMessageBufferSize);
             //}
             //rb->SetBufferStatus(local, idle);
@@ -812,7 +812,7 @@ void RdmaMessageBuffer::FreeBuffer() {
 // Returns:
 //   None
 void RdmaMessageBuffer::CreateCPUBuffer(size_t size, bool lock) {
-  LOG(INFO) << "CreateCPUBuffer(size=" << size << ", lock=" << lock << ")"
+  RDMA_LOG(1) << "CreateCPUBuffer(size=" << size << ", lock=" << lock << ")"
             << " local_status_=" << local_status_;
   CHECK(size > 0);
   if (lock) {
@@ -843,7 +843,7 @@ void RdmaMessageBuffer::CreateCPUBuffer(size_t size, bool lock) {
 //   None
 void RdmaMessageBuffer::SetRemoteMR(RemoteMR rmr, bool override) {
   mutex_lock lock{mu_};
-  LOG(INFO) << "SetRemoteMR(name=" << name_
+  RDMA_LOG(1) << "SetRemoteMR(name=" << name_
             << ", override=" << override
             << ", remote_status_=" << remote_status_
             << ", rmr.remote_addr=" << rmr.remote_addr
@@ -1095,14 +1095,14 @@ RdmaTensorResponse* RdmaChannel::UpdateTensorResponse(const RdmaMessage& rm) {
   if (it == responses_table_.end()) {
     auto id = responses_check_.find(rm.request_index_);
     if (id != responses_check_.end()) {
-      LOG(INFO) << "No response found."
+      RDMA_LOG(1) << "No response found."
                 << " but responses_check_[" << id->first << "]=" << id->second;
       if (maybe_skip_dup) {
         return nullptr;
       }
     }
     else {
-      LOG(INFO) << "No response found and no check found.";
+      RDMA_LOG(1) << "No response found and no check found.";
     }
   }
   CHECK(it != responses_table_.end()) << "No response found.";
@@ -1680,7 +1680,7 @@ bool RdmaTensorRequest::AllocateTensors() {
   }
   CHECK(mr_ != nullptr) << " No memory region found for address " << rdma_addr_
                         << ": " << key_;
-  LOG(INFO) << "AllocateTensors this=" << this << " rdma_addr_=" << rdma_addr_;
+  RDMA_LOG(1) << "AllocateTensors this=" << this << " rdma_addr_=" << rdma_addr_;
   return true;
 }
 
@@ -1735,7 +1735,7 @@ void RdmaTensorRequest::RecvTensorMetaData(DataType dtype, TensorShape shape,
   DeallocateTensors();
   AllocateTensorsAsync(
       [this](const Status& s) {
-      LOG(INFO) << "RdmaTensorRequest::RecvTensorMetaData this=" << this;
+      RDMA_LOG(1) << "RdmaTensorRequest::RecvTensorMetaData this=" << this;
       CHECK(s.ok()) << "AllocateTensorsAsync";
       Send(RDMA_MESSAGE_TENSOR_RE_REQUEST);
       });
@@ -1795,7 +1795,7 @@ void RdmaTensorRequest::Start() {
   if (meta_data_ != nullptr) {
     AllocateTensorsAsync(
         [this](const Status& s) {
-        LOG(INFO) << "RdmaTensorRequest::Start this=" << this;
+        RDMA_LOG(1) << "RdmaTensorRequest::Start this=" << this;
         CHECK(s.ok()) << "AllocateTensorsAsync";
         Send(RDMA_MESSAGE_TENSOR_REQUEST);
         });
