@@ -511,8 +511,8 @@ class RdmaMessageBuffers {
                     uint64_t remote_addr, uint32_t rkey,
                     RdmaWriteIDType write_type, void* write_context);
   RdmaMR AcquireRecvBuffer();
-  void ReleaseRecvBuffer(RdmaMR rmr);
-  void ReleaseSendBuffer(RdmaMR rmr);
+  void ReleaseRecvBuffer(RdmaMR rmr, bool is_message=true);
+  void ReleaseSendBuffer(RdmaMR rmr, bool is_message=true);
 
  protected:
   RdmaChannel* channel_;

@@ -61,6 +61,9 @@ string MessageTypeToString(RdmaMessageType rmt) {
     case RDMA_MESSAGE_TENSOR_REQUEST:
       return "RDMA_MESSAGE_TENSOR_REQUEST";
       break;
+    case RDMA_MESSAGE_ERROR_STATUS:
+      return "RDMA_MESSAGE_ERROR_STATUS";
+      break;
     default:
       return "UNKNOWN MESSAGE";
   }
@@ -504,7 +507,7 @@ void RdmaAdapter::Process_CQ() {
           RdmaTensorRequest* request = rc->GetTensorRequest(request_index);
           request->RecvTensorContent();
           // put back a recv wr.
-          rc->message_buffers_->ReleaseRecvBuffer(rmr);
+          rc->message_buffers_->ReleaseRecvBuffer(rmr, false);
           rc->Recv();
           continue;
         }
@@ -954,7 +957,7 @@ void RdmaMessageBuffers::SendNextItem() {
     memcpy(rmr.buffer_, message.data(), message.size());
     if (maybe_log_send) {
       RdmaMessage rm;
-      RdmaMessage::ParseMessage(rm, message.data());
+      RdmaMessage::ParseMessage(rm, rmr.buffer_);
       RDMA_LOG(1) << "SendNextItem(this=" << this << ") calling Write"
                   << " queue_.size()=" << queue_.size()
                   << " qid=" << qid
@@ -989,9 +992,21 @@ RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
   return rmr;
 }
 
-void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr) {
+void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
   mu_.lock();
-  RDMA_LOG(1) << "ReleaseRecvBuffer " << rmr.id_;
+  if (is_message) {
+    RdmaMessage rm;
+    RdmaMessage::ParseMessage(rm, rmr.buffer_);
+    RDMA_LOG(1) << "ReleaseRecvBuffer " << rmr.id_ << ": "
+                << "Step 0x" << std::hex << rm.step_id_ << std::dec
+                << ": Received " << rm.type_ << " "
+                << MessageTypeToString(rm.type_) << " "
+                << "#" << rm.request_index_ << ": "
+                << "R##" << rm.message_index_ << ": " << rm.name_;
+  }
+  else {
+    RDMA_LOG(1) << "ReleaseRecvBuffer " << rmr.id_;
+  }
   // check the front pad
   for (size_t i=0; i<PAD_SIZE; ++i) {
     if (rmr.buffer_all_[i] != PAD_BYTE) {
@@ -1019,13 +1034,25 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr) {
   mu_.unlock();
 }
 
-void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr) {
+void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
   mu_.lock();
-  RDMA_LOG(1) << "ReleaseSendBuffer " << rmr.id_;
+  if (is_message) {
+    RdmaMessage rm;
+    RdmaMessage::ParseMessage(rm, rmr.buffer_);
+    RDMA_LOG(1) << "ReleaseSendBuffer " << rmr.id_ << ": "
+                << "Step 0x" << std::hex << rm.step_id_ << std::dec
+                << ": Received " << rm.type_ << " "
+                << MessageTypeToString(rm.type_) << " "
+                << "#" << rm.request_index_ << ": "
+                << "R##" << rm.message_index_ << ": " << rm.name_;
+  }
+  else {
+    RDMA_LOG(1) << "ReleaseSendBuffer " << rmr.id_;
+  }
   // check the front pad
   for (size_t i=0; i<PAD_SIZE; ++i) {
     if (rmr.buffer_all_[i] != PAD_BYTE) {
-      LOG(ERROR) << "ReleaseRecvBuffer memory corruption pre at " << i;
+      LOG(ERROR) << "ReleaseSendBuffer memory corruption pre at " << i;
       break;
     }
   }
@@ -1036,7 +1063,7 @@ void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr) {
   // check the back pad
   for (size_t i=0; i<PAD_SIZE; ++i) {
     if (rmr.buffer_all_[PAD_SIZE+RdmaMessage::kRdmaMessageBufferSize+i] != PAD_BYTE) {
-      LOG(ERROR) << "ReleaseRecvBuffer memory corruption post at " << i;
+      LOG(ERROR) << "ReleaseSendBuffer memory corruption post at " << i;
       break;
     }
   }
