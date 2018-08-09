@@ -153,7 +153,7 @@ struct DividesBy<std::complex<double>> {
 
 #endif
 
- template <>
+template <>
 struct DividesBy<float, Eigen::half> {
   float divisor;
 
