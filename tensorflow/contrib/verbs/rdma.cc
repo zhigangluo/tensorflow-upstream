@@ -1044,7 +1044,7 @@ void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
                 << ": Received " << rm.type_ << " "
                 << MessageTypeToString(rm.type_) << " "
                 << "#" << rm.request_index_ << ": "
-                << "R##" << rm.message_index_ << ": " << rm.name_;
+                << "S##" << rm.message_index_ << ": " << rm.name_;
   }
   else {
     RDMA_LOG(1) << "ReleaseSendBuffer " << rmr.id_;
