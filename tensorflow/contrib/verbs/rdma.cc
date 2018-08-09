@@ -823,27 +823,34 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
   mr_send_.reserve(depth);
   mr_recv_.reserve(depth);
   for (uint32_t i=0; i<depth; ++i) {
-    char* buffer;
+    uint8_t* buffer_all;
+    uint8_t* buffer;
     ibv_mr* mr;
     size_t the_size = PAD_SIZE*2 + RdmaMessage::kRdmaMessageBufferSize;
 
-    buffer = (char*)malloc(the_size);
-    CHECK(buffer) << "Failed to allocate memory region";
-    memset(buffer, PAD_BYTE, the_size);
-    mr = ibv_reg_mr(channel_->adapter_->pd_, buffer+PAD_SIZE, RdmaMessage::kRdmaMessageBufferSize,
+    buffer_all = (uint8_t*)malloc(the_size);
+    CHECK(buffer_all) << "Failed to allocate memory region";
+    for (size_t i=0; i<the_size; ++i) {
+      buffer_all[i] = PAD_BYTE;
+    }
+    buffer = &buffer_all[PAD_SIZE];
+    mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
-    mr_send_.push_back(RdmaMR(buffer+PAD_SIZE, mr, i, buffer));
-    free_send_.push(RdmaMR(buffer+PAD_SIZE, mr, i, buffer));
+    mr_send_.push_back(RdmaMR(buffer, mr, i, buffer_all));
+    free_send_.push(RdmaMR(buffer, mr, i, buffer_all));
 
-    buffer = (char*)malloc(the_size);
-    CHECK(buffer) << "Failed to allocate memory region";
-    memset(buffer, PAD_BYTE, the_size);
-    mr = ibv_reg_mr(channel_->adapter_->pd_, buffer+PAD_SIZE, RdmaMessage::kRdmaMessageBufferSize,
+    buffer_all = (uint8_t*)malloc(the_size);
+    CHECK(buffer_all) << "Failed to allocate memory region";
+    for (size_t i=0; i<the_size; ++i) {
+      buffer_all[i] = PAD_BYTE;
+    }
+    buffer = &buffer_all[PAD_SIZE];
+    mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
-    mr_recv_.push_back(RdmaMR(buffer+PAD_SIZE, mr, i, buffer));
-    free_recv_.push(RdmaMR(buffer+PAD_SIZE, mr, i, buffer));
+    mr_recv_.push_back(RdmaMR(buffer, mr, i, buffer_all));
+    free_recv_.push(RdmaMR(buffer, mr, i, buffer_all));
   }
 }
 
@@ -984,17 +991,61 @@ RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
 
 void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr) {
   mu_.lock();
+  RDMA_LOG(1) << "ReleaseRecvBuffer " << rmr.id_;
+  // check the front pad
+  for (size_t i=0; i<PAD_SIZE; ++i) {
+    if (rmr.buffer_all_[i] != PAD_BYTE) {
+      LOG(ERROR) << "ReleaseRecvBuffer memory corruption pre at " << i;
+      break;
+    }
+  }
+  // reset the front pad
+  for (size_t i=0; i<PAD_SIZE; ++i) {
+    rmr.buffer_all_[i] = PAD_BYTE;
+  }
+  // check the back pad
+  for (size_t i=0; i<PAD_SIZE; ++i) {
+    if (rmr.buffer_all_[PAD_SIZE+RdmaMessage::kRdmaMessageBufferSize+i] != PAD_BYTE) {
+      LOG(ERROR) << "ReleaseRecvBuffer memory corruption post at " << i;
+      break;
+    }
+  }
+  // reset the back pad
+  for (size_t i=0; i<PAD_SIZE; ++i) {
+    rmr.buffer_all_[PAD_SIZE+RdmaMessage::kRdmaMessageBufferSize+i] = PAD_BYTE;
+  }
   memset(rmr.buffer_, 7, RdmaMessage::kRdmaMessageBufferSize);
   free_recv_.push(rmr);
-  RDMA_LOG(1) << "ReleaseRecvBuffer " << rmr.id_;
   mu_.unlock();
 }
 
 void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr) {
   mu_.lock();
+  RDMA_LOG(1) << "ReleaseSendBuffer " << rmr.id_;
+  // check the front pad
+  for (size_t i=0; i<PAD_SIZE; ++i) {
+    if (rmr.buffer_all_[i] != PAD_BYTE) {
+      LOG(ERROR) << "ReleaseRecvBuffer memory corruption pre at " << i;
+      break;
+    }
+  }
+  // reset the front pad
+  for (size_t i=0; i<PAD_SIZE; ++i) {
+    rmr.buffer_all_[i] = PAD_BYTE;
+  }
+  // check the back pad
+  for (size_t i=0; i<PAD_SIZE; ++i) {
+    if (rmr.buffer_all_[PAD_SIZE+RdmaMessage::kRdmaMessageBufferSize+i] != PAD_BYTE) {
+      LOG(ERROR) << "ReleaseRecvBuffer memory corruption post at " << i;
+      break;
+    }
+  }
+  // reset the back pad
+  for (size_t i=0; i<PAD_SIZE; ++i) {
+    rmr.buffer_all_[PAD_SIZE+RdmaMessage::kRdmaMessageBufferSize+i] = PAD_BYTE;
+  }
   memset(rmr.buffer_, 6, RdmaMessage::kRdmaMessageBufferSize);
   free_send_.push(rmr);
-  RDMA_LOG(1) << "ReleaseSendBuffer " << rmr.id_;
   mu_.unlock();
 }
 

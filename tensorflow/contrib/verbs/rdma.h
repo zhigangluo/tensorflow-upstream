@@ -472,7 +472,7 @@ class RdmaChannel {
 
 class RdmaMR {
   public:
-    RdmaMR(void* buffer, ibv_mr* mr, int id, void* buffer_all)
+    RdmaMR(void* buffer, ibv_mr* mr, int id, uint8_t* buffer_all)
       : buffer_(buffer), mr_(mr), id_(id), buffer_all_(buffer_all) {}
     RdmaMR(const RdmaMR& other)
       : buffer_(other.buffer_), mr_(other.mr_), id_(other.id_),
@@ -481,7 +481,7 @@ class RdmaMR {
     void* buffer_;
     ibv_mr* mr_;
     int id_;
-    void* buffer_all_;
+    uint8_t* buffer_all_;
 };
 
 class RdmaChannelAndMR {
