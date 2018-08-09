@@ -44,6 +44,9 @@ namespace tensorflow {
 
 #define RoCE_V2 "RoCE v2"
 
+#define PAD_SIZE 1024
+#define PAD_BYTE 0xDD
+
 namespace {
 
 // convenience function for printing message
@@ -820,24 +823,27 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
   mr_send_.reserve(depth);
   mr_recv_.reserve(depth);
   for (uint32_t i=0; i<depth; ++i) {
-    void* buffer;
+    char* buffer;
     ibv_mr* mr;
+    size_t the_size = PAD_SIZE*2 + RdmaMessage::kRdmaMessageBufferSize;
 
-    buffer = malloc(RdmaMessage::kRdmaMessageBufferSize);
+    buffer = (char*)malloc(the_size);
     CHECK(buffer) << "Failed to allocate memory region";
-    mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
+    memset(buffer, PAD_BYTE, the_size);
+    mr = ibv_reg_mr(channel_->adapter_->pd_, buffer+PAD_SIZE, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
-    mr_send_.push_back(RdmaMR(buffer, mr, i));
-    free_send_.push(RdmaMR(buffer, mr, i));
+    mr_send_.push_back(RdmaMR(buffer+PAD_SIZE, mr, i, buffer));
+    free_send_.push(RdmaMR(buffer+PAD_SIZE, mr, i, buffer));
 
-    buffer = malloc(RdmaMessage::kRdmaMessageBufferSize);
+    buffer = (char*)malloc(the_size);
     CHECK(buffer) << "Failed to allocate memory region";
-    mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
+    memset(buffer, PAD_BYTE, the_size);
+    mr = ibv_reg_mr(channel_->adapter_->pd_, buffer+PAD_SIZE, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
-    mr_recv_.push_back(RdmaMR(buffer, mr, i));
-    free_recv_.push(RdmaMR(buffer, mr, i));
+    mr_recv_.push_back(RdmaMR(buffer+PAD_SIZE, mr, i, buffer));
+    free_recv_.push(RdmaMR(buffer+PAD_SIZE, mr, i, buffer));
   }
 }
 
@@ -846,8 +852,8 @@ RdmaMessageBuffers::~RdmaMessageBuffers() {
   for (uint32_t i=0; i<depth; ++i) {
     CHECK(!ibv_dereg_mr(mr_send_[i].mr_));
     CHECK(!ibv_dereg_mr(mr_recv_[i].mr_));
-    free(mr_send_[i].buffer_);
-    free(mr_recv_[i].buffer_);
+    free(mr_send_[i].buffer_all_);
+    free(mr_recv_[i].buffer_all_);
   }
 }
 
