@@ -512,9 +512,10 @@ void RdmaAdapter::Process_CQ() {
         RdmaMessage::ParseMessage(rm, rmr.buffer_);
         rc->message_buffers_->ReleaseRecvBuffer(rmr);
         RDMA_LOG(1) << "Step 0x" << std::hex << rm.step_id_ << std::dec
-                    << ": Received " << MessageTypeToString(rm.type_) << " "
+                    << ": Received " << rm.type_ << " "
+                    << MessageTypeToString(rm.type_) << " "
                     << "#" << rm.request_index_ << ": "
-                    << "##" << rm.message_index_ << ": " << rm.name_;
+                    << "R##" << rm.message_index_ << ": " << rm.name_;
         // put back a recv wr.
         rc->Recv();
 
@@ -560,15 +561,18 @@ void RdmaAdapter::Process_CQ() {
               reinterpret_cast<RdmaChannelAndMR*>(wr_id->write_context);
             RdmaChannel* rc = rid->channel_;
             RdmaMR rmr = rid->rmr_;
-            rc->message_buffers_->ReleaseSendBuffer(rmr);
             delete rid;
+            rc->message_buffers_->ReleaseSendBuffer(rmr);
             break;
           }
           case RDMA_WRITE_ID_TENSOR_WRITE: {
             RdmaTensorResponse* response =
                 reinterpret_cast<RdmaTensorResponse*>(wr_id->write_context);
             response->Destroy();
+            break;
           }
+          default:
+            LOG(ERROR) << "Unknown write type: " << wr_id->write_type;
         }
         delete wr_id;
       }
@@ -860,9 +864,10 @@ void RdmaMessageBuffers::EnqueueItem(string item) {
                 << ", queue_.size()=" << queue_.size()
                 << ", qid=" << qid
                 << " Step 0x" << std::hex << rm.step_id_ << std::dec
-                << ": Writing  " << MessageTypeToString(rm.type_)
+                << ": Writing  " << rm.type_ << " "
+                << MessageTypeToString(rm.type_)
                 << " #" << rm.request_index_ << ": "
-                << " ##" << rm.message_index_ << ": "
+                << " S##" << rm.message_index_ << ": "
                 << rm.name_ << " on " << rm.remote_addr_
                 << " (rkey: 0x" << std::hex << rm.rkey_ << ")";
   }
@@ -941,9 +946,10 @@ void RdmaMessageBuffers::SendNextItem() {
                   << " queue_.size()=" << queue_.size()
                   << " qid=" << qid
                   << " Step 0x" << std::hex << rm.step_id_ << std::dec
-                  << ": Writing  " << MessageTypeToString(rm.type_)
+                  << ": Writing  " << rm.type_ << " "
+                  << MessageTypeToString(rm.type_)
                   << " #" << rm.request_index_ << ": "
-                  << " ##" << rm.message_index_ << ": "
+                  << " S##" << rm.message_index_ << ": "
                   << rm.name_ << " on " << rm.remote_addr_
                   << " (rkey: 0x" << std::hex << rm.rkey_ << ")";
     }
