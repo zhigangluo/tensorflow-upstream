@@ -387,6 +387,20 @@ void set_sleep_val() {
   RDMA_LOG(1) << "RDMA_SLEEP=" << sleep_for_memcpy;
 }
 
+static int usleep_for_memcpy;
+void set_usleep_val() {
+  int val = 0;
+  string val_s;
+
+  val_s = get_env_var("RDMA_USLEEP");
+
+  if (!val_s.empty()) {
+    val = stoi(val_s);
+  }
+  usleep_for_memcpy = val;
+  RDMA_LOG(1) << "RDMA_USLEEP=" << usleep_for_memcpy;
+}
+
 enum ibv_mtu set_mtu(uint8_t port_num, ibv_context* context) {
   ibv_port_attr port_attr;
   enum ibv_mtu mtu = IBV_MTU_512;
@@ -467,6 +481,7 @@ RdmaAdapter::RdmaAdapter(const WorkerEnv* worker_env)
   CHECK(cq_) << "Failed to create completion queue";
   CHECK(!ibv_req_notify_cq(cq_, 0)) << "Failed to request CQ notification";
   set_sleep_val();
+  set_usleep_val();
 }
 
 RdmaAdapter::~RdmaAdapter() {
@@ -1023,7 +1038,10 @@ void RdmaMessageBuffers::SendNextItem() {
                 << " message.size()=" << message.size();
     memcpy(rmr.buffer_, message.data(), message.size());
     if (0 != sleep_for_memcpy) {
-      usleep(sleep_for_memcpy);
+      sleep(sleep_for_memcpy);
+    }
+    if (0 != usleep_for_memcpy) {
+      usleep(usleep_for_memcpy);
     }
     if (maybe_fence) {
       asm volatile ("" : : : "memory");
