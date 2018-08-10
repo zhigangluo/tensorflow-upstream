@@ -21,6 +21,7 @@ limitations under the License.
 #include <iomanip>
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <unistd.h>
 
 #include "tensorflow/contrib/verbs/rdma.h"
 #include "tensorflow/contrib/verbs/verbs_service.pb.h"
@@ -1022,7 +1023,7 @@ void RdmaMessageBuffers::SendNextItem() {
                 << " message.size()=" << message.size();
     memcpy(rmr.buffer_, message.data(), message.size());
     if (0 != sleep_for_memcpy) {
-      sleep(sleep_for_memcpy);
+      usleep(sleep_for_memcpy);
     }
     if (maybe_fence) {
       asm volatile ("" : : : "memory");
