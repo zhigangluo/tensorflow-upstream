@@ -488,7 +488,7 @@ void RdmaAdapter::Process_CQ() {
           << static_cast<int>(wc_[i].wr_id) << " " << wc_[i].vendor_err;
       RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
                   << OpcodeToString(wc_[i].opcode) << ": "
-                  << "service level " << wc_[i].sl << ": "
+                  << "service level " << static_cast<int>(wc_[i].sl) << ": "
                   << "bytes " << wc_[i].byte_len;
       if (wc_[i].opcode == IBV_WC_RECV
               || wc_[i].opcode == IBV_WC_RECV_RDMA_WITH_IMM) {
