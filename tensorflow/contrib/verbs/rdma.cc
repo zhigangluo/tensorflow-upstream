@@ -1055,7 +1055,10 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
     rmr.buffer_all_[PAD_SIZE+RdmaMessage::kRdmaMessageBufferSize+i] = PAD_BYTE;
   }
   if (maybe_memset) {
-    memset(rmr.buffer_, 7, RdmaMessage::kRdmaMessageBufferSize);
+    uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
+    for (size_t i=0; i<RdmaMessage::kRdmaMessageBufferSize; ++i) {
+      b[i] = PAD_BYTE-1;
+    }
   }
   free_recv_.push(rmr);
   mu_.unlock();
@@ -1100,7 +1103,10 @@ void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
     rmr.buffer_all_[PAD_SIZE+RdmaMessage::kRdmaMessageBufferSize+i] = PAD_BYTE;
   }
   if (maybe_memset) {
-    memset(rmr.buffer_, 6, RdmaMessage::kRdmaMessageBufferSize);
+    uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
+    for (size_t i=0; i<RdmaMessage::kRdmaMessageBufferSize; ++i) {
+      b[i] = PAD_BYTE+1;
+    }
   }
   free_send_.push(rmr);
   mu_.unlock();
@@ -1609,11 +1615,8 @@ string RdmaMessage::CreateMessage(RdmaMessage& rm) {
 //   None
 void RdmaMessage::ParseMessage(RdmaMessage& rm, const void* buffer) {
   static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
-  static bool maybe_memset = !get_env_var("RDMA_MEMSET").empty();
   const char* message = static_cast<const char*>(buffer);
-  if (maybe_memset) {
-    memset(&rm, 0, sizeof(RdmaMessage));
-  }
+  memset(&rm, 0, sizeof(RdmaMessage));
   // type
   rm.type_ = static_cast<RdmaMessageType>(message[kTypeStartIndex]);
   // request index
