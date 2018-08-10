@@ -533,6 +533,17 @@ void RdmaAdapter::Process_CQ() {
             RdmaMessage::ParseMessage(rm, rmr.buffer_);
           }
         }
+        if (rm.type_ >= RDMA_MESSAGE_META_DATA_UPDATE
+            && rm.type_ <= RDMA_MESSAGE_ERROR_STATUS) {
+          std::ostringstream str;
+          uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
+          str << std::hex;
+          for (size_t i=0; i<RdmaMessage::kRdmaMessageBufferSize; ++i) {
+            str << " 0x" << b[i];
+          }
+          str << std::dec;
+          LOG(ERROR) << "buffer_=" << str.str();
+        }
         // put back a recv wr.
         rc->message_buffers_->ReleaseRecvBuffer(rmr);
         rc->Recv();
