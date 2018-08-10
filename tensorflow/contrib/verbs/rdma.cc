@@ -372,6 +372,20 @@ uint32_t set_param(uint32_t default_val, const char* env_param) {
   return val;
 }
 
+static int sleep_for_memcpy;
+void set_sleep_val() {
+  int val = 0;
+  string val_s;
+
+  val_s = get_env_var("RDMA_SLEEP");
+
+  if (!val_s.empty()) {
+    val = stoi(val_s);
+  }
+  sleep_for_memcpy = val;
+  RDMA_LOG(1) << "RDMA_SLEEP=" << sleep_for_memcpy;
+}
+
 enum ibv_mtu set_mtu(uint8_t port_num, ibv_context* context) {
   ibv_port_attr port_attr;
   enum ibv_mtu mtu = IBV_MTU_512;
@@ -451,6 +465,7 @@ RdmaAdapter::RdmaAdapter(const WorkerEnv* worker_env)
           event_channel_, 0);
   CHECK(cq_) << "Failed to create completion queue";
   CHECK(!ibv_req_notify_cq(cq_, 0)) << "Failed to request CQ notification";
+  set_sleep_val();
 }
 
 RdmaAdapter::~RdmaAdapter() {
@@ -478,6 +493,12 @@ string RdmaAdapter::name() const { return string(context_->device->name); }
 void RdmaAdapter::Process_CQ() {
   static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
   static bool maybe_retry = !get_env_var("RDMA_RETRY").empty();
+  static bool maybe_log_send = !get_env_var("RDMA_LOG_SEND").empty();
+  static bool maybe_fence = !get_env_var("RDMA_FENCE").empty();
+  static bool maybe_msync = !get_env_var("RDMA_MSYNC").empty();
+  RDMA_LOG(1) << "maybe_log_send=" << maybe_log_send;
+  RDMA_LOG(1) << "maybe_fence=" << maybe_fence;
+  RDMA_LOG(1) << "maybe_msync=" << maybe_msync;
   while (true) {
     ibv_cq* cq;
     void* cq_context;
@@ -1000,6 +1021,9 @@ void RdmaMessageBuffers::SendNextItem() {
     RDMA_LOG(1) << "SendNextItem using RdmaMR " << rmr.id_
                 << " message.size()=" << message.size();
     memcpy(rmr.buffer_, message.data(), message.size());
+    if (0 != sleep_for_memcpy) {
+      sleep(sleep_for_memcpy);
+    }
     if (maybe_fence) {
       asm volatile ("" : : : "memory");
     }
