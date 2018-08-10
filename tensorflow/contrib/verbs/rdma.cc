@@ -19,6 +19,8 @@ limitations under the License.
 #include <fcntl.h>
 #include <cstdlib>
 #include <iomanip>
+#include <sys/types.h>
+#include <sys/mman.h>
 
 #include "tensorflow/contrib/verbs/rdma.h"
 #include "tensorflow/contrib/verbs/verbs_service.pb.h"
@@ -425,7 +427,7 @@ RdmaParams params_init(ibv_context* context) {
   params.sl = (uint8_t)set_param(SL_DEFAULT, "RDMA_SL");
   CHECK(params.sl <= 7) << "SL value is " << (int)params.sl
                         << ". Valid values are 0-7.";
-  RDMA_LOG(1) << "service level value is " << params.sl;
+  RDMA_LOG(1) << "service level value is " << static_cast<int>(params.sl);
   params.mtu = set_mtu(params.port_num, context);
   params.traffic_class = set_param(TRAFFIC_CLASS, "RDMA_TRAFFIC_CLASS");
   return params;
@@ -822,7 +824,8 @@ void RdmaChannel::Connect(const RdmaAddress& remoteAddr) {
     attr.ah_attr.port_num = adapter_->params_.port_num;
     attr.ah_attr.grh.sgid_index = adapter_->params_.sgid_index;
     attr.ah_attr.grh.traffic_class = adapter_->params_.traffic_class;
-    RDMA_LOG(1) << "service level attr.ah_attr.sl=" << attr.ah_attr.sl;
+    RDMA_LOG(1) << "service level attr.ah_attr.sl="
+                << static_cast<int>(attr.ah_attr.sl);
 
     int r;
     CHECK(!(r = ibv_modify_qp(qp_, &attr,
@@ -983,6 +986,8 @@ void RdmaMessageBuffers::Write(void *thiz, RdmaChannel* channel, uint32_t imm_da
 // Send the next message from the buffer's job queue.
 void RdmaMessageBuffers::SendNextItem() {
   static bool maybe_log_send = !get_env_var("RDMA_LOG_SEND").empty();
+  static bool maybe_fence = !get_env_var("RDMA_FENCE").empty();
+  static bool maybe_msync = !get_env_var("RDMA_MSYNC").empty();
   uint32_t imm_data = RDMA_IMM_DATA_MESSAGE;
   mu_.lock();
   while (!queue_.empty() && !free_send_.empty()) {
@@ -995,6 +1000,14 @@ void RdmaMessageBuffers::SendNextItem() {
     RDMA_LOG(1) << "SendNextItem using RdmaMR " << rmr.id_
                 << " message.size()=" << message.size();
     memcpy(rmr.buffer_, message.data(), message.size());
+    if (maybe_fence) {
+      asm volatile ("" : : : "memory");
+    }
+    if (maybe_msync) {
+      if (msync(rmr.buffer_, message.size() , MS_SYNC) < 0) {
+        LOG(ERROR) << "msync failed with error:" << std::strerror(errno);
+      }
+    }
     if (maybe_log_send) {
       RdmaMessage rm;
       RdmaMessage::ParseMessage(rm, rmr.buffer_);
