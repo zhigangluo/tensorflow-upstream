@@ -47,6 +47,10 @@ namespace tensorflow {
 
 #define PAD_SIZE 1024
 #define PAD_BYTE 0xDD
+#define INIT_RECV_BYTE 0xD0
+#define INIT_SEND_BYTE 0xD1
+#define REINIT_RECV_BYTE 0xD2
+#define REINIT_SEND_BYTE 0xD3
 
 namespace {
 
@@ -866,6 +870,9 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
       buffer_all[i] = PAD_BYTE;
     }
     buffer = &buffer_all[PAD_SIZE];
+    for (size_t i=0; i<RdmaMessage::kRdmaMessageBufferSize; ++i) {
+      buffer[i] = INIT_SEND_BYTE;
+    }
     mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
@@ -878,6 +885,9 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
       buffer_all[i] = PAD_BYTE;
     }
     buffer = &buffer_all[PAD_SIZE];
+    for (size_t i=0; i<RdmaMessage::kRdmaMessageBufferSize; ++i) {
+      buffer[i] = INIT_RECV_BYTE;
+    }
     mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
@@ -982,7 +992,8 @@ void RdmaMessageBuffers::SendNextItem() {
     queue_.pop();
     RdmaMR rmr = free_send_.front();
     free_send_.pop();
-    RDMA_LOG(1) << "SendNextItem using RdmaMR " << rmr.id_;
+    RDMA_LOG(1) << "SendNextItem using RdmaMR " << rmr.id_
+                << " message.size()=" << message.size();
     memcpy(rmr.buffer_, message.data(), message.size());
     if (maybe_log_send) {
       RdmaMessage rm;
@@ -1062,7 +1073,7 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
   if (maybe_memset) {
     uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
     for (size_t i=0; i<RdmaMessage::kRdmaMessageBufferSize; ++i) {
-      b[i] = PAD_BYTE-1;
+      b[i] = REINIT_RECV_BYTE;
     }
   }
   free_recv_.push(rmr);
@@ -1110,7 +1121,7 @@ void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
   if (maybe_memset) {
     uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
     for (size_t i=0; i<RdmaMessage::kRdmaMessageBufferSize; ++i) {
-      b[i] = PAD_BYTE+1;
+      b[i] = REINIT_SEND_BYTE;
     }
   }
   free_send_.push(rmr);
