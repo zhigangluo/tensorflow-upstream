@@ -469,6 +469,7 @@ string RdmaAdapter::name() const { return string(context_->device->name); }
 // 2. IBV_WC_RDMA_WRITE (send))
 void RdmaAdapter::Process_CQ() {
   static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
+  static bool maybe_retry = !get_env_var("RDMA_RETRY").empty();
   while (true) {
     ibv_cq* cq;
     void* cq_context;
@@ -516,13 +517,24 @@ void RdmaAdapter::Process_CQ() {
         CHECK(imm_data == RDMA_IMM_DATA_MESSAGE);
         RdmaMessage rm;
         RdmaMessage::ParseMessage(rm, rmr.buffer_);
-        rc->message_buffers_->ReleaseRecvBuffer(rmr);
         RDMA_LOG(1) << "Step 0x" << std::hex << rm.step_id_ << std::dec
                     << ": Received " << rm.type_ << " "
                     << MessageTypeToString(rm.type_) << " "
                     << "#" << rm.request_index_ << ": "
                     << "R##" << rm.message_index_ << ": " << rm.name_;
+        if (maybe_retry) {
+          for (int tries=0; tries<10; ++tries) {
+            if (rm.type_ >= RDMA_MESSAGE_META_DATA_UPDATE
+                && rm.type_ <= RDMA_MESSAGE_ERROR_STATUS) {
+              break;
+            }
+            LOG(ERROR) << "BAD MESSAGE BUFFER";
+            sleep(2);
+            RdmaMessage::ParseMessage(rm, rmr.buffer_);
+          }
+        }
         // put back a recv wr.
+        rc->message_buffers_->ReleaseRecvBuffer(rmr);
         rc->Recv();
 
         if (rm.type_ == RDMA_MESSAGE_TENSOR_REQUEST) {
@@ -1585,7 +1597,11 @@ string RdmaMessage::CreateMessage(RdmaMessage& rm) {
 //   None
 void RdmaMessage::ParseMessage(RdmaMessage& rm, const void* buffer) {
   static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
+  static bool maybe_memset = !get_env_var("RDMA_MEMSET").empty();
   const char* message = static_cast<const char*>(buffer);
+  if (maybe_memset) {
+    memset(&rm, 0, sizeof(RdmaMessage));
+  }
   // type
   rm.type_ = static_cast<RdmaMessageType>(message[kTypeStartIndex]);
   // request index
