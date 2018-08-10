@@ -534,8 +534,8 @@ void RdmaAdapter::Process_CQ() {
             RdmaMessage::ParseMessage(rm, rmr.buffer_);
           }
         }
-        if (rm.type_ >= RDMA_MESSAGE_META_DATA_UPDATE
-            && rm.type_ <= RDMA_MESSAGE_ERROR_STATUS) {
+        if (rm.type_ < RDMA_MESSAGE_META_DATA_UPDATE
+            || rm.type_ > RDMA_MESSAGE_ERROR_STATUS) {
           std::ostringstream str;
           uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
           str << std::hex << std::setfill('0') << std::setw(2);
