@@ -574,6 +574,7 @@ void RdmaAdapter::Process_CQ() {
         }
         else {
           RdmaMessage err;
+          memset(&err, 0, sizeof(RdmaMessage));
           err.type_ = RDMA_MESSAGE_ERROR_STATUS;
           LOG(ERROR) << "Sending RDMA_MESSAGE_ERROR_STATUS: "
                      << "Unknown rm.type_=" << rm.type_;
@@ -1190,6 +1191,7 @@ static void ValidateChecksum(RdmaMessageBuffers *mb, uint64_t expected,
                  << " bytes): "
                  << " Expected 0x" << expected << ". Got 0x" << actual << ".";
       RdmaMessage rm;
+      memset(&rm, 0, sizeof(RdmaMessage));
       rm.type_ = RDMA_MESSAGE_ERROR_STATUS;
       LOG(ERROR) << "Sending RDMA_MESSAGE_ERROR_STATUS: "
                  << "Checksum validation failed";
@@ -1415,6 +1417,7 @@ void RdmaTensorResponse::SendMetaData(const Tensor& in,
 
   // Send meta-data update:
   RdmaMessage rm;
+  memset(&rm, 0, sizeof(RdmaMessage));
   rm.type_ = RDMA_MESSAGE_META_DATA_UPDATE;
   rm.name_size_ = rm_.name_.size();
   rm.name_ = rm_.name_;
@@ -1482,6 +1485,7 @@ void RdmaTensorResponse::SendContent(const Tensor& in, const TensorProto& proto,
 
 void RdmaTensorResponse::SendErrorStatus(const Status& status) {
   RdmaMessage rm;
+  memset(&rm, 0, sizeof(RdmaMessage));
   rm.type_ = RDMA_MESSAGE_ERROR_STATUS;
   rm.name_size_ = rm_.name_.size();
   rm.name_ = rm_.name_;
@@ -1849,6 +1853,7 @@ void RdmaTensorRequest::AllocateTensorsAsync(StatusCallback done) {
 void RdmaTensorRequest::Send(RdmaMessageType message_type) {
   RdmaMessageBuffers* rb = channel_->message_buffers_;
   RdmaMessage rm;
+  memset(&rm, 0, sizeof(RdmaMessage));
   rm.type_ = message_type;
   rm.request_index_ = index_;
   rm.name_size_ = key_.size();
