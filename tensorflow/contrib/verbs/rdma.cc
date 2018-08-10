@@ -18,6 +18,7 @@ limitations under the License.
 #include <atomic>
 #include <fcntl.h>
 #include <cstdlib>
+#include <iomanip>
 
 #include "tensorflow/contrib/verbs/rdma.h"
 #include "tensorflow/contrib/verbs/verbs_service.pb.h"
@@ -537,11 +538,11 @@ void RdmaAdapter::Process_CQ() {
             && rm.type_ <= RDMA_MESSAGE_ERROR_STATUS) {
           std::ostringstream str;
           uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
-          str << std::hex;
+          str << std::hex << std::setfill('0') << std::setw(2);
           for (size_t i=0; i<RdmaMessage::kRdmaMessageBufferSize; ++i) {
-            str << " 0x" << b[i];
+            // static cast because uint8_t is printed as char otherwise
+            str << " " << static_cast<int>(b[i]);
           }
-          str << std::dec;
           LOG(ERROR) << "buffer_=" << str.str();
         }
         // put back a recv wr.
