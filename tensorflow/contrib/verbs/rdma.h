@@ -405,6 +405,20 @@ class RdmaAdapter {
   std::unique_ptr<Thread> polling_thread_;
 };
 
+class RdmaMR {
+  public:
+    RdmaMR(void* buffer, ibv_mr* mr, int id, uint8_t* buffer_all)
+      : buffer_(buffer), mr_(mr), id_(id), buffer_all_(buffer_all) {}
+    RdmaMR(const RdmaMR& other)
+      : buffer_(other.buffer_), mr_(other.mr_), id_(other.id_),
+        buffer_all_(other.buffer_all_) {}
+
+    void* buffer_;
+    ibv_mr* mr_;
+    int id_;
+    uint8_t* buffer_all_;
+};
+
 // Class that represents a connection to a remote Rdma peer.
 // Responsible for connecting queue pairs.
 class RdmaChannel {
@@ -425,6 +439,7 @@ class RdmaChannel {
   void Connect(const RdmaAddress& remoteAddr);
   void Connect();
   void Recv();
+  void Recv(const RdmaMR &rmr);
   void SetRemoteAddress(const RdmaAddress& ra, bool override);
 
   // Requests:
@@ -468,20 +483,6 @@ class RdmaChannel {
   typedef std::unordered_map<uint32_t, RdmaTensorResponse> ResponsesTable;
   ResponsesTable responses_table_ GUARDED_BY(responses_mu_);
   RdmaMessageBuffers* message_buffers_;
-};
-
-class RdmaMR {
-  public:
-    RdmaMR(void* buffer, ibv_mr* mr, int id, uint8_t* buffer_all)
-      : buffer_(buffer), mr_(mr), id_(id), buffer_all_(buffer_all) {}
-    RdmaMR(const RdmaMR& other)
-      : buffer_(other.buffer_), mr_(other.mr_), id_(other.id_),
-        buffer_all_(other.buffer_all_) {}
-
-    void* buffer_;
-    ibv_mr* mr_;
-    int id_;
-    uint8_t* buffer_all_;
 };
 
 class RdmaChannelAndMR {

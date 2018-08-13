@@ -554,9 +554,8 @@ void RdmaAdapter::Process_CQ() {
           RDMA_LOG(1) << "receive a tensor RDMA write for " << request_index;
           RdmaTensorRequest* request = rc->GetTensorRequest(request_index);
           request->RecvTensorContent();
-          // put back a recv wr.
-          rc->message_buffers_->ReleaseRecvBuffer(rmr, false);
-          rc->Recv();
+          // put back a recv wr. buffer wasn't used
+          rc->Recv(rmr);
           continue;
         }
 
@@ -781,18 +780,29 @@ void RdmaChannel::SetRemoteAddress(const RdmaAddress& ra, bool override) {
 // Adding tokens to the completion queue
 // Tokens are needed to process future messages.
 void RdmaChannel::Recv() {
+  RdmaMR rmr = message_buffers_->AcquireRecvBuffer();
+  Recv(rmr);
+}
+
+void RdmaChannel::Recv(const RdmaMR &rmr) {
   struct ibv_sge sg;
   struct ibv_recv_wr wr;
   struct ibv_recv_wr* bad_wr;
   memset(&sg, 0, sizeof(sg));
   memset(&wr, 0, sizeof(wr));
-  RdmaMR rmr = message_buffers_->AcquireRecvBuffer();
   sg.addr = (uintptr_t)rmr.buffer_;
   sg.length = RdmaMessage::kRdmaMessageBufferSize;
   sg.lkey = rmr.mr_->lkey;
   wr.wr_id = (uint64_t) new RdmaChannelAndMR(this, rmr);
   wr.sg_list = &sg;
   wr.num_sge = 1;
+  {
+    uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
+    uint32_t i;
+    memcpy(&i, &b[RdmaMessage::kErrorStatusStartIndex], sizeof(uint32_t));
+    RDMA_LOG(1) << "RdmaChannel::Recv using RdmaMR " << rmr.id_
+                << " buffer id " << i;
+  }
   CHECK(!ibv_post_recv(qp_, &wr, &bad_wr)) << "Failed to post recv";
 }
 
@@ -1132,7 +1142,7 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
     uint32_t i;
     memcpy(&i, &b[RdmaMessage::kErrorStatusStartIndex], sizeof(uint32_t));
     RDMA_LOG(1) << "ReleaseRecvBuffer " << rmr.id_
-                << "buffer id " << i;
+                << " buffer id " << i;
   }
   // check the front pad
   for (size_t i=0; i<PAD_SIZE; ++i) {
