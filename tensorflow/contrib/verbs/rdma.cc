@@ -530,12 +530,11 @@ void RdmaAdapter::Process_CQ() {
           << "Failed status \n"
           << ibv_wc_status_str(wc_[i].status) << " " << wc_[i].status << " "
           << static_cast<int>(wc_[i].wr_id) << " " << wc_[i].vendor_err;
-      RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
-                  << OpcodeToString(wc_[i].opcode) << ": "
-                  << "service level " << static_cast<int>(wc_[i].sl) << ": "
-                  << "bytes " << wc_[i].byte_len;
       if (wc_[i].opcode == IBV_WC_RECV
               || wc_[i].opcode == IBV_WC_RECV_RDMA_WITH_IMM) {
+        RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
+                    << OpcodeToString(wc_[i].opcode) << ": "
+                    << "bytes " << wc_[i].byte_len;
         CHECK(wc_[i].wc_flags & IBV_WC_WITH_IMM);
         RdmaChannelAndMR* rid =
           reinterpret_cast<RdmaChannelAndMR*>(wc_[i].wr_id);
@@ -629,7 +628,9 @@ void RdmaAdapter::Process_CQ() {
       else if (wc_[i].opcode == IBV_WC_SEND
               || wc_[i].opcode == IBV_WC_RDMA_WRITE) {
         RdmaWriteID* wr_id = reinterpret_cast<RdmaWriteID*>(wc_[i].wr_id);
-        RDMA_LOG(1) << "Write complete of type " << wr_id->write_type
+        RDMA_LOG(1) << "wc " << i+1 << " of " << ne << ": "
+                    << OpcodeToString(wc_[i].opcode) << ": "
+                    << "Write complete of type " << wr_id->write_type
                     << " and id " << wr_id->id;
         switch (wr_id->write_type) {
           case RDMA_WRITE_ID_MESSAGE: {
