@@ -876,7 +876,7 @@ Status ConvertSubgraphToRTG(std::unique_ptr<Graph>* g, Cluster& cluster, T_INPUT
         cluster_name += "-";
         device = node->assigned_device_name();
     }
-    dump_graph::DumpMIGraph("After encode", cluster_name, program);
+    DUMP_MIGRAPH(dump_graph::DumpMIGraph("After encode", cluster_name, program));
     // call program->optimize()
     Converter bwd_convert(program, nullptr);
     // TODO: use gpu
@@ -904,7 +904,7 @@ Status ConvertGraphToRTG(std::unique_ptr<Graph>* g, T_INPUT_MAP* inputs) {
         dbg = atoi(dbg_env);
     CHECK_NOTNULL(g);
     const Graph& graph = **g;
-    RTGLIB::dump_graph::DumpGraphToFile("Before convert graph to RTG", graph);
+    DUMP_MIGRAPH(RTGLIB::dump_graph::DumpGraphToFile("Before convert graph to RTG", graph));
     
     std::unordered_map<int, unsigned> id2Order, id2Segment, id2Mask;
     std::unordered_map<int, bool> id2Candidate, id2Visit;
@@ -1050,7 +1050,7 @@ Status ConvertGraphToRTG(std::unique_ptr<Graph>* g, T_INPUT_MAP* inputs) {
         }
     }
 
-    RTGLIB::dump_graph::DumpGraphToFile("After convert graph to RTG", graph);
+    DUMP_MIGRAPH(RTGLIB::dump_graph::DumpGraphToFile("After convert graph to RTG", graph));
     return Status::OK();
 }
     
