@@ -141,7 +141,7 @@ bool RdmaMgr::ConnectivityCheck() {
     VLOG(2) << "Ping to " << worker_name;
     CHECK(rc->PingPostSend() == 0) << "Couldn't post send  to " << worker_name
                                    << " with error: " << std::strerror(errno);
-    for (i = 0; i < rc->adapter_->params_.queue_depth - 1; i++) {
+    for (i = 0; i < rc->adapter_->params_.queue_depth/2; i++) {
       rc->Recv();
     }
   }
@@ -165,12 +165,12 @@ bool RdmaMgr::ConnectivityCheck() {
         ++rcnt;
         // send complete
       } else {
-        RdmaChannelAndMR* rc =
-            reinterpret_cast<RdmaChannelAndMR*>(rdma_adapter_->wc_[i].wr_id);
+        RdmaChannel* rc =
+            reinterpret_cast<RdmaChannel*>(rdma_adapter_->wc_[i].wr_id);
         CHECK(s == IBV_WC_SUCCESS)
             << ": " << ibv_wc_status_str(rdma_adapter_->wc_[i].status) << "("
             << rdma_adapter_->wc_[i].status << ") to "
-            << rc->channel_->remote_name_;
+            << rc->remote_name_;
         ++scnt;
       }
     }  // for

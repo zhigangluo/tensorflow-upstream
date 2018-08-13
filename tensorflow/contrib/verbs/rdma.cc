@@ -799,9 +799,12 @@ void RdmaChannel::Recv(const RdmaMR &rmr) {
   {
     uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
     uint32_t i;
+    uint32_t j;
     memcpy(&i, &b[RdmaMessage::kErrorStatusStartIndex], sizeof(uint32_t));
+    memcpy(&j, &b[RdmaMessage::kRdmaMessageBufferSize], sizeof(uint32_t));
     RDMA_LOG(1) << "RdmaChannel::Recv using RdmaMR " << rmr.id_
-                << " buffer id " << i;
+                << " buffer id " << i
+                << " buffer id2 " << j;
   }
   CHECK(!ibv_post_recv(qp_, &wr, &bad_wr)) << "Failed to post recv";
 }
@@ -924,6 +927,7 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
       buffer[i] = INIT_SEND_BYTE;
     }
     memcpy(&buffer[RdmaMessage::kErrorStatusStartIndex], &i, sizeof(uint32_t));
+    memcpy(&buffer[RdmaMessage::kRdmaMessageBufferSize], &i, sizeof(uint32_t));
     mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
@@ -940,6 +944,7 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
       buffer[i] = INIT_RECV_BYTE;
     }
     memcpy(&buffer[RdmaMessage::kErrorStatusStartIndex], &i, sizeof(uint32_t));
+    memcpy(&buffer[RdmaMessage::kRdmaMessageBufferSize], &i, sizeof(uint32_t));
     mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
@@ -1048,10 +1053,13 @@ void RdmaMessageBuffers::SendNextItem() {
     free_send_.pop();
     uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
     uint32_t i;
+    uint32_t j;
     memcpy(&i, &b[RdmaMessage::kErrorStatusStartIndex], sizeof(uint32_t));
+    memcpy(&j, &b[RdmaMessage::kRdmaMessageBufferSize], sizeof(uint32_t));
     RDMA_LOG(1) << "SendNextItem using RdmaMR " << rmr.id_
                 << " message.size()=" << message.size()
-                << " buffer id " << i;
+                << " buffer id " << i
+                << " buffer id2 " << j;
     memcpy(rmr.buffer_, message.data(), message.size());
     if (0 != sleep_for_memcpy) {
       sleep(sleep_for_memcpy);
@@ -1102,9 +1110,12 @@ RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
   free_recv_.pop();
   uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
   uint32_t i;
+  uint32_t j;
   memcpy(&i, &b[RdmaMessage::kErrorStatusStartIndex], sizeof(uint32_t));
+  memcpy(&j, &b[RdmaMessage::kRdmaMessageBufferSize], sizeof(uint32_t));
   RDMA_LOG(1) << "AcquireRecvBuffer " << rmr.id_
-              << " buffer id " << i;
+              << " buffer id " << i
+              << " buffer id2 " << j;
   if (i == 3537031890 && first_time) {
     first_time = false;
     std::ostringstream str;
@@ -1128,9 +1139,12 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
     RdmaMessage::ParseMessage(rm, rmr.buffer_);
     uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
     uint32_t i;
+    uint32_t j;
     memcpy(&i, &b[RdmaMessage::kErrorStatusStartIndex], sizeof(uint32_t));
+    memcpy(&j, &b[RdmaMessage::kRdmaMessageBufferSize], sizeof(uint32_t));
     RDMA_LOG(1) << "ReleaseRecvBuffer " << rmr.id_ << ": "
                 << "buffer id " << i << ": "
+                << "buffer id2 " << j << ": "
                 << "Step 0x" << std::hex << rm.step_id_ << std::dec
                 << ": Received " << rm.type_ << " "
                 << MessageTypeToString(rm.type_) << " "
@@ -1140,9 +1154,12 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
   else {
     uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
     uint32_t i;
+    uint32_t j;
     memcpy(&i, &b[RdmaMessage::kErrorStatusStartIndex], sizeof(uint32_t));
+    memcpy(&j, &b[RdmaMessage::kRdmaMessageBufferSize], sizeof(uint32_t));
     RDMA_LOG(1) << "ReleaseRecvBuffer " << rmr.id_
-                << " buffer id " << i;
+                << " buffer id " << i
+                << " buffer id2 " << j;
   }
   // check the front pad
   for (size_t i=0; i<PAD_SIZE; ++i) {
@@ -1156,14 +1173,14 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
     rmr.buffer_all_[i] = PAD_BYTE;
   }
   // check the back pad
-  for (size_t i=0; i<PAD_SIZE; ++i) {
+  for (size_t i=4; i<PAD_SIZE; ++i) {
     if (rmr.buffer_all_[PAD_SIZE+RdmaMessage::kRdmaMessageBufferSize+i] != PAD_BYTE) {
       LOG(ERROR) << "ReleaseRecvBuffer memory corruption post at " << i;
       break;
     }
   }
   // reset the back pad
-  for (size_t i=0; i<PAD_SIZE; ++i) {
+  for (size_t i=4; i<PAD_SIZE; ++i) {
     rmr.buffer_all_[PAD_SIZE+RdmaMessage::kRdmaMessageBufferSize+i] = PAD_BYTE;
   }
   if (maybe_memset) {
@@ -1184,9 +1201,12 @@ void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
     RdmaMessage::ParseMessage(rm, rmr.buffer_);
     uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
     uint32_t i;
+    uint32_t j;
     memcpy(&i, &b[RdmaMessage::kErrorStatusStartIndex], sizeof(uint32_t));
+    memcpy(&j, &b[RdmaMessage::kRdmaMessageBufferSize], sizeof(uint32_t));
     RDMA_LOG(1) << "ReleaseSendBuffer " << rmr.id_ << ": "
                 << "buffer id " << i << ": "
+                << "buffer id2 " << j << ": "
                 << "Step 0x" << std::hex << rm.step_id_ << std::dec
                 << ": Received " << rm.type_ << " "
                 << MessageTypeToString(rm.type_) << " "
@@ -1208,14 +1228,14 @@ void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
     rmr.buffer_all_[i] = PAD_BYTE;
   }
   // check the back pad
-  for (size_t i=0; i<PAD_SIZE; ++i) {
+  for (size_t i=4; i<PAD_SIZE; ++i) {
     if (rmr.buffer_all_[PAD_SIZE+RdmaMessage::kRdmaMessageBufferSize+i] != PAD_BYTE) {
       LOG(ERROR) << "ReleaseSendBuffer memory corruption post at " << i;
       break;
     }
   }
   // reset the back pad
-  for (size_t i=0; i<PAD_SIZE; ++i) {
+  for (size_t i=4; i<PAD_SIZE; ++i) {
     rmr.buffer_all_[PAD_SIZE+RdmaMessage::kRdmaMessageBufferSize+i] = PAD_BYTE;
   }
   if (maybe_memset) {
