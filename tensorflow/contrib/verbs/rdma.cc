@@ -761,7 +761,7 @@ RdmaChannel::~RdmaChannel() {
 }
 
 void RdmaChannel::SetRemoteAddress(const RdmaAddress& ra, bool override) {
-  mutex_lock lock{mu_};
+  mutex_lock lock(mu_);
   if ((override) || (!remote_set_)) {
     remote_.lid = ra.lid;
     remote_.qpn = ra.qpn;
@@ -814,7 +814,7 @@ RdmaTensorRequest* RdmaChannel::InsertTensorRequest(
     const string& key, int64 step_id, Device* dst_dev,
     const Rendezvous::Args recv_args,
     const RdmaTensorRequest::RecvDoneCallback& done) {
-  mutex_lock lock{ct_mu_};
+  mutex_lock lock(ct_mu_);
   uint32_t request_index = request_serial_++;
   if (request_serial_ > RDMA_IMM_MAX_REQUEST_ID) {
     request_serial_ = 0;
@@ -826,12 +826,12 @@ RdmaTensorRequest* RdmaChannel::InsertTensorRequest(
 }
 
 void RdmaChannel::RemoveTensorRequest(uint32_t request_index) {
-  mutex_lock lock{ct_mu_};
+  mutex_lock lock(ct_mu_);
   request_table_.erase(request_index);
 }
 
 RdmaTensorRequest* RdmaChannel::GetTensorRequest(uint32_t request_index) {
-  mutex_lock lock{ct_mu_};
+  mutex_lock lock(ct_mu_);
   RequestTable::iterator iter = request_table_.find(request_index);
   CHECK(iter != request_table_.end()) << "No request found for index "
                                       << request_index;
@@ -840,7 +840,7 @@ RdmaTensorRequest* RdmaChannel::GetTensorRequest(uint32_t request_index) {
 
 void RdmaChannel::Connect() {
   {
-    mutex_lock lock{mu_};
+    mutex_lock lock(mu_);
     CHECK(remote_set_) << "remote channel is not set";
   }
   Connect(remote_);
@@ -852,7 +852,7 @@ void RdmaChannel::Connect() {
 // Returns:
 //   None
 void RdmaChannel::Connect(const RdmaAddress& remoteAddr) {
-  mutex_lock lock{mu_};
+  mutex_lock lock(mu_);
   if (!connected_) {
     struct ibv_qp_attr attr;
     memset(&attr, 0, sizeof(ibv_qp_attr));
@@ -966,7 +966,7 @@ RdmaMessageBuffers::~RdmaMessageBuffers() {
 
 // Put a task in the buffer's job queue
 void RdmaMessageBuffers::EnqueueItem(string item) {
-  mutex_lock lock{mu_};
+  mutex_lock lock(mu_);
   static bool maybe_log_send = !get_env_var("RDMA_LOG_SEND").empty();
   auto qid = qid_++;
   queue_.push(make_pair(qid,item));
@@ -1349,7 +1349,7 @@ static void StreamGPUOp(Device* gpu_device, const DeviceContext* device_context,
 #endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 RdmaTensorResponse* RdmaChannel::AddTensorResponse(const RdmaMessage& rm) {
-  mutex_lock lock{mu_};
+  mutex_lock lock(mu_);
   auto it =
       responses_table_.emplace(rm.request_index_, RdmaTensorResponse(this, rm));
   CHECK(it.second) << "Response with the ID " << rm.request_index_
@@ -1358,7 +1358,7 @@ RdmaTensorResponse* RdmaChannel::AddTensorResponse(const RdmaMessage& rm) {
 }
 
 RdmaTensorResponse* RdmaChannel::UpdateTensorResponse(const RdmaMessage& rm) {
-  mutex_lock lock{mu_};
+  mutex_lock lock(mu_);
   auto it = responses_table_.find(rm.request_index_);
   CHECK(it != responses_table_.end()) << "No response found for index "
                                       << rm.request_index_;
@@ -1368,7 +1368,7 @@ RdmaTensorResponse* RdmaChannel::UpdateTensorResponse(const RdmaMessage& rm) {
 }
 
 void RdmaChannel::RemoveTensorResponse(uint32_t request_index) {
-  mutex_lock lock{mu_};
+  mutex_lock lock(mu_);
   auto erased_index_count = responses_table_.erase(request_index);
   CHECK(erased_index_count == 1) << "RemoveTensorResponse request_index not found";
 }
