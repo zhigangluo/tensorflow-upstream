@@ -1089,7 +1089,11 @@ RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
   CHECK(!free_recv_.empty());
   RdmaMR rmr = free_recv_.front();
   free_recv_.pop();
-  RDMA_LOG(1) << "AcquireRecvBuffer " << rmr.id_;
+  uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
+  uint32_t i;
+  memcpy(&i, &b[RdmaMessage::kErrorStatusStartIndex], sizeof(uint32_t));
+  RDMA_LOG(1) << "AcquireRecvBuffer " << rmr.id_
+              << " buffer id " << i;
   mu_.unlock();
   return rmr;
 }
