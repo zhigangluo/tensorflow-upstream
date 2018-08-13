@@ -913,6 +913,7 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
     for (size_t i=0; i<RdmaMessage::kRdmaMessageBufferSize; ++i) {
       buffer[i] = INIT_SEND_BYTE;
     }
+    memcpy(&buffer[RdmaMessage::kErrorStatusStartIndex], &i, sizeof(uint32_t));
     mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
@@ -928,6 +929,7 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
     for (size_t i=0; i<RdmaMessage::kRdmaMessageBufferSize; ++i) {
       buffer[i] = INIT_RECV_BYTE;
     }
+    memcpy(&buffer[RdmaMessage::kErrorStatusStartIndex], &i, sizeof(uint32_t));
     mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
@@ -1034,8 +1036,12 @@ void RdmaMessageBuffers::SendNextItem() {
     queue_.pop();
     RdmaMR rmr = free_send_.front();
     free_send_.pop();
+    uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
+    uint32_t i;
+    memcpy(&i, &b[RdmaMessage::kErrorStatusStartIndex], sizeof(uint32_t));
     RDMA_LOG(1) << "SendNextItem using RdmaMR " << rmr.id_
-                << " message.size()=" << message.size();
+                << " message.size()=" << message.size()
+                << " buffer id " << i;
     memcpy(rmr.buffer_, message.data(), message.size());
     if (0 != sleep_for_memcpy) {
       sleep(sleep_for_memcpy);
@@ -1094,7 +1100,11 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
   if (is_message) {
     RdmaMessage rm;
     RdmaMessage::ParseMessage(rm, rmr.buffer_);
+    uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
+    uint32_t i;
+    memcpy(&i, &b[RdmaMessage::kErrorStatusStartIndex], sizeof(uint32_t));
     RDMA_LOG(1) << "ReleaseRecvBuffer " << rmr.id_ << ": "
+                << "buffer id " << i << ": "
                 << "Step 0x" << std::hex << rm.step_id_ << std::dec
                 << ": Received " << rm.type_ << " "
                 << MessageTypeToString(rm.type_) << " "
@@ -1142,7 +1152,11 @@ void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
   if (is_message) {
     RdmaMessage rm;
     RdmaMessage::ParseMessage(rm, rmr.buffer_);
+    uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
+    uint32_t i;
+    memcpy(&i, &b[RdmaMessage::kErrorStatusStartIndex], sizeof(uint32_t));
     RDMA_LOG(1) << "ReleaseSendBuffer " << rmr.id_ << ": "
+                << "buffer id " << i << ": "
                 << "Step 0x" << std::hex << rm.step_id_ << std::dec
                 << ": Received " << rm.type_ << " "
                 << MessageTypeToString(rm.type_) << " "
