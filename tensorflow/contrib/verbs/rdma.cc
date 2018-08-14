@@ -958,6 +958,10 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
     CHECK(mr) << "Failed to register memory region";
     mr_send_.push_back(RdmaMR(buffer, mr, i, buffer_all));
     free_send_.push(RdmaMR(buffer, mr, i, buffer_all));
+    RDMA_LOG(1) << "RdmaMessageBuffers send"
+                << " i=" << i
+                << " buffer=" << buffer
+                << " mr.lkey=" << mr->lkey;
 
     buffer_all = (uint8_t*)malloc(the_size);
     CHECK(buffer_all) << "Failed to allocate memory region";
@@ -975,6 +979,10 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
     CHECK(mr) << "Failed to register memory region";
     mr_recv_.push_back(RdmaMR(buffer, mr, i, buffer_all));
     free_recv_.push(RdmaMR(buffer, mr, i, buffer_all));
+    RDMA_LOG(1) << "RdmaMessageBuffers recv"
+                << " i=" << i
+                << " buffer=" << buffer
+                << " mr.lkey=" << mr->lkey;
   }
 }
 
