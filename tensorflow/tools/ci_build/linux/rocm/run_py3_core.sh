@@ -42,6 +42,7 @@ bazel test --test_sharding_strategy=disabled --config=rocm --test_tag_filters=-n
     //tensorflow/... -//tensorflow/compiler/... -//tensorflow/contrib/... \
     -//tensorflow/python/eager:pywrap_tfe_test \
     -//tensorflow/python/estimator:dnn_linear_combined_test \
+    -//tensorflow/python/estimator:linear_test \
     -//tensorflow/python/keras:cudnn_recurrent_test \
     -//tensorflow/python/keras:pooling_test \
     -//tensorflow/python/keras:model_subclassing_test \
