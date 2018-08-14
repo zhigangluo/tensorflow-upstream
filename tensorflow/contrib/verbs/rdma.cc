@@ -479,7 +479,8 @@ RdmaAdapter::RdmaAdapter(const WorkerEnv* worker_env)
   cq_ = ibv_create_cq(context_, params_.queue_depth * 2, NULL,
           event_channel_, 0);
   CHECK(cq_) << "Failed to create completion queue";
-  CHECK(!ibv_req_notify_cq(cq_, 0)) << "Failed to request CQ notification";
+  int rc = ibv_req_notify_cq(cq_, 0);
+  CHECK(!rc) << "Failed to request CQ notification";
   set_sleep_val();
   set_usleep_val();
 }
@@ -487,11 +488,15 @@ RdmaAdapter::RdmaAdapter(const WorkerEnv* worker_env)
 RdmaAdapter::~RdmaAdapter() {
   polling_thread_.reset();
   delete [] wc_;
-  CHECK(!ibv_destroy_cq(cq_)) << "Failed to destroy CQ";
-  CHECK(!ibv_destroy_comp_channel(event_channel_))
-      << "Failed to destroy channel";
-  CHECK(!ibv_dealloc_pd(pd_)) << "Failed to deallocate PD";
-  CHECK(!ibv_close_device(context_)) << "Failed to release context";
+  int rc;
+  rc = ibv_destroy_cq(cq_);
+  CHECK(!rc) << "Failed to destroy CQ";
+  rc = ibv_destroy_comp_channel(event_channel_);
+  CHECK(!rc) << "Failed to destroy channel";
+  rc = ibv_dealloc_pd(pd_);
+  CHECK(!rc) << "Failed to deallocate PD";
+  rc = ibv_close_device(context_);
+  CHECK(!rc) << "Failed to release context";
 }
 
 void RdmaAdapter::StartPolling() {
@@ -516,12 +521,15 @@ void RdmaAdapter::Process_CQ() {
   RDMA_LOG(1) << "maybe_fence=" << maybe_fence;
   RDMA_LOG(1) << "maybe_msync=" << maybe_msync;
   while (true) {
+    int rc;
     ibv_cq* cq;
     void* cq_context;
-    CHECK(!ibv_get_cq_event(event_channel_, &cq, &cq_context));
+    rc = ibv_get_cq_event(event_channel_, &cq, &cq_context);
+    CHECK(!rc) << "ibv_get_cq_event failed";
     CHECK(cq == cq_);
     ibv_ack_cq_events(cq, 1);
-    CHECK(!ibv_req_notify_cq(cq_, 0));
+    rc = ibv_req_notify_cq(cq_, 0);
+    CHECK(!rc) << "ibv_req_notify_cq failed";
 
     int ne = ibv_poll_cq(cq_, params_.queue_depth * 2, wc_);
     CHECK_GE(ne, 0);
@@ -696,6 +704,7 @@ RdmaChannel::RdmaChannel(const RdmaAdapter* adapter, const string local_name,
       local_name_(local_name),
       remote_name_(remote_name),
       request_serial_(0) {
+  int rc;
   struct ibv_sge list;
 
   mr_ = ibv_reg_mr(adapter_->pd_, ping_buff_, kPingBuffSize,
@@ -735,35 +744,37 @@ RdmaChannel::RdmaChannel(const RdmaAdapter* adapter, const string local_name,
 
     int mask =
         IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
-    CHECK(!ibv_modify_qp(qp_, &attr, mask)) << "Failed to set QP to INIT";
+    rc = ibv_modify_qp(qp_, &attr, mask);
+    CHECK(!rc) << "Failed to set QP to INIT";
   }
 
   // Local address
   {
     struct ibv_port_attr attr;
-    CHECK(
-        !ibv_query_port(adapter_->context_, adapter_->params_.port_num, &attr))
-        << "Query port";
+    rc = ibv_query_port(adapter_->context_, adapter_->params_.port_num, &attr);
+    CHECK(!rc) << "Query port";
     self_.lid = attr.lid;
     self_.qpn = qp_->qp_num;
     self_.psn = static_cast<uint32_t>(random::New64()) & 0xffffff;
     union ibv_gid gid;
-    CHECK(!ibv_query_gid(adapter_->context_, adapter_->params_.port_num,
-                         adapter_->params_.sgid_index, &gid))
-        << "Query gid";
+    rc = ibv_query_gid(adapter_->context_, adapter_->params_.port_num,
+                       adapter_->params_.sgid_index, &gid);
+    CHECK(!rc) << "Query gid";
     self_.snp = gid.global.subnet_prefix;
     self_.iid = gid.global.interface_id;
   }
 
   // create message buffers
   message_buffers_ = new RdmaMessageBuffers(this);
-  CHECK(PingPostRecv() == 0) << "Couldn't post receive from " << remote_name_
-                             << " with error " << std::strerror(errno);
+  rc = PingPostRecv();
+  CHECK(rc == 0) << "Couldn't post receive from " << remote_name_
+                 << " with error " << std::strerror(errno);
 }
 
 RdmaChannel::~RdmaChannel() {
   ibv_dereg_mr(mr_);
-  CHECK(!ibv_destroy_qp(qp_)) << "Failed to destroy QP";
+  int rc = ibv_destroy_qp(qp_);
+  CHECK(!rc) << "Failed to destroy QP";
   delete message_buffers_;
 }
 
@@ -814,7 +825,8 @@ void RdmaChannel::Recv(const RdmaMR &rmr) {
                 << " buffer id " << i
                 << " buffer id2 " << j;
   }
-  CHECK(!ibv_post_recv(qp_, &wr, &bad_wr)) << "Failed to post recv";
+  int rc = ibv_post_recv(qp_, &wr, &bad_wr);
+  CHECK(!rc) << "Failed to post recv";
 }
 
 RdmaTensorRequest* RdmaChannel::InsertTensorRequest(
@@ -885,13 +897,13 @@ void RdmaChannel::Connect(const RdmaAddress& remoteAddr) {
     RDMA_LOG(1) << "service level attr.ah_attr.sl="
                 << static_cast<int>(attr.ah_attr.sl);
 
-    int r;
-    CHECK(!(r = ibv_modify_qp(qp_, &attr,
-                              IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU |
-                                  IBV_QP_DEST_QPN | IBV_QP_RQ_PSN |
-                                  IBV_QP_MAX_DEST_RD_ATOMIC |
-                                  IBV_QP_MIN_RNR_TIMER)))
-        << "QP to Ready to Receive " << r;
+    int rc;
+    rc = ibv_modify_qp(qp_, &attr,
+                       IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU |
+                       IBV_QP_DEST_QPN | IBV_QP_RQ_PSN |
+                       IBV_QP_MAX_DEST_RD_ATOMIC |
+                       IBV_QP_MIN_RNR_TIMER);
+    CHECK(!rc) << "QP to Ready to Receive " << rc;
 
     memset(&attr, 0, sizeof(ibv_qp_attr));
     attr.qp_state = IBV_QPS_RTS;
@@ -901,11 +913,11 @@ void RdmaChannel::Connect(const RdmaAddress& remoteAddr) {
     attr.rnr_retry = 7; /* infinite */
     attr.max_rd_atomic = 1;
 
-    CHECK(!(r = ibv_modify_qp(qp_, &attr,
-                              IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
-                                  IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN |
-                                  IBV_QP_MAX_QP_RD_ATOMIC)))
-        << "QP to Ready to Send " << r;
+    rc = ibv_modify_qp(qp_, &attr,
+                       IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
+                       IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN |
+                       IBV_QP_MAX_QP_RD_ATOMIC);
+    CHECK(!rc) << "QP to Ready to Send " << rc;
 
     connected_ = true;
   } else {
@@ -964,8 +976,11 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
 RdmaMessageBuffers::~RdmaMessageBuffers() {
   uint32_t depth = channel_->adapter_->params_.queue_depth;
   for (uint32_t i=0; i<depth; ++i) {
-    CHECK(!ibv_dereg_mr(mr_send_[i].mr_));
-    CHECK(!ibv_dereg_mr(mr_recv_[i].mr_));
+    int rc;
+    rc = ibv_dereg_mr(mr_send_[i].mr_);
+    CHECK(!rc) << "ibv_dereg_mr failed";
+    rc = ibv_dereg_mr(mr_recv_[i].mr_);
+    CHECK(!rc) << "ibv_dereg_mr failed";
     free(mr_send_[i].buffer_all_);
     free(mr_recv_[i].buffer_all_);
   }
@@ -1043,7 +1058,8 @@ void RdmaMessageBuffers::Write(void *thiz, RdmaChannel* channel, uint32_t imm_da
       << ")";
 
   struct ibv_send_wr* bad_wr;
-  CHECK(!ibv_post_send(channel->qp_, &wr, &bad_wr)) << "Failed to post send";
+  int rc = ibv_post_send(channel->qp_, &wr, &bad_wr);
+  CHECK(!rc) << "Failed to post send";
 }
 
 // Send the next message from the buffer's job queue.
@@ -1611,6 +1627,7 @@ void RdmaTensorResponse::SendContent(const Tensor& in, const TensorProto& proto,
       src_addr_ = malloc(tensor_bytes);
       mr_ = ibv_reg_mr(channel_->adapter_->pd_, src_addr_, tensor_bytes,
                        IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
+      CHECK(mr_) << "Failed to register memory region";
       proto.SerializeToArray(src_addr_, tensor_bytes);
     }
   } else {
