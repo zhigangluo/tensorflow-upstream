@@ -79,6 +79,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/transpose_folding.h"
 #include "tensorflow/compiler/xla/service/tuple_simplifier.h"
 #include "tensorflow/compiler/xla/service/while_loop_constant_sinking.h"
+#include "tensorflow/compiler/xla/service/while_loop_invariant_code_motion.h"
 #include "tensorflow/compiler/xla/service/while_loop_simplifier.h"
 #include "tensorflow/compiler/xla/service/zero_sized_hlo_elimination.h"
 #include "tensorflow/compiler/xla/status_macros.h"
@@ -249,9 +250,6 @@ Status OptimizeHloModule(HloModule* hlo_module, se::StreamExecutor* stream_exec,
           return true;
         });
 
-    // ROCM TODO: check if CudnnConvolutionAlgorithmPicker can be applied
-    // directly or should we come up with MIOpenConvolutionAlgorithmPicker
-    //
     // Choose the fastest algorithm for each conv.
     //
     // We pick the algorithm before fusion so we can generate better HLO. After
@@ -277,8 +275,8 @@ Status OptimizeHloModule(HloModule* hlo_module, se::StreamExecutor* stream_exec,
     // the gte(customcall, 0) would probably already be into a fusion node.  We
     // can't simplify across HloComputation boundaries, so in this case we
     // wouldn't be able to simplify away the new_tuple bits.
-    //pipeline.AddPass<CudnnConvolutionAlgorithmPicker>(
-    //    stream_exec, device_allocator, compiler);
+    pipeline.AddPass<CudnnConvolutionAlgorithmPicker>(stream_exec,
+                                                      device_allocator);
     // Clean up new_tuple described above.
     pipeline.AddPass<TupleSimplifier>();
 
