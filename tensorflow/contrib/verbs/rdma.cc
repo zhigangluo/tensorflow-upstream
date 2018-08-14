@@ -54,6 +54,7 @@ namespace tensorflow {
 #define INIT_SEND_BYTE 0xD1
 #define REINIT_RECV_BYTE 0xD2
 #define REINIT_SEND_BYTE 0xD3
+//#define USE_CQ_NOTIFY
 
 namespace {
 
@@ -479,8 +480,10 @@ RdmaAdapter::RdmaAdapter(const WorkerEnv* worker_env)
   cq_ = ibv_create_cq(context_, params_.queue_depth * 2, NULL,
           event_channel_, 0);
   CHECK(cq_) << "Failed to create completion queue";
+#ifdef USE_CQ_NOTIFY
   int rc = ibv_req_notify_cq(cq_, 0);
   CHECK(!rc) << "Failed to request CQ notification";
+#endif
   set_sleep_val();
   set_usleep_val();
 }
@@ -521,6 +524,7 @@ void RdmaAdapter::Process_CQ() {
   RDMA_LOG(1) << "maybe_fence=" << maybe_fence;
   RDMA_LOG(1) << "maybe_msync=" << maybe_msync;
   while (true) {
+#ifdef USE_CQ_NOTIFY
     int rc;
     ibv_cq* cq;
     void* cq_context;
@@ -530,6 +534,7 @@ void RdmaAdapter::Process_CQ() {
     ibv_ack_cq_events(cq, 1);
     rc = ibv_req_notify_cq(cq_, 0);
     CHECK(!rc) << "ibv_req_notify_cq failed";
+#endif
 
     int ne = ibv_poll_cq(cq_, params_.queue_depth * 2, wc_);
     CHECK_GE(ne, 0);
