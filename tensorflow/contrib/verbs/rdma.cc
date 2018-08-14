@@ -960,7 +960,7 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
     free_send_.push(RdmaMR(buffer, mr, i, buffer_all));
     RDMA_LOG(1) << "RdmaMessageBuffers send"
                 << " i=" << i
-                << " buffer=" << buffer
+                << " buffer=" << (void*)buffer
                 << " mr.lkey=" << mr->lkey;
 
     buffer_all = (uint8_t*)malloc(the_size);
@@ -981,7 +981,7 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
     free_recv_.push(RdmaMR(buffer, mr, i, buffer_all));
     RDMA_LOG(1) << "RdmaMessageBuffers recv"
                 << " i=" << i
-                << " buffer=" << buffer
+                << " buffer=" << (void*)buffer
                 << " mr.lkey=" << mr->lkey;
   }
 }
