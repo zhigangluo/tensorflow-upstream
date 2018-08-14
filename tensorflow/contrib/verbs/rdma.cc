@@ -1001,6 +1001,7 @@ void RdmaMessageBuffers::Write(void *thiz, RdmaChannel* channel, uint32_t imm_da
   static std::atomic<int> WKEY(0);
 
   struct ibv_sge list;
+  memset(&list, 0, sizeof(list));
   list.addr = src_addr;
   list.length = buffer_size;
   list.lkey = lkey;
@@ -1024,11 +1025,11 @@ void RdmaMessageBuffers::Write(void *thiz, RdmaChannel* channel, uint32_t imm_da
   RDMA_LOG(1) << "Write(this=" << thiz
       << ", channel=" << channel
       << ", imm_data=" << imm_data
-      << ", buffer_size=" << buffer_size
-      << ", src_addr=" << src_addr
-      << ", lkey=" << lkey
-      << ", remote_addr=" << remote_addr
-      << ", rkey=" << rkey
+      << ", buffer_size=" << list.length
+      << ", src_addr=" << list.addr
+      << ", lkey=" << list.lkey
+      << ", remote_addr=" << wr.wr.rdma.remote_addr
+      << ", rkey=" << wr.wr.rdma.rkey
       << ", write_type=" << write_type
       << ", write_context=" << write_context
       << ", wkey=" << wkey
@@ -1044,7 +1045,7 @@ void RdmaMessageBuffers::SendNextItem() {
   static bool maybe_fence = !get_env_var("RDMA_FENCE").empty();
   static bool maybe_msync = !get_env_var("RDMA_MSYNC").empty();
   uint32_t imm_data = RDMA_IMM_DATA_MESSAGE;
-  mu_.lock();
+  mutex_lock lock(mu_);
   while (!queue_.empty() && !free_send_.empty()) {
     auto item = queue_.front();
     auto qid = item.first;
@@ -1081,6 +1082,7 @@ void RdmaMessageBuffers::SendNextItem() {
       RdmaMessage::ParseMessage(rm, rmr.buffer_);
       RDMA_LOG(1) << "SendNextItem(this=" << this << ") calling Write"
                   << " queue_.size()=" << queue_.size()
+                  << " free_send_.size()=" << free_send_.size()
                   << " qid=" << qid
                   << " Step 0x" << std::hex << rm.step_id_ << std::dec
                   << ": Writing  " << rm.type_ << " "
@@ -1093,6 +1095,7 @@ void RdmaMessageBuffers::SendNextItem() {
     else {
       RDMA_LOG(1) << "SendNextItem(this=" << this << ") calling Write"
                   << " queue_.size()=" << queue_.size()
+                  << " free_send_.size()=" << free_send_.size()
                   << " qid=" << qid
                   << " message.size()=" << message.size();
     }
@@ -1100,12 +1103,11 @@ void RdmaMessageBuffers::SendNextItem() {
         (uint64_t)rmr.buffer_, rmr.mr_->lkey,
         0, 0, RDMA_WRITE_ID_MESSAGE, new RdmaChannelAndMR(channel_, rmr));
   }
-  mu_.unlock();
 }
 
 RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
   static bool first_time = true;
-  mu_.lock();
+  mutex_lock lock(mu_);
   CHECK(!free_recv_.empty());
   RdmaMR rmr = free_recv_.front();
   free_recv_.pop();
@@ -1128,13 +1130,12 @@ RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
     }
     LOG(ERROR) << "AcquireRecvBuffer strange buffer_=" << str.str();
   }
-  mu_.unlock();
   return rmr;
 }
 
 void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
   static bool maybe_memset = !get_env_var("RDMA_MEMSET").empty();
-  mu_.lock();
+  mutex_lock lock(mu_);
   if (is_message) {
     RdmaMessage rm;
     RdmaMessage::ParseMessage(rm, rmr.buffer_);
@@ -1191,12 +1192,11 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
     }
   }
   free_recv_.push(rmr);
-  mu_.unlock();
 }
 
 void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
   static bool maybe_memset = !get_env_var("RDMA_MEMSET").empty();
-  mu_.lock();
+  mutex_lock lock(mu_);
   if (is_message) {
     RdmaMessage rm;
     RdmaMessage::ParseMessage(rm, rmr.buffer_);
@@ -1215,7 +1215,14 @@ void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
                 << "S##" << rm.message_index_ << ": " << rm.name_;
   }
   else {
-    RDMA_LOG(1) << "ReleaseSendBuffer " << rmr.id_;
+    uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
+    uint32_t i;
+    uint32_t j;
+    memcpy(&i, &b[RdmaMessage::kErrorStatusStartIndex], sizeof(uint32_t));
+    memcpy(&j, &b[RdmaMessage::kRdmaMessageBufferSize], sizeof(uint32_t));
+    RDMA_LOG(1) << "ReleaseSendBuffer " << rmr.id_
+                << " buffer id " << i
+                << " buffer id2 " << j;
   }
   // check the front pad
   for (size_t i=0; i<PAD_SIZE; ++i) {
@@ -1246,7 +1253,6 @@ void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
     }
   }
   free_send_.push(rmr);
-  mu_.unlock();
 }
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
