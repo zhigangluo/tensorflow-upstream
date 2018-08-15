@@ -350,11 +350,11 @@ void Timeline::AllocateLanes() {
         const auto& lane = p->lanes[i];
         l = i;
         for (auto cur_it = lane.rbegin(); cur_it != lane.rend(); ++cur_it) {
-          if (cur_it->second > start_time) {
-            l = -1;
+          if (start_time >= cur_it->second) {
             break;
           }
-          if (start_time > cur_it->second) {
+          if (end_time > cur_it->first) {
+            l = -1;
             break;
           }
         }

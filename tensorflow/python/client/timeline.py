@@ -400,17 +400,27 @@ class Timeline(object):
     """Assigns non-overlapping lanes for the activities on each device."""
     for device_stats in self._step_stats.dev_stats:
       # TODO(pbar): Genuine thread IDs in NodeExecStats might be helpful.
-      lanes = [0]
+      lanes = []
       for ns in device_stats.node_stats:
+        start_ts = ns.all_start_micros
+        end_ts = ns.all_start_micros + ns.all_end_rel_micros
         l = -1
-        for (i, lts) in enumerate(lanes):
-          if ns.all_start_micros > lts:
-            l = i
-            lanes[l] = ns.all_start_micros + ns.all_end_rel_micros
+        for (i, ln) in enumerate(lanes):
+          l = i
+          index = len(ln);
+          for ts in reversed(ln):
+            if start_ts >= ts[1]:
+              break
+            if end_ts > ts[0]:
+              l = -1
+              break;
+            index -= 1
+          if l >= 0:
+            ln.insert(index, (start_ts, end_ts))
             break
         if l < 0:
           l = len(lanes)
-          lanes.append(ns.all_start_micros + ns.all_end_rel_micros)
+          lanes.append([(start_ts, end_ts)])
         ns.thread_id = l
 
   def _emit_op(self, nodestats, pid, is_gputrace):
