@@ -41,8 +41,10 @@ bazel test --test_sharding_strategy=disabled --config=rocm --test_tag_filters=-n
     --run_under=//tensorflow/tools/ci_build/gpu_build:parallel_gpu_execute -- \
     //tensorflow/... -//tensorflow/compiler/... -//tensorflow/contrib/... \
     -//tensorflow/python/eager:pywrap_tfe_test \
+    -//tensorflow/python/distribute:distribute_coordinator_test \
     -//tensorflow/python/estimator:dnn_linear_combined_test \
     -//tensorflow/python/estimator:linear_test \
+    -//tensorflow/python/feature_column:feature_column_v2_test \
     -//tensorflow/python/keras:cudnn_recurrent_test \
     -//tensorflow/python/keras:pooling_test \
     -//tensorflow/python/keras:model_subclassing_test \
@@ -55,7 +57,6 @@ bazel test --test_sharding_strategy=disabled --config=rocm --test_tag_filters=-n
     -//tensorflow/python/kernel_tests:dct_ops_test \
     -//tensorflow/python/kernel_tests:depthwise_conv_op_test \
     -//tensorflow/python/kernel_tests:fft_ops_test \
-    -//tensorflow/python/kernel_tests:init_ops_test \
     -//tensorflow/python/kernel_tests:matrix_inverse_op_test \
     -//tensorflow/python/kernel_tests:matrix_triangular_solve_op_test \
     -//tensorflow/python/kernel_tests:pool_test \
@@ -66,6 +67,7 @@ bazel test --test_sharding_strategy=disabled --config=rocm --test_tag_filters=-n
     -//tensorflow/python/kernel_tests:lrn_op_test \
     -//tensorflow/python/kernel_tests:neon_depthwise_conv_op_test \
     -//tensorflow/python/ops/parallel_for:control_flow_ops_test \
+    -//tensorflow/python/ops/parallel_for:gradients_test \
     -//tensorflow/python/profiler/internal:run_metadata_test \
     -//tensorflow/python/profiler:profile_context_test \
     -//tensorflow/python/profiler:profiler_test \
