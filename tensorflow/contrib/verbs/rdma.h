@@ -230,6 +230,7 @@ class RdmaMemoryMgr {
 
   // Managed memory regions
   mutex mrs_mu_;
+  std::unordered_map<std::string, size_t> mrs_size_ GUARDED_BY(mrs_mu_);
   std::vector<MemoryRegionPtr> mrs_ GUARDED_BY(mrs_mu_);
 };
 

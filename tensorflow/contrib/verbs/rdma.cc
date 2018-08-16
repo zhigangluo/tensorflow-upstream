@@ -1877,8 +1877,17 @@ void RdmaMemoryMgr::InsertMemoryRegion(void* addr, size_t length,
     mutex_lock l(mrs_mu_);
     auto iter = std::upper_bound(mrs_.begin(), mrs_.end(), addr, &Comparator);
     mrs_.insert(iter, {mr, &MRDeleter});
+    if (mrs_size_.count(allocator_name) == 0) {
+      mrs_size_[allocator_name] = length;
+    }
+    else {
+      mrs_size_[allocator_name] += length;
+    }
   } else {
-    LOG(WARNING) << "Cannot register memory region: " << std::strerror(errno);
+    LOG(WARNING) << "Cannot register memory region: " << std::strerror(errno)
+                 << " name " << allocator_name
+                 << " size " << mrs_size_[allocator_name]
+                 << " attempted " << length;
   }
   CHECK(mr) << "InsertMemoryRegion failed for " << allocator_name;
 }
