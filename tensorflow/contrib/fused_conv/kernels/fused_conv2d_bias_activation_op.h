@@ -22,11 +22,11 @@ limitations under the License.
 #include "tensorflow/core/util/activation_mode.h"
 #include "tensorflow/core/util/tensor_format.h"
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/contrib/fused_conv/kernels/fused_conv_ops_gpu.h"
 #include "tensorflow/core/platform/stream_executor.h"
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA  || TENSORFLOW_USE_ROCM
 
 namespace tensorflow {
 
@@ -45,7 +45,7 @@ class LaunchFusedConv2DBiasActivationOp {
               FilterTensorFormat filter_format, Tensor* output);
 };
 
-#ifdef GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 template <typename T, typename BiasType, typename ScaleType>
 class LaunchFusedConv2DBiasActivationOp<Eigen::GpuDevice, T, BiasType,
                                         ScaleType> {
@@ -58,7 +58,7 @@ class LaunchFusedConv2DBiasActivationOp<Eigen::GpuDevice, T, BiasType,
               ActivationMode activation_mode, TensorFormat data_format,
               FilterTensorFormat filter_format, Tensor* output);
 };
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow
 

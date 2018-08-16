@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #define EIGEN_USE_GPU
 #endif  // GOOGLE_CUDA
 
@@ -33,12 +33,17 @@ limitations under the License.
 #include "tensorflow/core/util/padding.h"
 #include "tensorflow/core/util/use_cudnn.h"
 
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+
 #if GOOGLE_CUDA
 #include "cuda/include/cudnn.h"
+#endif
+
 #include "tensorflow/core/kernels/conv_ops_gpu.h"
 #include "tensorflow/core/platform/stream_executor.h"
 #include "tensorflow/core/util/activation_mode.h"
-#endif  // GOOGLE_CUDA
+
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace tensorflow {
 
@@ -249,7 +254,7 @@ class FusedConv2DBiasActivationOp : public OpKernel {
   TF_DISALLOW_COPY_AND_ASSIGN(FusedConv2DBiasActivationOp);
 };
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 namespace dnn = se::dnn;
 
 // A dummy type to group forward convolution autotune results together.
@@ -671,6 +676,6 @@ REGISTER_KERNEL_BUILDER(
         .HostMemory("side_input_scale"),
     FusedConv2DBiasActivationOp<GPUDevice, qint8, float, float>);
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 }  // namespace tensorflow

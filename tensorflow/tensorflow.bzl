@@ -1415,6 +1415,7 @@ def tf_custom_op_library(name, srcs=[], gpu_srcs=[], deps=[], linkopts=[]):
   ]
   rocm_deps = [
       clean_dep("//tensorflow/core:stream_executor_headers_lib"),
+      "@local_config_rocm//rocm:rocm_headers",
   ]
   deps = deps + tf_custom_op_library_additional_deps()
   if gpu_srcs:

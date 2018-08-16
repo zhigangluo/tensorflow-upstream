@@ -24,6 +24,9 @@ load("//tensorflow:tensorflow.bzl", "tf_gen_op_libs")
 load("//tensorflow:tensorflow.bzl", "tf_gen_op_wrapper_py")
 load("//tensorflow:tensorflow.bzl", "tf_custom_op_py_library")
 
+load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda", "if_cuda_is_configured")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm", "if_rocm_is_configured")
+
 tf_custom_op_py_library(
     name = "fused_conv_py",
     srcs = ["__init__.py"] + glob(["python/ops/*.py"]),
@@ -75,8 +78,9 @@ tf_kernel_library(
         "//tensorflow/core/kernels:gpu_util_hdrs",
         "//tensorflow/core/kernels:ops_util_hdrs",
         "//third_party/eigen3",
-        "@local_config_cuda//cuda:cudnn_header",
-    ],
+        ] + if_cuda_is_configured([
+            "@local_config_cuda//cuda:cudnn_header",]
+        ),
     alwayslink = 1,
 )
 
@@ -95,8 +99,9 @@ tf_custom_op_library(
         "//tensorflow/core/kernels:conv_ops_gpu_hdrs",
         "//tensorflow/core/kernels:gpu_util_hdrs",
         "//tensorflow/core/kernels:ops_util_hdrs",
-        "@local_config_cuda//cuda:cudnn_header",
-    ],
+        ] + if_cuda_is_configured([
+            "@local_config_cuda//cuda:cudnn_header",]
+        ),
 )
 
 tf_gen_op_libs(
@@ -131,7 +136,7 @@ gpu_py_test(
     ],
     tags = [
         "manual",
-        "requires_cudnn6",
+        # "requires_cudnn6",
     ],
 )
 
