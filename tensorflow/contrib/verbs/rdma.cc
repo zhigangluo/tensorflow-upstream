@@ -1878,8 +1878,9 @@ void RdmaMemoryMgr::InsertMemoryRegion(void* addr, size_t length,
     auto iter = std::upper_bound(mrs_.begin(), mrs_.end(), addr, &Comparator);
     mrs_.insert(iter, {mr, &MRDeleter});
   } else {
-    LOG(WARNING) << "Cannot register memory region";
+    LOG(WARNING) << "Cannot register memory region: " << std::strerror(errno);
   }
+  CHECK(mr) << "InsertMemoryRegion failed for " << allocator_name;
 }
 
 void RdmaMemoryMgr::EvictMemoryRegion(void* addr, size_t length) {
