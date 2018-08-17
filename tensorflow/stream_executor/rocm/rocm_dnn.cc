@@ -95,6 +95,7 @@ string ToString(miopenStatus_t status) {
 
 namespace wrap {
 
+  /* delete 
 static port::ThreadPool* InitMIOpenThreadpool() {
   port::ThreadPool* miopen_threadpool_;
   port::ThreadOptions options;
@@ -115,7 +116,8 @@ static port::ThreadPool* GetROCmThreadpool() {
   static port::ThreadPool* miopen_threadpool = InitMIOpenThreadpool();
   return miopen_threadpool;
 }
-
+  */
+  
 #define PERFTOOLS_GPUTOOLS_MIOPEN_WRAP(__name)                      \
   struct WrapperShim__##__name {                                   \
     template <typename... Args>                                    \
@@ -185,8 +187,27 @@ static port::ThreadPool* GetROCmThreadpool() {
   __macro(miopenGetRNNLayerParamSize)                      \
   __macro(miopenGetRNNLayerBiasOffset)                     \
   __macro(miopenGetRNNLayerBiasSize)                       \
-  __macro(miopenGetRNNParamsDescriptor)
+  __macro(miopenGetRNNParamsDescriptor)			   \
+  __macro(miopenCreateActivationDescriptor)		   \
+  __macro(miopenDestroyActivationDescriptor)		   \
+  __macro(miopenSetActivationDescriptor)		   \
+  __macro(miopenCreateFusionPlan)			   \
+  __macro(miopenDestroyFusionPlanDescriptor)		   \
+  __macro(miopenCompileFusionPlan)			   \
+  __macro(miopenExecuteFusionPlan)			   \
+  __macro(miopenCreateOpConvForward)			   \
+  __macro(miopenCreateOpBiasForward)			   \
+  __macro(miopenCreateOpActivationForward)		   \
+  __macro(miopenGetActivationDescriptor)		   \
+  __macro(miopenCreateOperatorArgs)			   \
+  __macro(miopenDestroyOperatorArgs)			   \
+  __macro(miopenSetOpArgsConvForward)			   \
+  __macro(miopenSetOpArgsBiasForward)			   \
+  __macro(miopenSetOpArgsActivForward)
+  
+  
 
+  
 // clang-format on
 
 MIOPEN_DNN_ROUTINE_EACH(PERFTOOLS_GPUTOOLS_MIOPEN_WRAP)
@@ -592,6 +613,264 @@ class ScopedNormalizeDescriptor {
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedNormalizeDescriptor);
 };
 
+class ScopedActivationDescriptor {
+ public:
+  ScopedActivationDescriptor(ROCMExecutor* parent,
+			     dnn::ActivationMode activation_mode)
+    : parent_(parent)
+    , handle_(nullptr) {
+    
+    miopenStatus_t status = wrap::miopenCreateActivationDescriptor(parent_, &handle_);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenCreateActivationDescriptor failed: "
+		 << ToString(status);
+    } else {
+      miopenActivationMode_t miopen_activation_mode = miopenActivationPASTHRU; 
+      double alpha = 0;
+      double beta = 0;
+      double gamma = 0;
+  
+      switch (activation_mode) {
+    
+      case dnn::ActivationMode::kNone:
+	miopen_activation_mode = miopenActivationPASTHRU;
+	break;
+    
+      case dnn::ActivationMode::kSigmoid:
+	miopen_activation_mode = miopenActivationLOGISTIC;
+	break;
+    
+      case dnn::ActivationMode::kRelu:
+	miopen_activation_mode = miopenActivationRELU;
+	break;
+    
+      case dnn::ActivationMode::kRelu6:
+	miopen_activation_mode = miopenActivationRELU;
+	alpha = 6.0;
+	break;
+    
+      case dnn::ActivationMode::kTanh:
+	miopen_activation_mode = miopenActivationTANH;
+	break;
+      
+      default:
+	LOG(FATAL) << "Activation mode (" << dnn::ActivationModeString(activation_mode)
+		   << ") not yet implemented";
+	break;
+      }
+  
+      status = wrap::miopenSetActivationDescriptor(parent_, handle_, miopen_activation_mode, alpha, beta, gamma);
+      if (status != miopenStatusSuccess) {
+	LOG(FATAL) << "call to miopenSetActivationDescriptor failed: "
+		   << ToString(status);
+      }
+    }
+  }
+
+  ~ScopedActivationDescriptor() {
+    miopenStatus_t status = wrap::miopenDestroyActivationDescriptor(parent_, handle_);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenDestroyActivationDescriptor failed: "
+		 << ToString(status);
+    }
+  }
+  
+  miopenActivationDescriptor_t handle() const { return handle_; }
+
+ private:
+  ROCMExecutor* parent_;         // Parent executor. Not owned.
+  miopenActivationDescriptor_t handle_;  // Owned.
+
+  SE_DISALLOW_COPY_AND_ASSIGN(ScopedActivationDescriptor);
+};
+
+
+class ScopedFusionPlanBase {
+  public:
+
+  ScopedFusionPlanBase(ROCMExecutor* parent,
+		       miopenHandle_t miopen_handle,
+		       const miopenFusionDirection_t fuse_direction,
+		       const miopenTensorDescriptor_t input_descriptor)
+    : parent_(parent)
+    , miopen_handle_(miopen_handle)
+    , fusion_plan_(nullptr)
+    , fusion_args_(nullptr) {
+    
+    miopenStatus_t status = wrap::miopenCreateFusionPlan(parent_, &fusion_plan_, fuse_direction, input_descriptor);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenCreateFusionPlan failed: "
+		 << ToString(status);
+    }
+    
+    status = wrap::miopenCreateOperatorArgs(parent_, &fusion_args_);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenCreateOperatorArgs failed: "
+		 << ToString(status);
+    }
+  }
+  
+  virtual ~ScopedFusionPlanBase() {
+
+    miopenStatus_t status = wrap::miopenDestroyFusionPlanDescriptor(parent_, fusion_plan_);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenDestroyFusionPlanDescriptor failed: "
+		 << ToString(status);
+    }
+
+    status = wrap::miopenDestroyOperatorArgs(parent_, fusion_args_);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenDestroyFusionPlanDescriptor failed: "
+		 << ToString(status);
+    }
+  }
+
+  miopenStatus_t compile() {
+    // once we have this code functionally working 
+    // we need to implement a lookup mechanism here to avoid recompilation where applicable
+    return wrap::miopenCompileFusionPlan(parent_, miopen_handle_, fusion_plan_);
+  }
+
+  miopenStatus_t execute(miopenTensorDescriptor_t input_descriptor, const void* input_data,
+			 miopenTensorDescriptor_t output_descriptor, void* output_data) {
+
+    return wrap::miopenExecuteFusionPlan(parent_, miopen_handle_, fusion_plan_,
+					 input_descriptor, input_data,
+					 output_descriptor, output_data, fusion_args_);
+  }
+  
+ protected:
+
+  miopenStatus_t set_convolution_args(miopenFusionOpDescriptor_t conv_op,
+				      const float* alpha, const float* beta, const void* data) {
+    miopenStatus_t status =
+      wrap::miopenSetOpArgsConvForward(parent_, fusion_args_, conv_op, alpha, beta, data);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenSetOpArgsConvForward failed: "
+		 << ToString(status);
+    }
+    return status;
+  }
+  
+  miopenStatus_t set_bias_args(miopenFusionOpDescriptor_t bias_op,
+			       const float* alpha, const float* beta, const void* data) {
+    miopenStatus_t status =
+      wrap::miopenSetOpArgsBiasForward(parent_, fusion_args_, bias_op, alpha, beta, data);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenSetOpArgsBiasForward failed: "
+		 << ToString(status);
+    }
+    return status;
+  }
+  
+  miopenStatus_t set_activation_args(miopenFusionOpDescriptor_t actv_op,
+				     float* alpha, float* beta,
+				     double activ_alpha, double activ_beta, double activ_gamma) {
+    miopenStatus_t status =
+      wrap::miopenSetOpArgsActivForward(parent_, fusion_args_, actv_op,
+					alpha, beta, activ_alpha, activ_beta, activ_gamma);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenSetOpArgsActivForward failed: "
+		 << ToString(status);
+    }
+    return status;
+  }
+  
+  ROCMExecutor* parent_;         // Parent executor. Not owned.
+  miopenHandle_t miopen_handle_;  // Reference pointer. Not owned
+  miopenFusionPlanDescriptor_t fusion_plan_;  // Owned.
+  miopenOperatorArgs_t fusion_args_; // Owned.
+  
+  SE_DISALLOW_COPY_AND_ASSIGN(ScopedFusionPlanBase);
+};
+
+
+  
+class ScopedFusionPlanConvBiasActv : public ScopedFusionPlanBase {
+ public:
+
+  ScopedFusionPlanConvBiasActv(ROCMExecutor* parent,
+			       miopenHandle_t miopen_handle,
+			       miopenTensorDescriptor_t input_descriptor,
+			       miopenConvolutionDescriptor_t conv_descriptor,
+			       miopenTensorDescriptor_t filter_descriptor,
+			       miopenTensorDescriptor_t bias_descriptor,
+			       miopenActivationDescriptor_t activation_descriptor
+			       )
+    : ScopedFusionPlanBase(parent, miopen_handle, miopenVerticalFusion, input_descriptor)
+    , conv_op_(nullptr)
+    , bias_op_(nullptr)
+    , actv_op_(nullptr)
+  {
+    miopenStatus_t status =
+      wrap::miopenCreateOpConvForward(parent_, fusion_plan_, &conv_op_, conv_descriptor, filter_descriptor);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenCreateOpConvForward failed: "
+		 << ToString(status);
+    }
+
+    status = wrap::miopenCreateOpBiasForward(parent_, fusion_plan_, &bias_op_, bias_descriptor); 
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenCreateOpBiasForward failed: "
+		 << ToString(status);
+    }
+
+    miopenActivationMode_t activation_mode;
+    double alpha, beta, gamma;
+    status = wrap::miopenGetActivationDescriptor(parent_, activation_descriptor, &activation_mode, &alpha, &beta, &gamma);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenGetActivationDescriptor failed: "
+		 << ToString(status);
+    }
+    
+    status = wrap::miopenCreateOpActivationForward(parent_, fusion_plan_, &actv_op_, activation_mode); 
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenCreateOpActivationForward failed: "
+		 << ToString(status);
+    }
+  }
+
+  miopenStatus_t set_convolution_args(const void* filter_data) {
+    float alpha = 1.0;
+    float beta = 0.0;
+    return ScopedFusionPlanBase::set_convolution_args(conv_op_, &alpha, &beta, filter_data);
+  }
+  
+  miopenStatus_t set_bias_args(const void* bias_data) {
+    float alpha = 1.0;
+    float beta = 0.0;
+    return ScopedFusionPlanBase::set_bias_args(bias_op_, &alpha, &beta, bias_data);
+  }
+  
+  miopenStatus_t set_activation_args(miopenActivationDescriptor_t activation_descriptor) {
+    miopenActivationMode_t activ_mode;
+    double activ_alpha, activ_beta, activ_gamma;
+    miopenStatus_t status = wrap::miopenGetActivationDescriptor(parent_, activation_descriptor,
+								&activ_mode, &activ_alpha, &activ_beta, &activ_gamma);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenGetActivationDescriptor failed: "
+		 << ToString(status);
+    }
+
+    float alpha = 1.0;
+    float beta = 0.0;
+
+    return ScopedFusionPlanBase::set_activation_args(actv_op_, &alpha, &beta, activ_alpha, activ_beta, activ_gamma);
+  }
+  
+  ~ScopedFusionPlanConvBiasActv() {
+    // dont need to call destroy for either the conv_op_, bias_op_, or actv_op_.
+    // they are owned by the fusion plan once they are added to the fusion plan
+  }
+  
+ private:
+  miopenFusionOpDescriptor_t conv_op_;
+  miopenFusionOpDescriptor_t bias_op_;
+  miopenFusionOpDescriptor_t actv_op_;
+  
+  SE_DISALLOW_COPY_AND_ASSIGN(ScopedFusionPlanConvBiasActv);
+};
+
 namespace {
 miopenDataType_t ToMIOpenDataType(
     dnn::DataType data_type,
@@ -646,6 +925,7 @@ miopenRNNMode_t ToMIOpenRnnMode(dnn::RnnMode rnn_mode) {
   }
 }
 
+  /* delete  
 int MIOpenDataTypeToByteSize(miopenDataType_t data_type) {
   switch (data_type) {
     case miopenFloat:
@@ -656,7 +936,8 @@ int MIOpenDataTypeToByteSize(miopenDataType_t data_type) {
       LOG(FATAL) << "Invalid DNN data type: " << static_cast<int>(data_type);
   }
 }
-
+  */
+  
 template <typename Base>
 class MixinBase : public Base {};
 template <>
@@ -2083,42 +2364,176 @@ bool MIOpenSupport::DoConvolve(
       scratch_allocator, algorithm_config, output_profile_result);
 }
 
+template <typename Type, typename BiasType, typename ScaleType>
+bool MIOpenSupport::DoFusedConvolveImpl(
+    Stream* stream,
+    int miopen_type,  // Actually miopenDataType_t.
+    const dnn::BatchDescriptor& conv_input_descriptor,
+    const DeviceMemory<Type>& conv_input_data,
+    ScaleType conv_input_scale,
+    const dnn::FilterDescriptor& filter_descriptor,
+    const DeviceMemory<Type>& filter_data,
+    const dnn::ConvolutionDescriptor& convolution_descriptor,
+    const DeviceMemory<Type>& side_input_data,
+    ScaleType side_input_scale,
+    const dnn::BatchDescriptor& bias_descriptor,
+    const DeviceMemory<BiasType>& biases,
+    dnn::ActivationMode activation_mode,
+    const dnn::BatchDescriptor& output_descriptor,
+    DeviceMemory<Type>* output_data,
+    ScratchAllocator* scratch_allocator,
+    const dnn::AlgorithmConfig& algorithm_config,
+    dnn::ProfileResult* output_profile_result) {
+
+  ScopedTensorDescriptor conv_input_nd{parent_, conv_input_descriptor,
+      static_cast<miopenDataType_t>(miopen_type)};
+
+  ScopedTensorDescriptor bias_nd{parent_, bias_descriptor,
+      static_cast<miopenDataType_t>(miopen_type)};
+
+  ScopedTensorDescriptor output_nd{parent_, output_descriptor,
+      static_cast<miopenDataType_t>(miopen_type)};
+
+  ScopedConvolutionDescriptor conv{parent_, convolution_descriptor,
+      static_cast<miopenDataType_t>(miopen_type)};
+
+  ScopedFilterDescriptor filter{parent_, filter_descriptor, conv_input_descriptor,
+      static_cast<miopenDataType_t>(miopen_type)};
+
+  ScopedActivationDescriptor activation_desc{parent_, activation_mode};
+  
+  ScopedFusionPlanConvBiasActv fusion_plan{parent_, ToHandle(dnn_handle_),
+      conv_input_nd.handle(), conv.handle(), filter.handle(),
+      bias_nd.handle(), activation_desc.handle()};
+  
+  const bool is_profiling = output_profile_result != nullptr;
+
+  VLOG(2) << "\nconv_input_scale = " << conv_input_scale
+          << "\nconv_input_nd.handle() = " << conv_input_nd.handle()
+          << "\nconv_input_data.opaque() = " << conv_input_data.opaque()
+          << "\nfilter.handle() = " << filter.handle()
+          << "\nfilter_data.opaque() = " << filter_data.opaque()
+          << "\nconv.handle() = " << conv.handle()
+	  // << "\nalgo = " << algo_desc.algo_id()
+          // << "\nscratch.opaque() = " << scratch.opaque()
+          // << "\nscratch.size() = " << scratch.size()
+          << "\nside_input_scale = " << side_input_scale
+          << "\noutput_nd.handle() = " << output_nd.handle()
+          // << "\nside_input_data_ptr = " << side_input_data_ptr
+          << "\nbias_nd.handle() = " << bias_nd.handle()
+          << "\nbiases.opaque() = " << biases.opaque()
+          << "\nactivation_desc.handle() = " << activation_desc.handle()
+          << "\noutput_nd.handle() = " << output_nd.handle()
+          << "\noutput_data->opaque() = " << output_data->opaque();
+  
+  std::unique_ptr<ROCMTimer> timer;
+  if (is_profiling) {
+    timer.reset(new ROCMTimer(parent_));
+    timer->Init();
+    // The start and stop of the timer should be as close to the MIOpen call as
+    // possible. It is still possible for other threads to issue workload on
+    // to this stream. So it could take multiple profiling measurements.
+    timer->Start(AsROCMStream(stream));
+  }
+  
+  miopenStatus_t status = fusion_plan.compile();
+  if (status != miopenStatusSuccess) {
+    LOG(FATAL) << "call to miopenCompileFusionPlan (CBA) failed: "
+	       << ToString(status);
+  }
+
+  fusion_plan.set_convolution_args(filter_data.opaque());
+  
+  fusion_plan.set_bias_args(biases.opaque());
+
+  fusion_plan.set_activation_args(activation_desc.handle());
+  
+  status = fusion_plan.execute(conv_input_nd.handle(), conv_input_data.opaque(),
+			       output_nd.handle(), output_data->opaque());
+  if (status != miopenStatusSuccess) {
+    LOG(FATAL) << "call to miopenExecuteFusionPlan (CBA) failed: "
+	       << ToString(status);
+  }
+  
+  if (is_profiling) {
+    timer->Stop(AsROCMStream(stream));
+    if (status == miopenStatusSuccess) {
+      // output_profile_result->set_algorithm(algo_desc);
+      output_profile_result->set_elapsed_time_in_ms(timer->GetElapsedMilliseconds());
+    }
+    timer->Destroy();
+  }
+  
+  if (status != miopenStatusSuccess) {
+    // Silently return when we are profiling.
+    if (!is_profiling) {
+      LOG(FATAL) << "failed to enqueue fused-convolution on stream: "
+		 << ToString(status);
+    }
+  }
+  
+  return true;
+}
+
 bool MIOpenSupport::DoFusedConvolve(
-    Stream* stream, const dnn::BatchDescriptor& conv_input_descriptor,
-    const DeviceMemory<double>& conv_input_data, double conv_input_scale,
+    Stream* stream,
+    const dnn::BatchDescriptor& conv_input_descriptor,
+    const DeviceMemory<double>& conv_input_data,
+    double conv_input_scale,
     const dnn::FilterDescriptor& filter_descriptor,
     const DeviceMemory<double>& filter_data,
     const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const DeviceMemory<double>& side_input_data, double side_input_scale,
+    const DeviceMemory<double>& side_input_data,
+    double side_input_scale,
     const dnn::BatchDescriptor& bias_descriptor,
-    const DeviceMemory<double>& biases, dnn::ActivationMode activation_mode,
+    const DeviceMemory<double>& biases,
+    dnn::ActivationMode activation_mode,
     const dnn::BatchDescriptor& output_descriptor,
-    DeviceMemory<double>* output_data, ScratchAllocator* scratch_allocator,
+    DeviceMemory<double>* output_data,
+    ScratchAllocator* scratch_allocator,
     const dnn::AlgorithmConfig& algorithm_config,
     dnn::ProfileResult* output_profile_result) {
-  LOG(ERROR) << "fused convolve not implemented yet";
-  return false;
+
+    LOG(ERROR) << "Fused-Convolution not yet implemented for float64 datatype";
+    return false;
 }
 
 bool MIOpenSupport::DoFusedConvolve(
-    Stream* stream, const dnn::BatchDescriptor& conv_input_descriptor,
-    const DeviceMemory<float>& conv_input_data, float conv_input_scale,
+    Stream* stream,
+    const dnn::BatchDescriptor& conv_input_descriptor,
+    const DeviceMemory<float>& conv_input_data,
+    float conv_input_scale,
     const dnn::FilterDescriptor& filter_descriptor,
     const DeviceMemory<float>& filter_data,
     const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const DeviceMemory<float>& side_input_data, float side_input_scale,
+    const DeviceMemory<float>& side_input_data,
+    float side_input_scale,
     const dnn::BatchDescriptor& bias_descriptor,
-    const DeviceMemory<float>& biases, dnn::ActivationMode activation_mode,
+    const DeviceMemory<float>& biases,
+    dnn::ActivationMode activation_mode,
     const dnn::BatchDescriptor& output_descriptor,
-    DeviceMemory<float>* output_data, ScratchAllocator* scratch_allocator,
+    DeviceMemory<float>* output_data,
+    ScratchAllocator* scratch_allocator,
     const dnn::AlgorithmConfig& algorithm_config,
     dnn::ProfileResult* output_profile_result) {
-  LOG(ERROR) << "fused convolve not implemented yet";
-  return false;
+  
+  return DoFusedConvolveImpl<float, float, float>(
+	  stream, miopenFloat,
+	  conv_input_descriptor, conv_input_data, conv_input_scale,
+          filter_descriptor, filter_data,
+	  convolution_descriptor,
+          side_input_data, side_input_scale,
+	  bias_descriptor, biases,
+          activation_mode,
+	  output_descriptor, output_data,
+	  scratch_allocator,
+          algorithm_config,
+	  output_profile_result);
 }
 
 bool MIOpenSupport::DoFusedConvolve(
-    Stream* stream, const dnn::BatchDescriptor& conv_input_descriptor,
+    Stream* stream,
+    const dnn::BatchDescriptor& conv_input_descriptor,
     const DeviceMemory<Eigen::half>& conv_input_data,
     float conv_input_scale,
     const dnn::FilterDescriptor& filter_descriptor,
@@ -2134,24 +2549,41 @@ bool MIOpenSupport::DoFusedConvolve(
     ScratchAllocator* scratch_allocator,
     const dnn::AlgorithmConfig& algorithm_config,
     dnn::ProfileResult* output_profile_result) {
-  LOG(ERROR) << "fused convolve not implemented yet";
-  return false;
+  
+  return DoFusedConvolveImpl<Eigen::half, Eigen::half, float>(
+          stream, miopenHalf,
+	  conv_input_descriptor, conv_input_data, conv_input_scale,
+          filter_descriptor, filter_data,
+	  convolution_descriptor,
+          side_input_data, side_input_scale,
+	  bias_descriptor, biases,
+          activation_mode,
+	  output_descriptor, output_data,
+	  scratch_allocator,
+          algorithm_config,
+	  output_profile_result);
 }
 
 bool MIOpenSupport::DoFusedConvolve(
-    Stream* stream, const dnn::BatchDescriptor& conv_input_descriptor,
-    const DeviceMemory<int8>& conv_input_data, float conv_input_scale,
+    Stream* stream,
+    const dnn::BatchDescriptor& conv_input_descriptor,
+    const DeviceMemory<int8>& conv_input_data,
+    float conv_input_scale,
     const dnn::FilterDescriptor& filter_descriptor,
     const DeviceMemory<int8>& filter_data,
     const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const DeviceMemory<int8>& side_input_data, float side_input_scale,
+    const DeviceMemory<int8>& side_input_data,
+    float side_input_scale,
     const dnn::BatchDescriptor& bias_descriptor,
-    const DeviceMemory<float>& biases, dnn::ActivationMode activation_mode,
+    const DeviceMemory<float>& biases,
+    dnn::ActivationMode activation_mode,
     const dnn::BatchDescriptor& output_descriptor,
-    DeviceMemory<int8>* output_data, ScratchAllocator* scratch_allocator,
+    DeviceMemory<int8>* output_data,
+    ScratchAllocator* scratch_allocator,
     const dnn::AlgorithmConfig& algorithm_config,
     dnn::ProfileResult* output_profile_result) {
-  LOG(ERROR) << "fused convolve not implemented yet";
+
+  LOG(ERROR) << "Fused-Convolution not yet implemented for int8 datatype";
   return false;
 }
 
