@@ -1499,7 +1499,6 @@ void RdmaTensorResponse::RecvHandler(Rendezvous::ParsedKey parsed,
       if ((in.TotalBytes() > 0) && !meta_data_changed_ &&
           (RdmaMemoryMgr::Singleton().FindMemoryRegion(
                (void*)DMAHelper::base(&in), in.TotalBytes()) != nullptr)) {
-        LOG(INFO) << "RdmaTensorResponse::RecvHandler can_memcpy && DMAHelper MR found";
         StreamGPUOp(src_dev_, send_dev_context,
                     [this, in, proto, is_dead](const Status& s) {
                       Send(in, proto, is_dead, s);
@@ -1519,14 +1518,12 @@ void RdmaTensorResponse::RecvHandler(Rendezvous::ParsedKey parsed,
       copy = Tensor(alloc, in.dtype(), in.shape());
       CountCopies(rm_.name_, (void*)DMAHelper::base(&in),
                   (void*)DMAHelper::base(&copy), in.TotalBytes(), true);
-      LOG(INFO) << "RdmaTensorResponse::RecvHandler can_memcpy && copy to CPU first";
       GPUUtil::CopyGPUTensorToCPU(
           src_dev_, send_dev_context, &in, &copy,
           [this, copy, proto, is_dead](const Status& s) {
             Send(copy, proto, is_dead, s);
           });
     } else {
-      LOG(INFO) << "RdmaTensorResponse::RecvHandler SetProtoFromGPU";
       GPUUtil::SetProtoFromGPU(
           in, src_dev_, send_args.device_context, &proto, is_dead,
           [this, in, proto, is_dead](const Status& s) mutable {
