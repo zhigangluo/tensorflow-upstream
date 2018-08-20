@@ -286,13 +286,14 @@ REGISTER_MEM_ALLOCATOR("BFCRdmaAllocator", 101, BFCRdmaAllocator);
 void RdmaMgr::InitAllocators() {
   RdmaMemoryMgr::Singleton().pd_ = rdma_adapter_->pd_;
 
-  Allocator* allocators[] = {
+  std::vector<Allocator*> allocators;
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
-    ProcessState::singleton()->GetGPUHostAllocator(0),
-    ProcessState::singleton()->GetCPUAllocator(0),
+  if (IsGDRAvailable()) {
+    allocators.push_back(ProcessState::singleton()->GetGPUHostAllocator(0));
+  }
+  allocators.push_back(ProcessState::singleton()->GetCPUAllocator(0));
 #endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
-    cpu_allocator(),
-  };
+  allocators.push_back(cpu_allocator());
 
   using namespace std::placeholders;
 

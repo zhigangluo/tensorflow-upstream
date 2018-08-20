@@ -46,6 +46,8 @@ limitations under the License.
 
 namespace tensorflow {
 
+extern bool IsGDRAvailable();
+
 #define RoCE_V2 "RoCE v2"
 
 #define PAD_SIZE 1024
@@ -1499,6 +1501,7 @@ void RdmaTensorResponse::RecvHandler(Rendezvous::ParsedKey parsed,
       if ((in.TotalBytes() > 0) && !meta_data_changed_ &&
           (RdmaMemoryMgr::Singleton().FindMemoryRegion(
                (void*)DMAHelper::base(&in), in.TotalBytes()) != nullptr)) {
+        LOG(INFO) << "RdmaTensorResponse::RecvHandler can_memcpy && DMAHelper MR found";
         StreamGPUOp(src_dev_, send_dev_context,
                     [this, in, proto, is_dead](const Status& s) {
                       Send(in, proto, is_dead, s);
@@ -1509,16 +1512,23 @@ void RdmaTensorResponse::RecvHandler(Rendezvous::ParsedKey parsed,
       // The tensor must be copied from GPU to CPU, because either:
       // 1. The tensor is located on a non GDR compatible GPU.
       // 2. The tensor's meta-data has changed.
-      Allocator* alloc = ProcessState::singleton()->GetGPUHostAllocator(0);
+      Allocator* alloc;
+      if (IsGDRAvailable()) {
+        alloc = ProcessState::singleton()->GetGPUHostAllocator(0);
+      } else {
+        alloc = ProcessState::singleton()->GetCPUAllocator(0);
+      }
       copy = Tensor(alloc, in.dtype(), in.shape());
       CountCopies(rm_.name_, (void*)DMAHelper::base(&in),
                   (void*)DMAHelper::base(&copy), in.TotalBytes(), true);
+      LOG(INFO) << "RdmaTensorResponse::RecvHandler can_memcpy && copy to CPU first";
       GPUUtil::CopyGPUTensorToCPU(
           src_dev_, send_dev_context, &in, &copy,
           [this, copy, proto, is_dead](const Status& s) {
             Send(copy, proto, is_dead, s);
           });
     } else {
+      LOG(INFO) << "RdmaTensorResponse::RecvHandler SetProtoFromGPU";
       GPUUtil::SetProtoFromGPU(
           in, src_dev_, send_args.device_context, &proto, is_dead,
           [this, in, proto, is_dead](const Status& s) mutable {
@@ -2004,9 +2014,14 @@ bool RdmaTensorRequest::AllocateTensors() {
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
     if (mr_ == nullptr) {
       // Can't RDMA directly to result. Use a proxy.
+      Allocator* alloc;
+      if (IsGDRAvailable()) {
+        alloc = ProcessState::singleton()->GetGPUHostAllocator(0);
+      } else {
+        alloc = ProcessState::singleton()->GetCPUAllocator(0);
+      }
       proxy_tensor_ =
-          new Tensor(ProcessState::singleton()->GetGPUHostAllocator(0),
-                     result_tensor_->dtype(), result_tensor_->shape());
+          new Tensor(alloc, result_tensor_->dtype(), result_tensor_->shape());
       rdma_addr_ = DMAHelper::base(proxy_tensor_);
       mr_ =
           RdmaMemoryMgr::Singleton().FindMemoryRegion(rdma_addr_, tensor_size);
