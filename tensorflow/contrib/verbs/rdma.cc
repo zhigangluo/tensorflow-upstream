@@ -46,8 +46,6 @@ limitations under the License.
 
 namespace tensorflow {
 
-extern bool IsGDRAvailable();
-
 #define RoCE_V2 "RoCE v2"
 
 #define PAD_SIZE 1024
@@ -1513,7 +1511,7 @@ void RdmaTensorResponse::RecvHandler(Rendezvous::ParsedKey parsed,
       // 1. The tensor is located on a non GDR compatible GPU.
       // 2. The tensor's meta-data has changed.
       Allocator* alloc;
-      if (IsGDRAvailable()) {
+      if (RdmaMemoryMgr::Singleton().IsGDRAvailable()) {
         alloc = ProcessState::singleton()->GetGPUHostAllocator(0);
       } else {
         alloc = ProcessState::singleton()->GetCPUAllocator(0);
@@ -1937,6 +1935,30 @@ const TensorMetaData* RdmaMemoryMgr::SetTensorMetaData(
   return &meta_data;
 }
 
+bool RdmaMemoryMgr::IsGDRAvailableCheck() {
+#if defined(__APPLE__)
+  return false;
+#elif defined(PLATFORM_WINDOWS)
+  return false;
+#elif TENSORFLOW_USE_ROCM
+  const char *value = getenv("ROCM_USE_GDR");
+  string rocm_use_gdr = value == nullptr ? "no" : value;
+  VLOG(0) << "ROCM_USE_GDR is: \"" << rocm_use_gdr << "\"";
+  return !rocm_use_gdr.empty() && rocm_use_gdr[0] == 'y';
+#else
+  std::ifstream ifs("/proc/modules");
+  string line;
+  while (std::getline(ifs, line)) {
+    auto sep = line.find(' ');
+    CHECK_NE(sep, std::string::npos);
+    if (line.substr(0, sep) == "nv_peer_mem") {
+      return true;
+    }
+  }
+  return false;
+#endif
+}
+
 //*****************************************************************************
 // RdmaTensorRequest
 //*****************************************************************************
@@ -2015,7 +2037,7 @@ bool RdmaTensorRequest::AllocateTensors() {
     if (mr_ == nullptr) {
       // Can't RDMA directly to result. Use a proxy.
       Allocator* alloc;
-      if (IsGDRAvailable()) {
+      if (RdmaMemoryMgr::Singleton().IsGDRAvailable()) {
         alloc = ProcessState::singleton()->GetGPUHostAllocator(0);
       } else {
         alloc = ProcessState::singleton()->GetCPUAllocator(0);

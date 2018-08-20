@@ -197,30 +197,6 @@ RdmaChannel* RdmaMgr::FindChannel(const string& name) {
   return iter->second;
 }
 
-bool IsGDRAvailable() {
-#if defined(__APPLE__)
-  return false;
-#elif defined(PLATFORM_WINDOWS)
-  return false;
-#elif TENSORFLOW_USE_ROCM
-  const char *value = getenv("ROCM_USE_GDR");
-  string rocm_use_gdr = value == nullptr ? "no" : value;
-  VLOG(0) << "ROCM_USE_GDR is: \"" << rocm_use_gdr << "\"";
-  return !rocm_use_gdr.empty() && rocm_use_gdr[0] == 'y';
-#else
-  std::ifstream ifs("/proc/modules");
-  string line;
-  while (std::getline(ifs, line)) {
-    auto sep = line.find(' ');
-    CHECK_NE(sep, std::string::npos);
-    if (line.substr(0, sep) == "nv_peer_mem") {
-      return true;
-    }
-  }
-  return false;
-#endif
-}
-
 int TryToReadNumaNode(ibv_device* device) {
 #if defined(__APPLE__)
   LOG(INFO) << "OS X does not support NUMA - returning NUMA node 0";
@@ -288,7 +264,7 @@ void RdmaMgr::InitAllocators() {
 
   std::vector<Allocator*> allocators;
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
-  if (IsGDRAvailable()) {
+  if (RdmaMemoryMgr::Singleton().IsGDRAvailable()) {
     allocators.push_back(ProcessState::singleton()->GetGPUHostAllocator(0));
   }
   allocators.push_back(ProcessState::singleton()->GetCPUAllocator(0));
@@ -320,7 +296,7 @@ void RdmaMgr::InitAllocators() {
   }
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
-  if (IsGDRAvailable()) {
+  if (RdmaMemoryMgr::Singleton().IsGDRAvailable()) {
     // Note we don't free allocated GPU memory so there is no free visitor
     int32_t bus_id = TryToReadNumaNode(rdma_adapter_->context_->device) + 1;
 
