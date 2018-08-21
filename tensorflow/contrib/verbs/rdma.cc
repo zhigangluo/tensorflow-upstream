@@ -55,6 +55,7 @@ namespace tensorflow {
 #define REINIT_RECV_BYTE 0xD2
 #define REINIT_SEND_BYTE 0xD3
 //#define USE_CQ_NOTIFY
+//#define DEBUG_BUFFER
 
 namespace {
 
@@ -516,6 +517,7 @@ string RdmaAdapter::name() const { return string(context_->device->name); }
 // 2. IBV_WC_RDMA_WRITE (send))
 void RdmaAdapter::Process_CQ() {
   static bool maybe_checksum = !get_env_var("RDMA_DATA_VALIDATION").empty();
+#if DEBUG_BUFFER
   static bool maybe_retry = !get_env_var("RDMA_RETRY").empty();
   static bool maybe_log_send = !get_env_var("RDMA_LOG_SEND").empty();
   static bool maybe_fence = !get_env_var("RDMA_FENCE").empty();
@@ -523,6 +525,7 @@ void RdmaAdapter::Process_CQ() {
   RDMA_LOG(1) << "maybe_log_send=" << maybe_log_send;
   RDMA_LOG(1) << "maybe_fence=" << maybe_fence;
   RDMA_LOG(1) << "maybe_msync=" << maybe_msync;
+#endif
   while (true) {
 #ifdef USE_CQ_NOTIFY
     int rc;
@@ -580,6 +583,7 @@ void RdmaAdapter::Process_CQ() {
                     << MessageTypeToString(rm.type_) << " "
                     << "#" << rm.request_index_ << ": "
                     << "R##" << rm.message_index_ << ": " << rm.name_;
+#if DEBUG_BUFFER
         if (maybe_retry) {
           for (int tries=0; tries<10; ++tries) {
             if (rm.type_ >= RDMA_MESSAGE_META_DATA_UPDATE
@@ -609,9 +613,10 @@ void RdmaAdapter::Process_CQ() {
                      << "buffer id2 " << j << ": "
                      << " buffer_=" << str.str();
         }
+#endif
         // put back a recv wr.
-        rc->message_buffers_->ReleaseRecvBuffer(rmr);
-        rc->Recv();
+        //rc->message_buffers_->ReleaseRecvBuffer(rmr);
+        rc->Recv(rmr);
 
         if (rm.type_ == RDMA_MESSAGE_TENSOR_REQUEST) {
           RdmaTensorResponse* response = rc->AddTensorResponse(rm);
@@ -820,6 +825,7 @@ void RdmaChannel::Recv(const RdmaMR &rmr) {
   wr.wr_id = (uint64_t) new RdmaChannelAndMR(this, rmr);
   wr.sg_list = &sg;
   wr.num_sge = 1;
+#if DEBUG_BUFFER
   {
     uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
     uint32_t i;
@@ -830,6 +836,7 @@ void RdmaChannel::Recv(const RdmaMR &rmr) {
                 << " buffer id " << i
                 << " buffer id2 " << j;
   }
+#endif
   int rc = ibv_post_recv(qp_, &wr, &bad_wr);
   CHECK(!rc) << "Failed to post recv";
 }
@@ -940,10 +947,15 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
     uint8_t* buffer_all;
     uint8_t* buffer;
     ibv_mr* mr;
+#if DEBUG_BUFFER
     size_t the_size = PAD_SIZE*2 + RdmaMessage::kRdmaMessageBufferSize;
+#else
+    size_t the_size = RdmaMessage::kRdmaMessageBufferSize;
+#endif
 
     buffer_all = (uint8_t*)malloc(the_size);
     CHECK(buffer_all) << "Failed to allocate memory region";
+#if DEBUG_BUFFER
     for (size_t i=0; i<the_size; ++i) {
       buffer_all[i] = PAD_BYTE;
     }
@@ -953,6 +965,9 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
     }
     memcpy(&buffer[RdmaMessage::kErrorStatusStartIndex], &i, sizeof(uint32_t));
     memcpy(&buffer[RdmaMessage::kRdmaMessageBufferSize], &i, sizeof(uint32_t));
+#else
+    buffer = &buffer_all[0];
+#endif
     mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
@@ -965,6 +980,7 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
 
     buffer_all = (uint8_t*)malloc(the_size);
     CHECK(buffer_all) << "Failed to allocate memory region";
+#if DEBUG_BUFFER
     for (size_t i=0; i<the_size; ++i) {
       buffer_all[i] = PAD_BYTE;
     }
@@ -974,6 +990,9 @@ RdmaMessageBuffers::RdmaMessageBuffers(RdmaChannel* channel)
     }
     memcpy(&buffer[RdmaMessage::kErrorStatusStartIndex], &i, sizeof(uint32_t));
     memcpy(&buffer[RdmaMessage::kRdmaMessageBufferSize], &i, sizeof(uint32_t));
+#else
+    buffer = &buffer_all[0];
+#endif
     mr = ibv_reg_mr(channel_->adapter_->pd_, buffer, RdmaMessage::kRdmaMessageBufferSize,
         IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     CHECK(mr) << "Failed to register memory region";
@@ -1002,9 +1021,10 @@ RdmaMessageBuffers::~RdmaMessageBuffers() {
 // Put a task in the buffer's job queue
 void RdmaMessageBuffers::EnqueueItem(string item) {
   mutex_lock lock(mu_);
-  static bool maybe_log_send = !get_env_var("RDMA_LOG_SEND").empty();
   auto qid = qid_++;
   queue_.push(make_pair(qid,item));
+#if DEBUG_BUFFER
+  static bool maybe_log_send = !get_env_var("RDMA_LOG_SEND").empty();
   if (maybe_log_send) {
     RdmaMessage rm;
     RdmaMessage::ParseMessage(rm, item.data());
@@ -1025,6 +1045,7 @@ void RdmaMessageBuffers::EnqueueItem(string item) {
                 << ", qid=" << qid
                 << ")";
   }
+#endif
 }
 
 // Generalized Write method
@@ -1077,18 +1098,21 @@ void RdmaMessageBuffers::Write(void *thiz, RdmaChannel* channel, uint32_t imm_da
 
 // Send the next message from the buffer's job queue.
 void RdmaMessageBuffers::SendNextItem() {
+#if DEBUG_BUFFER
   static bool maybe_log_send = !get_env_var("RDMA_LOG_SEND").empty();
   static bool maybe_fence = !get_env_var("RDMA_FENCE").empty();
   static bool maybe_msync = !get_env_var("RDMA_MSYNC").empty();
+#endif
   uint32_t imm_data = RDMA_IMM_DATA_MESSAGE;
   mutex_lock lock(mu_);
   while (!queue_.empty() && !free_send_.empty()) {
     auto item = queue_.front();
-    auto qid = item.first;
     string message = item.second;
     queue_.pop();
     RdmaMR rmr = free_send_.front();
     free_send_.pop();
+#if DEBUG_BUFFER
+    auto qid = item.first;
     uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
     uint32_t i;
     uint32_t j;
@@ -1098,7 +1122,9 @@ void RdmaMessageBuffers::SendNextItem() {
                 << " message.size()=" << message.size()
                 << " buffer id " << i
                 << " buffer id2 " << j;
+#endif
     memcpy(rmr.buffer_, message.data(), message.size());
+#if DEBUG_BUFFER
     if (0 != sleep_for_memcpy) {
       sleep(sleep_for_memcpy);
     }
@@ -1135,6 +1161,7 @@ void RdmaMessageBuffers::SendNextItem() {
                   << " qid=" << qid
                   << " message.size()=" << message.size();
     }
+#endif
     Write(this, channel_, imm_data, RdmaMessage::kRdmaMessageBufferSize,
         (uint64_t)rmr.buffer_, rmr.mr_->lkey,
         0, 0, RDMA_WRITE_ID_MESSAGE, new RdmaChannelAndMR(channel_, rmr));
@@ -1142,11 +1169,14 @@ void RdmaMessageBuffers::SendNextItem() {
 }
 
 RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
+#if DEBUG_BUFFER
   static bool first_time = true;
+#endif
   mutex_lock lock(mu_);
   CHECK(!free_recv_.empty());
   RdmaMR rmr = free_recv_.front();
   free_recv_.pop();
+#if DEBUG_BUFFER
   uint8_t *b = static_cast<uint8_t*>(rmr.buffer_);
   uint32_t i;
   uint32_t j;
@@ -1166,12 +1196,14 @@ RdmaMR RdmaMessageBuffers::AcquireRecvBuffer() {
     }
     LOG(ERROR) << "AcquireRecvBuffer strange buffer_=" << str.str();
   }
+#endif
   return rmr;
 }
 
 void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
-  static bool maybe_memset = !get_env_var("RDMA_MEMSET").empty();
   mutex_lock lock(mu_);
+#if DEBUG_BUFFER
+  static bool maybe_memset = !get_env_var("RDMA_MEMSET").empty();
   if (is_message) {
     RdmaMessage rm;
     RdmaMessage::ParseMessage(rm, rmr.buffer_);
@@ -1227,12 +1259,14 @@ void RdmaMessageBuffers::ReleaseRecvBuffer(RdmaMR rmr, bool is_message) {
       b[i] = REINIT_RECV_BYTE;
     }
   }
+#endif
   free_recv_.push(rmr);
 }
 
 void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
-  static bool maybe_memset = !get_env_var("RDMA_MEMSET").empty();
   mutex_lock lock(mu_);
+#if DEBUG_BUFFER
+  static bool maybe_memset = !get_env_var("RDMA_MEMSET").empty();
   if (is_message) {
     RdmaMessage rm;
     RdmaMessage::ParseMessage(rm, rmr.buffer_);
@@ -1288,6 +1322,7 @@ void RdmaMessageBuffers::ReleaseSendBuffer(RdmaMR rmr, bool is_message) {
       b[i] = REINIT_SEND_BYTE;
     }
   }
+#endif
   free_send_.push(rmr);
 }
 
