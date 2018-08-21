@@ -161,6 +161,7 @@ class GdrMemoryManager : public RemoteMemoryManager {
   RdmaEndpointPtr listening_;
   std::atomic<bool> stopped_;
   int epfd_;
+  bool is_gdr_available_;
 
   // Server side endpoints
   // Accessed sequentially in Run() so not protected by lock
@@ -214,6 +215,7 @@ GdrMemoryManager::GdrMemoryManager(const string& host, const string& port)
       port_(port),
       listening_(nullptr, EndpointDeleter),
       stopped_(true),
+      is_gdr_available_(IsGDRAvailable()),
       next_key_(0) {}
 
 GdrMemoryManager::~GdrMemoryManager() { close(epfd_); }
@@ -277,13 +279,14 @@ Status GdrMemoryManager::Init() {
                                "cannot add server to epoll");
   }
 
-  Allocator* allocators[] = {
+  std::vector<Allocator*> allocators;
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
-    ProcessState::singleton()->GetGPUHostAllocator(0),
-    ProcessState::singleton()->GetCPUAllocator(0),
+  if (is_gdr_available_) {
+    allocators.push_back(ProcessState::singleton()->GetGPUHostAllocator(0));
+  }
+  allocators.push_back(ProcessState::singleton()->GetCPUAllocator(0));
 #endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
-    cpu_allocator(),
-  };
+  allocators.push_back(cpu_allocator());
 
   using namespace std::placeholders;
   VisitableAllocator::Visitor alloc_visitor =
@@ -310,7 +313,7 @@ Status GdrMemoryManager::Init() {
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
   VisitableAllocator::Visitor cuda_alloc_visitor =
       std::bind(&GdrMemoryManager::InsertMemoryRegion, this, _1, _2);
-  if (IsGDRAvailable()) {
+  if (is_gdr_available_) {
     // Note we don't free allocated GPU memory so there is no free visitor
     int32_t bus_id = TryToReadNumaNode(listening_->verbs->device) + 1;
     ProcessState::singleton()->AddGPUAllocVisitor(bus_id, cuda_alloc_visitor);
@@ -435,7 +438,13 @@ void GdrMemoryManager::TransportOptionsFromTensor(
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
   if (!on_host) {
-    Allocator* alloc = ProcessState::singleton()->GetGPUHostAllocator(0);
+    Allocator* alloc;
+    if (is_gdr_available_) {
+      alloc = ProcessState::singleton()->GetGPUHostAllocator(0);
+    }
+    else {
+      alloc = ProcessState::singleton()->GetCPUAllocator(0);
+    }
     Tensor* host_copy = new Tensor(alloc, tensor.dtype(), tensor.shape());
     GPUUtil::CopyGPUTensorToCPU(
         device, device_context, &tensor, host_copy,
@@ -537,7 +546,13 @@ void GdrMemoryManager::TensorFromTransportOptions(
   Tensor host_copy;
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
   if (mr == nullptr && !on_host) {
-    Allocator* alloc = ProcessState::singleton()->GetGPUHostAllocator(0);
+    Allocator* alloc;
+    if (is_gdr_available_) {
+      alloc = ProcessState::singleton()->GetGPUHostAllocator(0);
+    }
+    else {
+      alloc = ProcessState::singleton()->GetCPUAllocator(0);
+    }
     host_copy = Tensor(alloc, tensor->dtype(), tensor->shape());
     buffer = DMAHelper::buffer(&host_copy);
     addr = buffer->data();
