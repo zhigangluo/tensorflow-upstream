@@ -53,7 +53,7 @@ bool IsGDRAvailable() {
   return false;
 #elif TENSORFLOW_USE_ROCM
   const char *value = getenv("ROCM_USE_GDR");
-  string rocm_use_gdr = value == nullptr ? "yes" : value;
+  string rocm_use_gdr = value == nullptr ? "no" : value;
   VLOG(0) << "ROCM_USE_GDR is: \"" << rocm_use_gdr << "\"";
   return !rocm_use_gdr.empty() && rocm_use_gdr[0] == 'y';
 #else
