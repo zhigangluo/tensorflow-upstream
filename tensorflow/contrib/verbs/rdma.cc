@@ -1084,7 +1084,12 @@ void RdmaTensorResponse::RecvHandler(Rendezvous::ParsedKey parsed,
       // The tensor must be copied from GPU to CPU, because either:
       // 1. The tensor is located on a non GDR compatible GPU.
       // 2. The tensor's meta-data has changed.
-      Allocator* alloc = ProcessState::singleton()->GetGPUHostAllocator(0);
+      Allocator* alloc;
+      if (RdmaMemoryMgr::Singleton().IsGDRAvailable()) {
+        alloc = ProcessState::singleton()->GetGPUHostAllocator(0);
+      } else {
+        alloc = ProcessState::singleton()->GetCPUAllocator(0);
+      }
       copy = Tensor(alloc, in.dtype(), in.shape());
       CountCopies(rm_.name_, (void*)DMAHelper::base(&in),
                   (void*)DMAHelper::base(&copy), in.TotalBytes(), true);
@@ -1467,6 +1472,30 @@ const TensorMetaData* RdmaMemoryMgr::SetTensorMetaData(
   return &meta_data;
 }
 
+bool RdmaMemoryMgr::IsGDRAvailableCheck() {
+#if defined(__APPLE__)
+  return false;
+#elif defined(PLATFORM_WINDOWS)
+  return false;
+#elif TENSORFLOW_USE_ROCM
+  const char *value = getenv("ROCM_USE_GDR");
+  string rocm_use_gdr = value == nullptr ? "no" : value;
+  VLOG(0) << "ROCM_USE_GDR is: \"" << rocm_use_gdr << "\"";
+  return !rocm_use_gdr.empty() && rocm_use_gdr[0] == 'y';
+#else
+  std::ifstream ifs("/proc/modules");
+  string line;
+  while (std::getline(ifs, line)) {
+    auto sep = line.find(' ');
+    CHECK_NE(sep, std::string::npos);
+    if (line.substr(0, sep) == "nv_peer_mem") {
+      return true;
+    }
+  }
+  return false;
+#endif
+}
+
 //*****************************************************************************
 // RdmaTensorRequest
 //*****************************************************************************
@@ -1540,9 +1569,14 @@ bool RdmaTensorRequest::AllocateTensors() {
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
     if (mr_ == nullptr) {
       // Can't RDMA directly to result. Use a proxy.
+      Allocator* alloc;
+      if (RdmaMemoryMgr::Singleton().IsGDRAvailable()) {
+        alloc = ProcessState::singleton()->GetGPUHostAllocator(0);
+      } else {
+        alloc = ProcessState::singleton()->GetCPUAllocator(0);
+      }
       proxy_tensor_ =
-          new Tensor(ProcessState::singleton()->GetGPUHostAllocator(0),
-                     result_tensor_->dtype(), result_tensor_->shape());
+          new Tensor(alloc, result_tensor_->dtype(), result_tensor_->shape());
       rdma_addr_ = DMAHelper::base(proxy_tensor_);
       mr_ =
           RdmaMemoryMgr::Singleton().FindMemoryRegion(rdma_addr_, tensor_size);

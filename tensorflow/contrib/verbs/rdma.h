@@ -213,14 +213,19 @@ class RdmaMemoryMgr {
 
   struct ibv_pd* pd_;
 
+  bool IsGDRAvailable() { return gdr_available_; }
+
  protected:
-  RdmaMemoryMgr() : pd_(nullptr) {}
+  RdmaMemoryMgr() : pd_(nullptr), gdr_available_(IsGDRAvailableCheck()) {}
+  bool IsGDRAvailableCheck();
 
   static bool Comparator(const void* ptr, const MemoryRegionPtr& other) {
     return ptr < reinterpret_cast<char*>(other->addr) + other->length;
   }
 
  private:
+  bool gdr_available_;
+
   mutex tensor_meta_data_mu_;
   std::unordered_map<std::string, TensorMetaData> tensors_meta_data_;
 
