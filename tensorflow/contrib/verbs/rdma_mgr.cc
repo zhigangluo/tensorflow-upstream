@@ -263,9 +263,7 @@ void RdmaMgr::InitAllocators() {
 
   std::vector<Allocator*> allocators;
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
-  if (RdmaMemoryMgr::Singleton().IsGDRAvailable()) {
-    allocators.push_back(ProcessState::singleton()->GetGPUHostAllocator(0));
-  }
+  allocators.push_back(ProcessState::singleton()->GetGPUHostAllocator(0));
   allocators.push_back(ProcessState::singleton()->GetCPUAllocator(0));
 #endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
   allocators.push_back(cpu_allocator());
