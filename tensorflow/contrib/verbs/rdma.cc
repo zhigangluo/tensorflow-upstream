@@ -1089,7 +1089,7 @@ void RdmaTensorResponse::RecvHandler(Rendezvous::ParsedKey parsed,
       // check early that we can get the MR from the copy
       if (!RdmaMemoryMgr::Singleton().FindMemoryRegion(
             (void*)DMAHelper::base(&in), in.TotalBytes())) {
-        LOG(WARNING) << "Cannot find memory region";
+        RDMA_LOG(1) << "Cannot find memory region";
         alloc = ProcessState::singleton()->GetCPUAllocator(0);
         copy = Tensor(alloc, in.dtype(), in.shape());
       }
@@ -1212,7 +1212,7 @@ void RdmaTensorResponse::SendContent(const Tensor& in, const TensorProto& proto,
         mr_ = RdmaMemoryMgr::Singleton().FindMemoryRegion(src_addr_,
                                                           tensor_bytes);
         if (!mr_) {
-          LOG(WARNING) << "Cannot find memory region";
+          RDMA_LOG(1) << "Cannot find memory region";
           if (tensor_) {
             // was cloned, but clone used different allocator?
             Allocator* alloc = ProcessState::singleton()->GetCPUAllocator(0);
