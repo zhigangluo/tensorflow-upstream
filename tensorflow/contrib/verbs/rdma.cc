@@ -1089,6 +1089,7 @@ void RdmaTensorResponse::RecvHandler(Rendezvous::ParsedKey parsed,
       // check early that we can get the MR from the copy
       if (!RdmaMemoryMgr::Singleton().FindMemoryRegion(
             (void*)DMAHelper::base(&in), in.TotalBytes())) {
+        LOG(WARNING) << "Cannot find memory region";
         alloc = ProcessState::singleton()->GetCPUAllocator(0);
         copy = Tensor(alloc, in.dtype(), in.shape());
       }
@@ -1210,6 +1211,27 @@ void RdmaTensorResponse::SendContent(const Tensor& in, const TensorProto& proto,
         src_addr_ = src_buffer_->data();
         mr_ = RdmaMemoryMgr::Singleton().FindMemoryRegion(src_addr_,
                                                           tensor_bytes);
+        if (!mr_) {
+          LOG(WARNING) << "Cannot find memory region";
+          if (tensor_) {
+            // was cloned, but clone used different allocator?
+            Allocator* alloc = ProcessState::singleton()->GetCPUAllocator(0);
+            Tensor *copy = new Tensor(alloc, in.dtype(), in.shape());
+            memcpy(DMAHelper::base(copy), DMAHelper::base(&in), in.TotalBytes());
+            src_buffer_->Unref();
+            delete tensor_;
+            tensor_ = copy;
+            src_buffer_ = const_cast<TensorBuffer*>(DMAHelper::buffer(tensor_));
+            if (src_buffer_ != nullptr) {
+              src_buffer_->Ref();  // Keep buffer alive until write is complete
+              src_addr_ = src_buffer_->data();
+              mr_ = RdmaMemoryMgr::Singleton().FindMemoryRegion(src_addr_,
+                  tensor_bytes);
+            }
+          }
+        }
+        CHECK(mr_ != nullptr) << " No memory region found for address "
+                              << src_addr_;
       }
     } else {
       RDMA_LOG(2) << "Encoding proto: " << rm_.name_
@@ -1218,9 +1240,9 @@ void RdmaTensorResponse::SendContent(const Tensor& in, const TensorProto& proto,
       mr_ = ibv_reg_mr(channel_->adapter_->pd_, src_addr_, tensor_bytes,
                        IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
       proto.SerializeToArray(src_addr_, tensor_bytes);
+      CHECK(mr_ != nullptr) << " No memory region found for address "
+                            << src_addr_;
     }
-    CHECK(mr_ != nullptr) << " No memory region found for address "
-                          << src_addr_;
   } else {
     tensor_bytes = 0;
   }
