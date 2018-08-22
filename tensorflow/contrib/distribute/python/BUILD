@@ -272,8 +272,7 @@ py_library(
     deps = [
         ":one_device_strategy",
         ":values",
-        "//tensorflow/contrib/tpu",
-        "//tensorflow/contrib/tpu:tpu_py",
+        "//tensorflow/contrib/tpu:tpu_lib",
         "//tensorflow/python:constant_op",
         "//tensorflow/python:control_flow_ops",
         "//tensorflow/python:framework_ops",
@@ -587,6 +586,7 @@ gpu_py_test(
     ],
     tags = [
         "multi_and_single_gpu",
+        "no_windows_gpu",
         "notsan",
     ],
 )

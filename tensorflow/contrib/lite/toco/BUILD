@@ -212,7 +212,7 @@ cc_library(
         "graph_transformations/quantization_util.h",
         "graph_transformations/quantize.cc",
         "graph_transformations/quantize_weights.cc",
-        "graph_transformations/read_fake_quant_min_max.cc",
+        "graph_transformations/read_array_minmax_and_narrow_range_from_fake_quant.cc",
         "graph_transformations/remove_final_dequantize_op.cc",
         "graph_transformations/remove_tensorflow_assert.cc",
         "graph_transformations/remove_tensorflow_identity.cc",
@@ -245,6 +245,7 @@ cc_library(
         "graph_transformations/resolve_constant_strided_slice.cc",
         "graph_transformations/resolve_constant_transpose.cc",
         "graph_transformations/resolve_constant_unary.cc",
+        "graph_transformations/resolve_fake_quant_args_from_vars.cc",
         "graph_transformations/resolve_mean_attributes.cc",
         "graph_transformations/resolve_multiply_by_zero.cc",
         "graph_transformations/resolve_pad_attributes.cc",
@@ -336,6 +337,7 @@ cc_library(
 tf_cc_test(
     name = "import_tensorflow_test",
     srcs = ["import_tensorflow_test.cc"],
+    tags = ["no_oss"],
     deps = [
         ":toco_tooling",
         "//tensorflow/core:framework",
@@ -375,6 +377,7 @@ cc_library(
 tf_cc_test(
     name = "tooling_util_test",
     srcs = ["tooling_util_test.cc"],
+    tags = ["no_oss"],
     deps = [
         ":model",
         ":tooling_util",
@@ -409,6 +412,7 @@ tf_cc_test(
     data = [
         "toco_port_test.cc",
     ],
+    tags = ["no_oss"],
     deps = [
         ":toco_port",
         "@com_google_googletest//:gtest_main",
