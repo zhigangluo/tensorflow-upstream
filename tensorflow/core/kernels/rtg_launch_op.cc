@@ -113,11 +113,12 @@ void RTGLaunchOp::Compute(OpKernelContext* ctx) {
     OP_REQUIRES_OK(ctx, ctx->allocate_output(0, output_shape, &output));
 
     // default to 1GB at this moment.
-    MIGraphScratchAllocator scratch_allocator(1LL << 32, ctx);
+    int64 alloc_size = 1LL << 32;
+    MIGraphScratchAllocator scratch_allocator(alloc_size, ctx);
     void * scratch_mem_ptr = nullptr;
-    int scratch_mem_size = 0;
-    if ((required_bytes > 0) && use_gpu) {
-        auto allocated = scratch_allocator.AllocateBytes(stream, 1024);
+    int64 scratch_mem_size = 0;
+    if (use_gpu) {
+        auto allocated = scratch_allocator.AllocateBytes(stream, 1024*1024*200);
         DeviceMemory<uint8> scratch;
         if (allocated.ok()) {
             scratch = allocated.ValueOrDie();

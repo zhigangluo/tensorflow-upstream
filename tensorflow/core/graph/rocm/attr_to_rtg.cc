@@ -38,7 +38,7 @@ void GetProgram(const NameAttrList& function, void ** p_program, int &bytes, str
     *p_program = program;
 }
 
-void EvalProgram(void* p_program, Tensor* output, std::vector<const Tensor*>& input_ptrs, bool use_gpu, void* scratch_mem_ptr, int size, string name)
+void EvalProgram(void* p_program, Tensor* output, std::vector<const Tensor*>& input_ptrs, bool use_gpu, void* scratch_mem_ptr, int64 size, string name)
 {
     migraph::program* program = reinterpret_cast<migraph::program*>(p_program);
     Converter convert(program, nullptr);
@@ -58,18 +58,7 @@ void EvalProgram(void* p_program, Tensor* output, std::vector<const Tensor*>& in
             char* data = const_cast<char*> (ptr->tensor_data().data());
             migraph::argument arg = {shape, data};
             params[name] = arg;
-        } else if (convert.starts_with(name, Converter::literal_prefix)) {
-#if 0             
-            if (use_gpu) {
-                // place literal in GPU memory
-                std::string str = ins->op.name();
-                migraph::shape shape = ins->lit.get_shape();
-                char * lit_ptr = base_ptr + convert.get_offset(shape);
-                hipMemcpy(lit_ptr, ins->lit.data(), shape.bytes(), hipMemcpyHostToDevice);
-                params[str] = {shape, lit_ptr};
-            }
-#endif            
-        } else {
+        } else if (!convert.starts_with(name, Converter::literal_prefix)) {
             break;
         }
     }
@@ -78,11 +67,12 @@ void EvalProgram(void* p_program, Tensor* output, std::vector<const Tensor*>& in
         DUMP_MIGRAPH(dump_graph::DumpMIGraph("After compile", name, program));
         arg = program->eval(params);
     } else  {
-        
-        // auto handle = migraph::miopen::make_obj<migraph::miopen::miopen_handle>(&miopenCreate);
-
         params["output"] = {output_shape, output_ptr};
-        // params["handle"] = {migraph::shape::any_type, handle.get()};
+        std::vector<std::size_t> dims;
+        dims.push_back(size/sizeof(float));
+        migraph::shape shape = {migraph::shape::float_type, dims};
+        params["scratch"] = {shape, base_ptr};
+        program->add_parameter("scratch", shape);
         program->compile(migraph::gpu::target{});
         DUMP_MIGRAPH(dump_graph::DumpMIGraph("After compile", name, program));
         arg = program->eval(params);
@@ -96,7 +86,7 @@ void EvalProgram(void* p_program, Tensor* output, std::vector<const Tensor*>& in
         memcpy(const_cast<char*> (output->tensor_data().data()),
                arg.cast<char>(), arg_shape.bytes());
     } else {
-#if 1
+#if 0
         migraph::argument ret = {arg_shape, output_ptr};
         migraph::argument val = migraph::gpu::from_gpu(ret);
         float* f_ptr = val.cast<float>();

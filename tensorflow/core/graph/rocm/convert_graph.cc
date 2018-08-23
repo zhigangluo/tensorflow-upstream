@@ -891,7 +891,7 @@ Status ConvertSubgraphToRTG(std::unique_ptr<Graph>* g, Cluster& cluster, T_INPUT
 
 Status ConvertGraphToRTG(std::unique_ptr<Graph>* g, T_INPUT_MAP* inputs) {
     const char* env_val = getenv("TF_MIGRAPH_USE_GPU");
-    bool use_gpu = false;
+    bool use_gpu = true;
     if (env_val != nullptr)
         use_gpu = atoi(env_val);
     const char* dbg_limit_env = getenv("TF_MIGRAPH_DBG_LIMIT");
@@ -902,6 +902,7 @@ Status ConvertGraphToRTG(std::unique_ptr<Graph>* g, T_INPUT_MAP* inputs) {
     int dbg = -1;
     if (dbg_env != nullptr)
         dbg = atoi(dbg_env);
+    bool do_binary_search = ((dbg >= 0) || (dbg_limit >= 0)) ? true : false;
     CHECK_NOTNULL(g);
     const Graph& graph = **g;
     DUMP_MIGRAPH(RTGLIB::dump_graph::DumpGraphToFile("Before convert graph to RTG", graph));
@@ -1040,12 +1041,14 @@ Status ConvertGraphToRTG(std::unique_ptr<Graph>* g, T_INPUT_MAP* inputs) {
             }
             if (output_cnt > 1)
                 continue;
-            RTGOpCnt++;
-            if ((dbg >= 0) && (RTGOpCnt != dbg))
-                continue;
-            if ((dbg_limit >= 0) && (RTGOpCnt >= dbg_limit))
-                continue;
-            std::cout << "RTGOp: " << RTGOpCnt << "\n";
+            if (do_binary_search) {
+                RTGOpCnt++;
+                if ((dbg >= 0) && (RTGOpCnt != dbg))
+                    continue;
+                if ((dbg_limit >= 0) && (RTGOpCnt >= dbg_limit))
+                    continue;
+                std::cout << "RTGOp: " << RTGOpCnt << "\n";
+            }
             ConvertSubgraphToRTG(g, cluster, inputs, id2Mask, use_gpu, refiner);
         }
     }

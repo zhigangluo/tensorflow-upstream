@@ -21,7 +21,7 @@ limitations under the License.
 #include "tensorflow/core/graph/graph.h"
 #include "tensorflow/core/platform/env.h"
 
-// #define DEBUG_MIGRAPH
+//#define DEBUG_MIGRAPH
 
 #ifdef DEBUG_MIGRAPH
 #define DUMP_MIGRAPH(s) s
