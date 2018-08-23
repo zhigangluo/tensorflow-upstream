@@ -11,7 +11,7 @@ exports_files(["LICENSE"])
 
 load(
     "//tensorflow:tensorflow.bzl",
-    "cuda_py_test",
+    "gpu_py_test",
     "tf_cc_test",
     "tf_copts",
     "tf_gpu_library",
@@ -323,7 +323,7 @@ tf_gpu_cc_test(
     ]),
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "tf_trt_integration_test",
     srcs = ["test/tf_trt_integration_test.py"],
     additional_deps = [
