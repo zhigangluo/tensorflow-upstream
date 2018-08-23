@@ -1789,21 +1789,25 @@ def tf_version_info_genrule():
       tools=[clean_dep("//tensorflow/tools/git:gen_git_source.py")],)
 
 def tf_py_build_info_genrule():
-  native.genrule(
-      name="py_build_info_gen",
-      outs=["platform/build_info.py"],
-      cmd=
-     "$(location //tensorflow/tools/build_info:gen_build_info.py) --raw_generate \"$@\" --build_config " + if_cuda("cuda", "cpu"),
-      local=1,
-      tools=[clean_dep("//tensorflow/tools/build_info:gen_build_info.py")],)
+    native.genrule(
+        name = "py_build_info_gen",
+        outs = ["platform/build_info.py"],
+        cmd =
+            "$(location //tensorflow/tools/build_info:gen_build_info.py) --raw_generate \"$@\" "
+            + " --is_config_cuda " + if_cuda("True", "False")
+            + " --is_config_rocm " + if_rocm("True", "False"),
+        local = 1,
+        tools = [clean_dep("//tensorflow/tools/build_info:gen_build_info.py")],
+    )
 
-def cc_library_with_android_deps(deps,
-                                 android_deps=[],
-                                 common_deps=[],
-                                 copts=tf_copts(),
-                                 **kwargs):
-  deps = if_not_android(deps) + if_android(android_deps) + common_deps
-  native.cc_library(deps=deps, copts=copts, **kwargs)
+def cc_library_with_android_deps(
+        deps,
+        android_deps = [],
+        common_deps = [],
+        copts = tf_copts(),
+        **kwargs):
+    deps = if_not_android(deps) + if_android(android_deps) + common_deps
+    native.cc_library(deps = deps, copts = copts, **kwargs)
 
 register_extension_info(
     extension_name = "cc_library_with_android_deps",
