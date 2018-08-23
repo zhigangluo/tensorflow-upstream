@@ -1,6 +1,7 @@
 # TensorFlow external dependencies that can be loaded in WORKSPACE files.
 
 load("//third_party/gpus:cuda_configure.bzl", "cuda_configure")
+load("//third_party/gpus:rocm_configure.bzl", "rocm_configure")
 load("//third_party/tensorrt:tensorrt_configure.bzl", "tensorrt_configure")
 load("//third_party:nccl/nccl_configure.bzl", "nccl_configure")
 load("//third_party/mkl:build_defs.bzl", "mkl_repository")
@@ -36,6 +37,7 @@ def tf_workspace(path_prefix="", tf_repo_name=""):
   nccl_configure(name="local_config_nccl")
   git_configure(name="local_config_git")
   sycl_configure(name="local_config_sycl")
+  rocm_configure(name="local_config_rocm")
   syslibs_configure(name="local_config_syslibs")
   python_configure(name="local_config_python")
 
@@ -109,11 +111,11 @@ def tf_workspace(path_prefix="", tf_repo_name=""):
   tf_http_archive(
       name = "eigen_archive",
       urls = [
-          "https://mirror.bazel.build/bitbucket.org/eigen/eigen/get/fd6845384b86.tar.gz",
-          "https://bitbucket.org/eigen/eigen/get/fd6845384b86.tar.gz",
+      	"https://mirror.bazel.build/github.com/ROCmSoftwarePlatform/eigen-upstream/archive/ff6a01b4b8173c0d62b3e050212ecbcaac7e7003.zip",
+	"https://github.com/ROCmSoftwarePlatform/eigen-upstream/archive/ff6a01b4b8173c0d62b3e050212ecbcaac7e7003.zip",	
       ],
-      sha256 = "d956415d784fa4e42b6a2a45c32556d6aec9d0a3d8ef48baee2522ab762556a9",
-      strip_prefix = "eigen-eigen-fd6845384b86",
+      sha256 = "eeab922428ce95b554d29fd8c776513967884511fb1b0b3853b52a51e9b6b7c7",
+      strip_prefix = "eigen-upstream-ff6a01b4b8173c0d62b3e050212ecbcaac7e7003",
       build_file = clean_dep("//third_party:eigen.BUILD"),
   )
 
@@ -698,6 +700,17 @@ def tf_workspace(path_prefix="", tf_repo_name=""):
       sha256 = "6bfa06ab52a650ae7ee6963143a0bbc667d6504822cbd9670369b598f18c58c3",
       strip_prefix = "cub-1.8.0",
       build_file = clean_dep("//third_party:cub.BUILD"),
+  )
+
+  tf_http_archive(
+      name = "rocprim_archive",
+      urls = [
+          "https://mirror.bazel.build/github.com/ROCmSoftwarePlatform/rocPRIM/archive/v1.0.0.zip",
+          "https://github.com/ROCmSoftwarePlatform/rocPRIM/archive/v1.0.0.zip",
+      ],
+      sha256 = "fc1005f56cd7bd6f5f3c48b39c9972dda20d1f9e7ad94dae183fce9120c0d8ce",
+      strip_prefix = "rocPRIM-1.0.0",
+      build_file = clean_dep("//third_party:rocprim.BUILD"),
   )
 
   tf_http_archive(

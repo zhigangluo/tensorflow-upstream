@@ -4,7 +4,7 @@
 # Uses the ":optmode" config_setting to pick the options.
 load(
     "//tensorflow/core:platform/default/build_config_root.bzl",
-    "tf_cuda_tests_tags",
+    "tf_gpu_tests_tags",
     "tf_sycl_tests_tags",
     "tf_additional_grpc_deps_py",
     "tf_additional_xla_deps_py",
@@ -17,7 +17,14 @@ load(
 load(
     "@local_config_cuda//cuda:build_defs.bzl",
     "if_cuda",
+    "if_cuda_is_configured",
     "cuda_default_copts",
+)
+load(
+    "@local_config_rocm//rocm:build_defs.bzl",
+    "if_rocm",
+    "if_rocm_is_configured",
+    "rocm_default_copts",
 )
 load(
     "//third_party/mkl:build_defs.bzl",
@@ -292,7 +299,7 @@ def _rpath_linkopts(name):
       clean_dep("//tensorflow:windows"): [],
       clean_dep("//tensorflow:windows_msvc"): [],
       "//conditions:default": [
-          "-Wl,%s" % (_make_search_paths("$$ORIGIN", levels_to_root),),
+          "-Wl,%s" % (_make_search_paths("\\\$$ORIGIN", levels_to_root),),
       ],
   })
 
@@ -719,7 +726,7 @@ register_extension_info(
     label_regex_for_dep = "{extension_name}",
 )
 
-def tf_cuda_cc_test(name,
+def tf_gpu_cc_test(name,
                     srcs=[],
                     deps=[],
                     tags=[],
@@ -740,33 +747,34 @@ def tf_cuda_cc_test(name,
       linkstatic=linkstatic,
       linkopts=linkopts,
       args=args)
-  tf_cc_test(
-      name=name,
-      srcs=srcs,
-      suffix="_gpu",
-      deps=deps + if_cuda([
-          clean_dep("//tensorflow/core:gpu_runtime"),
-      ]),
-      linkstatic=select({
-          # TODO(allenl): Remove Mac static linking when Bazel 0.6 is out.
-          clean_dep("//tensorflow:darwin"): 1,
-          "@local_config_cuda//cuda:using_nvcc": 1,
-          "@local_config_cuda//cuda:using_clang": 1,
-          "//conditions:default": 0,
-      }),
-      tags=tags + tf_cuda_tests_tags(),
-      data=data,
-      size=size,
-      extra_copts=extra_copts,
-      linkopts=linkopts,
-      args=args)
+  if if_cuda_is_configured(True) or if_rocm_is_configured(True):
+      tf_cc_test(
+          name=name,
+          srcs=srcs,
+          suffix="_gpu",
+          deps=deps + [
+              clean_dep("//tensorflow/core:gpu_runtime"),
+          ],
+          linkstatic=select({
+              # TODO(allenl): Remove Mac static linking when Bazel 0.6 is out.
+              clean_dep("//tensorflow:darwin"): 1,
+              "@local_config_cuda//cuda:using_nvcc": 1,
+              "@local_config_cuda//cuda:using_clang": 1,
+              "//conditions:default": 0,
+          }),
+          tags=tags + tf_gpu_tests_tags(),
+          data=data,
+          size=size,
+          extra_copts=extra_copts,
+          linkopts=linkopts,
+          args=args)
 
 register_extension_info(
-    extension_name = "tf_cuda_cc_test",
+    extension_name = "tf_gpu_cc_test",
     label_regex_for_dep = "{extension_name}",
 )
 
-def tf_cuda_only_cc_test(name,
+def tf_gpu_only_cc_test(name,
                     srcs=[],
                     deps=[],
                     tags=[],
@@ -780,11 +788,15 @@ def tf_cuda_only_cc_test(name,
       srcs=srcs + tf_binary_additional_srcs(),
       size=size,
       args=args,
-      copts= _cuda_copts() + tf_copts(),
+      copts= _cuda_copts() + _rocm_copts() + tf_copts(),
       data=data,
-      deps=deps + if_cuda([
-          clean_dep("//tensorflow/core:cuda"),
-          clean_dep("//tensorflow/core:gpu_lib")]),
+      deps=deps
+          + if_cuda_is_configured([
+              clean_dep("//tensorflow/core:cuda"),
+              clean_dep("//tensorflow/core:gpu_lib")])
+          + if_rocm_is_configured([
+              clean_dep("//tensorflow/core:rocm"),
+              clean_dep("//tensorflow/core:gpu_lib")]),
       linkopts=if_not_windows(["-lpthread", "-lm"]) + linkopts + _rpath_linkopts(name),
       linkstatic=linkstatic or select({
           # cc_tests with ".so"s in srcs incorrectly link on Darwin
@@ -793,10 +805,10 @@ def tf_cuda_only_cc_test(name,
           clean_dep("//tensorflow:darwin"): 1,
           "//conditions:default": 0,
       }),
-      tags=tags + tf_cuda_tests_tags())
+      tags=tags + tf_gpu_tests_tags())
 
 register_extension_info(
-    extension_name = "tf_cuda_only_cc_test",
+    extension_name = "tf_gpu_only_cc_test",
     label_regex_for_dep = "{extension_name}_gpu",
 )
 
@@ -870,7 +882,7 @@ def tf_cc_tests_gpu(srcs,
                     args=None):
   tf_cc_tests(srcs, deps, linkstatic, tags=tags, size=size, args=args)
 
-def tf_cuda_cc_tests(srcs,
+def tf_gpu_cc_tests(srcs,
                      deps,
                      name="",
                      tags=[],
@@ -879,7 +891,7 @@ def tf_cuda_cc_tests(srcs,
                      args=None,
                      linkopts=[]):
   for src in srcs:
-    tf_cuda_cc_test(
+    tf_gpu_cc_test(
         name=src_to_test_name(src),
         srcs=[src],
         deps=deps,
@@ -924,28 +936,51 @@ def _cuda_copts():
       ]),
   })
 
+def _rocm_copts():
+  """Gets the appropriate set of copts for (maybe) ROCm compilation.
+
+    If we're doing ROCm compilation, returns copts for our particular ROCm
+    compiler.  If we're not doing ROCm compilation, returns an empty list.
+
+    """
+  return rocm_default_copts() + select({
+      "//conditions:default": [],
+      "@local_config_rocm//rocm:using_hipcc": ([
+          "",
+      ]),
+  })
+
 # Build defs for TensorFlow kernels
 
 # When this target is built using --config=cuda, a cc_library is built
 # that passes -DGOOGLE_CUDA=1 and '-x cuda', linking in additional
 # libraries needed by GPU kernels.
+#
+# When this target is built using --config=rocm, a cc_library is built
+# that passes -DTENSORFLOW_USE_ROCM and '-x rocm', linking in additional
+# libraries needed by GPU kernels.
 def tf_gpu_kernel_library(srcs,
                           copts=[],
-                          cuda_copts=[],
+                          gpu_copts=[],
                           deps=[],
                           hdrs=[],
                           **kwargs):
-  copts = copts + _cuda_copts() + if_cuda(cuda_copts) + tf_copts()
+  copts=copts + tf_copts() + _cuda_copts() + _rocm_copts() + if_cuda_is_configured(gpu_copts) + if_rocm_is_configured(gpu_copts)
   kwargs["features"] = kwargs.get("features", []) + ["-use_header_modules"]
 
   native.cc_library(
       srcs=srcs,
       hdrs=hdrs,
       copts=copts,
-      deps=deps + if_cuda([
-          clean_dep("//tensorflow/core:cuda"),
-          clean_dep("//tensorflow/core:gpu_lib"),
-      ]),
+      deps=deps +
+          if_cuda_is_configured([
+              clean_dep("//tensorflow/core:cuda"),
+              clean_dep("//tensorflow/core:gpu_lib"),
+          ]) +
+          if_rocm_is_configured([
+              clean_dep("//tensorflow/core:rocm"),
+              clean_dep("//tensorflow/core:gpu_lib"),
+          ]),
       alwayslink=1,
       **kwargs)
 
@@ -954,19 +989,19 @@ register_extension_info(
     label_regex_for_dep = "{extension_name}",
 )
 
-def tf_cuda_library(deps=None, cuda_deps=None, copts=tf_copts(), **kwargs):
+def tf_gpu_library(deps=None, gpu_deps=None, copts=tf_copts(), **kwargs):
   """Generate a cc_library with a conditional set of CUDA dependencies.
 
   When the library is built with --config=cuda:
 
-  - Both deps and cuda_deps are used as dependencies.
+  - Both deps and gpu_deps are used as dependencies.
   - The cuda runtime is added as a dependency (if necessary).
   - The library additionally passes -DGOOGLE_CUDA=1 to the list of copts.
   - In addition, when the library is also built with TensorRT enabled, it
       additionally passes -DGOOGLE_TENSORRT=1 to the list of copts.
 
   Args:
-  - cuda_deps: BUILD dependencies which will be linked if and only if:
+  - gpu_deps: BUILD dependencies which will be linked if and only if:
       '--config=cuda' is passed to the bazel command line.
   - deps: dependencies which will always be linked.
   - copts: copts always passed to the cc_library.
@@ -974,21 +1009,26 @@ def tf_cuda_library(deps=None, cuda_deps=None, copts=tf_copts(), **kwargs):
   """
   if not deps:
     deps = []
-  if not cuda_deps:
-    cuda_deps = []
+  if not gpu_deps:
+    gpu_deps = []
 
   kwargs["features"] = kwargs.get("features", []) + ["-use_header_modules"]
   native.cc_library(
-      deps=deps + if_cuda(cuda_deps + [
-          clean_dep("//tensorflow/core:cuda"),
-          "@local_config_cuda//cuda:cuda_headers"
-      ]),
+      deps=deps +
+          if_cuda_is_configured(gpu_deps + [
+              clean_dep("//tensorflow/core:cuda"),
+              "@local_config_cuda//cuda:cuda_headers"
+          ]) +
+          if_rocm_is_configured(gpu_deps + [
+              clean_dep("//tensorflow/core:rocm"),
+              "@local_config_rocm//rocm:rocm_headers"
+          ]),
       copts=(copts + if_cuda(["-DGOOGLE_CUDA=1"]) + if_mkl(["-DINTEL_MKL=1"]) +
              if_tensorrt(["-DGOOGLE_TENSORRT=1"])),
       **kwargs)
 
 register_extension_info(
-    extension_name = "tf_cuda_library",
+    extension_name = "tf_gpu_library",
     label_regex_for_dep = "{extension_name}",
 )
 
@@ -1005,7 +1045,7 @@ def tf_kernel_library(
         **kwargs):
   """A rule to build a TensorFlow OpKernel.
 
-  May either specify srcs/hdrs or prefix.  Similar to tf_cuda_library,
+  May either specify srcs/hdrs or prefix.  Similar to tf_gpu_library,
   but with alwayslink=1 by default.  If prefix is specified:
     * prefix*.cc (except *.cu.cc) is added to srcs
     * prefix*.h (except *.cu.h) is added to hdrs
@@ -1050,7 +1090,7 @@ def tf_kernel_library(
             [prefix + "*impl.h"],
             exclude = [prefix + "*test*", prefix + "*.cu.h"],
         )
-  cuda_deps = [clean_dep("//tensorflow/core:gpu_lib")]
+  gpu_deps = [clean_dep("//tensorflow/core:gpu_lib")]
   if gpu_srcs:
     for gpu_src in gpu_srcs:
       if gpu_src.endswith(".cc") and not gpu_src.endswith(".cu.cc"):
@@ -1058,14 +1098,14 @@ def tf_kernel_library(
              format(gpu_src))
     tf_gpu_kernel_library(
         name=name + "_gpu", srcs=gpu_srcs, deps=deps, **kwargs)
-    cuda_deps.extend([":" + name + "_gpu"])
-  tf_cuda_library(
+    gpu_deps.extend([":" + name + "_gpu"])
+  tf_gpu_library(
       name=name,
       srcs=srcs,
       hdrs=hdrs,
       textual_hdrs = textual_hdrs,
       copts=copts,
-      cuda_deps=cuda_deps,
+      gpu_deps=gpu_deps,
       linkstatic=1,  # Needed since alwayslink is broken in bazel b/27630669
       alwayslink=alwayslink,
       deps=deps,
@@ -1325,20 +1365,24 @@ def tf_custom_op_library(name, srcs=[], gpu_srcs=[], deps=[], linkopts=[]):
       "@local_config_cuda//cuda:cuda_headers",
       "@local_config_cuda//cuda:cudart_static",
   ]
+  rocm_deps = [
+      clean_dep("//tensorflow/core:stream_executor_headers_lib"),
+  ]
   deps = deps + tf_custom_op_library_additional_deps()
   if gpu_srcs:
     basename = name.split(".")[0]
     native.cc_library(
         name=basename + "_gpu",
         srcs=gpu_srcs,
-        copts=_cuda_copts() + if_tensorrt(["-DGOOGLE_TENSORRT=1"]),
+        copts=_cuda_copts() + _rocm_copts() + if_tensorrt(["-DGOOGLE_TENSORRT=1"]),
         features = if_cuda(["-use_header_modules"]),
-        deps=deps + if_cuda(cuda_deps))
+        deps=deps + if_cuda_is_configured(cuda_deps) + if_rocm_is_configured(rocm_deps))
     cuda_deps.extend([":" + basename + "_gpu"])
+    rocm_deps.extend([":" + basename + "_gpu"])
 
   check_deps(
       name=name + "_check_deps",
-      deps=deps + if_cuda(cuda_deps),
+      deps=deps + if_cuda_is_configured(cuda_deps) + if_rocm_is_configured(rocm_deps),
       disallowed_deps=[
           clean_dep("//tensorflow/core:framework"),
           clean_dep("//tensorflow/core:lib")
@@ -1346,7 +1390,7 @@ def tf_custom_op_library(name, srcs=[], gpu_srcs=[], deps=[], linkopts=[]):
   tf_cc_shared_object(
       name=name,
       srcs=srcs,
-      deps=deps + if_cuda(cuda_deps),
+      deps=deps + if_cuda_is_configured(cuda_deps) + if_rocm_is_configured(rocm_deps),
       data=[name + "_check_deps"],
       copts=tf_copts(is_external=True),
       features = ["windows_export_all_symbols"],
@@ -1579,7 +1623,7 @@ register_extension_info(
     label_regex_map = {"additional_deps": "deps:{extension_name}"},
 )
 
-def cuda_py_test(name,
+def gpu_py_test(name,
                  srcs,
                  size="medium",
                  data=[],
@@ -1591,7 +1635,7 @@ def cuda_py_test(name,
                  flaky=0,
                  xla_enabled=False,
                  grpc_enabled=False):
-  test_tags = tags + tf_cuda_tests_tags()
+  test_tags = tags + tf_gpu_tests_tags()
   tf_py_test(
       name=name,
       size=size,
@@ -1607,7 +1651,7 @@ def cuda_py_test(name,
       grpc_enabled=grpc_enabled)
 
 register_extension_info(
-    extension_name = "cuda_py_test",
+    extension_name = "gpu_py_test",
     label_regex_map = {"additional_deps": "additional_deps:{extension_name}"},
 )
 
@@ -1669,7 +1713,7 @@ def py_tests(name,
         xla_enabled=xla_enabled,
         grpc_enabled=grpc_enabled)
 
-def cuda_py_tests(name,
+def gpu_py_tests(name,
                   srcs,
                   size="medium",
                   additional_deps=[],
@@ -1679,7 +1723,7 @@ def cuda_py_tests(name,
                   prefix="",
                   xla_enabled=False,
                   grpc_enabled=False):
-  test_tags = tags + tf_cuda_tests_tags()
+  test_tags = tags + tf_gpu_tests_tags()
   py_tests(
       name=name,
       size=size,
