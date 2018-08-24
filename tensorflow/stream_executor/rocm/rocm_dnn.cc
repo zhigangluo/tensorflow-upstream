@@ -1705,21 +1705,25 @@ bool MIOpenSupport::DoConvolveImpl(
 
           MIOpenAllocatorContext mac(scratch_allocator, stream);
           wrap::miopenSetAllocator(parent_, ToHandle(dnn_handle_),MIOpenAllocatorCallback,MIOpenDeallocatorCallback,&mac);
-          size_t size_in_bytes;
+          size_t size_in_bytes = 0;
           status = wrap::miopenConvolutionForwardGetWorkSpaceSize(
               parent_, ToHandle(dnn_handle_), /*filterDesc=*/filter.handle(),
               /*srcDesc=*/input_nd.handle(), /*convDesc=*/conv.handle(),
               /*destDesc=*/output_nd.handle(), /*sizeInBytes=*/&size_in_bytes);
+          VLOG(2) << "Fwd convolution workspace size: " << size_in_bytes;
+
           if (status == miopenStatusSuccess && size_in_bytes != 0) {
             auto allocated =
                 scratch_allocator->AllocateBytes(stream, size_in_bytes);
             if (allocated.ok()) {
               scratch = allocated.ValueOrDie();
+            } else {
+              LOG(FATAL) << "failed to allocate fwd convolution workspace: " << size_in_bytes;
             }
           }
 
           miopenConvAlgoPerf_t preference;
-          int returnedAlgoCount;
+          int returnedAlgoCount = 0;
 
           status = wrap::miopenFindConvolutionForwardAlgorithm(
               parent_, ToHandle(dnn_handle_), input_nd.handle(),
@@ -1728,14 +1732,17 @@ bool MIOpenSupport::DoConvolveImpl(
               /*requestAlgoCount=*/1, &returnedAlgoCount,
               /*preference=*/&preference, /*workspace*/scratch.opaque(),
               /*WorkSpaceSize*/scratch.size(), /*exhaustiveSearch*/false);
-
-
-          // Restore default allocator, note mac is stack temp
-          wrap::miopenSetAllocator(parent_, ToHandle(dnn_handle_),nullptr,nullptr,nullptr);
+          VLOG(2) << "returnedAlgoCount: " << returnedAlgoCount
+                  << "algo: " << preference.fwd_algo
+                  << "scratch: " << preference.memory;
           CHECK_EQ(status, miopenStatusSuccess)
               << "Unable to find a suitable "
                  "algorithm for doing forward "
                  "convolution";
+
+          // Restore default allocator, note mac is stack temp
+          wrap::miopenSetAllocator(parent_, ToHandle(dnn_handle_),nullptr,nullptr,nullptr);
+
           return std::pair<miopenConvFwdAlgorithm_t, size_t> (preference.fwd_algo, preference.memory);
         };
 
@@ -2262,7 +2269,7 @@ bool MIOpenSupport::DoConvolveBackwardDataImpl(
 
       MIOpenAllocatorContext mac(scratch_allocator, stream);
       wrap::miopenSetAllocator(parent_, ToHandle(dnn_handle_),MIOpenAllocatorCallback,MIOpenDeallocatorCallback,&mac);
-      size_t size_in_bytes;
+      size_t size_in_bytes = 0;
       status = wrap::miopenConvolutionBackwardDataGetWorkSpaceSize(
           parent_, ToHandle(dnn_handle_),
           /*diffDesc=*/out_back_nd.handle(),
@@ -2270,16 +2277,20 @@ bool MIOpenSupport::DoConvolveBackwardDataImpl(
           /*convDesc=*/conv.handle(),
           /*gradDesc=*/in_back_nd.handle(),
           /*sizeInBytes=*/&size_in_bytes);
+      VLOG(2) << "Bwd convolution data workspace size: " << size_in_bytes;
+
       if (status == miopenStatusSuccess && size_in_bytes != 0) {
         auto allocated =
             scratch_allocator->AllocateBytes(stream, size_in_bytes);
         if (allocated.ok()) {
           scratch = allocated.ValueOrDie();
+        } else {
+          LOG(FATAL) << "failed to allocate bwd convolution data workspace: " << size_in_bytes;
         }
       }
 
       miopenConvAlgoPerf_t preference;
-      int returnedAlgoCount;
+      int returnedAlgoCount = 0;
 
       miopenStatus_t status = wrap::miopenFindConvolutionBackwardDataAlgorithm(
           parent_, ToHandle(dnn_handle_),
@@ -2290,12 +2301,16 @@ bool MIOpenSupport::DoConvolveBackwardDataImpl(
           /*requestCount=*/1, /*returnedAlgoCount=*/&returnedAlgoCount,
           /*preference=*/&preference, /*WorkSpace=*/scratch.opaque(),
           /*WorkSpaceSize=*/scratch.size(), /*exhaustiveSearch=*/false);
-
-      // Restore default allocator, note mac is stack temp
-      wrap::miopenSetAllocator(parent_, ToHandle(dnn_handle_),nullptr,nullptr,nullptr);
+      VLOG(2) << "returnedAlgoCount: " << returnedAlgoCount
+              << "algo: " << preference.fwd_algo
+              << "scratch: " << preference.memory;
       CHECK_EQ(status, miopenStatusSuccess) << "Unable to find a suitable "
                                                 "algorithm for doing backward "
                                                 "filter convolution";
+
+      // Restore default allocator, note mac is stack temp
+      wrap::miopenSetAllocator(parent_, ToHandle(dnn_handle_),nullptr,nullptr,nullptr);
+
       return std::pair<miopenConvBwdDataAlgorithm_t , size_t> (
           preference.bwd_data_algo, preference.memory);
     };
@@ -2487,21 +2502,25 @@ bool MIOpenSupport::DoConvolveBackwardFilterImpl(
 
       MIOpenAllocatorContext mac(scratch_allocator, stream);
       wrap::miopenSetAllocator(parent_, ToHandle(dnn_handle_),MIOpenAllocatorCallback,MIOpenDeallocatorCallback,&mac);
-      size_t size_in_bytes;
+      size_t size_in_bytes = 0;
       status = wrap::miopenConvolutionBackwardWeightsGetWorkSpaceSize(
           parent_, ToHandle(dnn_handle_), /*diffDesc=*/out_back_nd.handle(),
           /*srcDesc=*/input_nd.handle() ,/*convDesc=*/conv.handle(),
           /*gradDesc=*/filter.handle(), /*sizeInBytes=*/&size_in_bytes);
+      VLOG(2) << "Bwd convolution weights workspace size: " << size_in_bytes;
+
       if (status == miopenStatusSuccess && size_in_bytes != 0) {
         auto allocated =
             scratch_allocator->AllocateBytes(stream, size_in_bytes);
         if (allocated.ok()) {
           scratch = allocated.ValueOrDie();
+        } else {
+          LOG(FATAL) << "failed to allocate bwd convolution weights workspace: " << size_in_bytes;
         }
       }
 
       miopenConvAlgoPerf_t preference;
-      int returnedAlgoCount;
+      int returnedAlgoCount = 0;
 
       miopenStatus_t status =
           wrap::miopenFindConvolutionBackwardWeightsAlgorithm(
@@ -2513,6 +2532,9 @@ bool MIOpenSupport::DoConvolveBackwardFilterImpl(
               /*requestAlgoCount=*/1, /*returnedAlgoCount=*/&returnedAlgoCount,
               /*preference=*/&preference, /*WorkSpace=*/scratch.opaque(),
               /*WorkSpaceSize=*/scratch.size(), /*exhaustiveSearch=*/false);
+      VLOG(2) << "returnedAlgoCount: " << returnedAlgoCount
+              << "algo: " << preference.fwd_algo
+              << "scratch: " << preference.memory;
       CHECK_EQ(status, miopenStatusSuccess) << "Unable to find a suitable "
                                                 "algorithm for doing backward "
                                                 "filter convolution";
@@ -2955,32 +2977,10 @@ bool MIOpenSupport::DoPoolForward(
                                    miopenFloat};
   ScopedPoolingDescriptor pooling_desc{parent_, pooling_dimensions};
 
-  DeviceMemory<uint8> workspace;
-  size_t workspace_size_in_bytes = 0;
-  status = wrap::miopenPoolingGetWorkSpaceSize(parent_, dest_desc.handle(),
-                                                  &workspace_size_in_bytes);
-
-  if (status != miopenStatusSuccess) {
-    LOG(ERROR) << "failed to obtain workspace size for pooling on stream: "
-               << ToString(status);
-    return false;
-  }
-
-  // Allocate the workspace.
-  if (workspace_size_in_bytes > 0) {
-    assert(workspace_allocator);
-    auto allocated =
-        workspace_allocator->AllocateBytes(stream, workspace_size_in_bytes);
-    if (!allocated.ok() || (workspace = allocated.ValueOrDie()) == nullptr) {
-      LOG(ERROR) << "Failed to allocate pooling workspace";
-      return false;
-    }
-  }
-
   status = wrap::miopenPoolingForward(
       parent_, ToHandle(dnn_handle_), pooling_desc.handle(), &alpha,
       src_desc.handle(), input_data.opaque(), &beta, dest_desc.handle(),
-      output_data->opaque(), true, workspace.opaque(), workspace_size_in_bytes);
+      output_data->opaque(), false, nullptr, 0);
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to enqueue forward pooling on stream: "
                << ToString(status);
@@ -3014,32 +3014,10 @@ bool MIOpenSupport::DoPoolForward(
                                    miopenHalf};
   ScopedPoolingDescriptor pooling_desc{parent_, pooling_dimensions};
 
-  DeviceMemory<uint8> workspace;
-  size_t workspace_size_in_bytes = 0;
-  status = wrap::miopenPoolingGetWorkSpaceSize(parent_, dest_desc.handle(),
-                                                  &workspace_size_in_bytes);
-
-  if (status != miopenStatusSuccess) {
-    LOG(ERROR) << "failed to obtain workspace size for pooling on stream: "
-               << ToString(status);
-    return false;
-  }
-
-  // Allocate the workspace.
-  if (workspace_size_in_bytes > 0) {
-    assert(workspace_allocator);
-    auto allocated =
-        workspace_allocator->AllocateBytes(stream, workspace_size_in_bytes);
-    if (!allocated.ok() || (workspace = allocated.ValueOrDie()) == nullptr) {
-      LOG(ERROR) << "Failed to allocate pooling workspace";
-      return false;
-    }
-  }
-
   status = wrap::miopenPoolingForward(
       parent_, ToHandle(dnn_handle_), pooling_desc.handle(), &alpha,
       src_desc.handle(), input_data.opaque(), &beta, dest_desc.handle(),
-      output_data->opaque(), true, workspace.opaque(), workspace_size_in_bytes);
+      output_data->opaque(), false, nullptr, 0);
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to enqueue forward pooling on stream: "
                << ToString(status);
@@ -3093,6 +3071,8 @@ bool MIOpenSupport::DoPoolBackward(
   status = wrap::miopenPoolingGetWorkSpaceSize(parent_, dest_desc.handle(),
                                                   &workspace_size_in_bytes);
 
+  VLOG(2) << "Bwd pooling workspace size: " << workspace_size_in_bytes;
+
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to obtain workspace size for backward pooling on stream: "
                << ToString(status);
@@ -3110,36 +3090,10 @@ bool MIOpenSupport::DoPoolBackward(
     }
   }
 
-  DeviceMemory<uint8> dest2; // duplicated dest from forward:
-  int dest2_size = 0;
-
-  // miopen requires the strides and dims to be ordered as BDYX.
-  std::vector<int64> dims64 =
-      output_dimensions.full_dims(dnn::DataLayout::kBatchDepthYX);
-
-  // miopen does not use strides and must have 4D tensor.
-  std::vector<int> dims(4);
-
-  std::transform(dims64.cbegin(), dims64.cend(), dims.begin(),
-                 &CheckedNarrowing<int64, int>);
-
-  dest2_size = dims[0] * dims[1] * dims[2] * dims[3] * sizeof(float);
-
-  if (dest2_size > 0) {
-    assert(workspace_allocator);
-    auto allocated = workspace_allocator->AllocateBytes(stream, dest2_size);
-    if (!allocated.ok() || (dest2 = allocated.ValueOrDie()) == nullptr) {
-      LOG(ERROR) << "Failed to allocate backward pooling workspace";
-      return false;
-    }
-  } else {
-    LOG(ERROR) << "Failed to calcuate tensor size to chain forward and backward pooling";
-  }
-
   status = wrap::miopenPoolingForward(
       parent_, ToHandle(dnn_handle_), pooling_desc.handle(), &alpha,
       src_desc.handle(), input_data.opaque(), &beta, dest_desc.handle(),
-      dest2.opaque(), true, workspace.opaque(), workspace_size_in_bytes);
+      nullptr, true, workspace.opaque(), workspace_size_in_bytes, false);
 
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to enqueue forward pooling (before backward) on stream: "
@@ -3149,7 +3103,7 @@ bool MIOpenSupport::DoPoolBackward(
 
   status = wrap::miopenPoolingBackward(
       parent_, ToHandle(dnn_handle_), pooling_desc.handle(), &alpha,
-      dest_desc.handle(), dest2.opaque(), dest_desc.handle(),
+      dest_desc.handle(), output_data.opaque(), dest_desc.handle(),
       input_diff_data.opaque(), src_desc.handle(), input_data.opaque(), &beta,
       src_desc.handle(), output_diff_data->opaque(), workspace.opaque());
 
@@ -3194,6 +3148,8 @@ bool MIOpenSupport::DoPoolBackward(
   status = wrap::miopenPoolingGetWorkSpaceSize(parent_, dest_desc.handle(),
                                                   &workspace_size_in_bytes);
 
+  VLOG(2) << "Bwd pooling workspace size: " << workspace_size_in_bytes;
+
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to obtain workspace size for backward pooling on stream: "
                << ToString(status);
@@ -3211,36 +3167,10 @@ bool MIOpenSupport::DoPoolBackward(
     }
   }
 
-  DeviceMemory<uint8> dest2; // duplicated dest from forward:
-  int dest2_size = 0;
-
-  // miopen requires the strides and dims to be ordered as BDYX.
-  std::vector<int64> dims64 =
-      output_dimensions.full_dims(dnn::DataLayout::kBatchDepthYX);
-
-  // miopen does not use strides and must have 4D tensor.
-  std::vector<int> dims(4);
-
-  std::transform(dims64.cbegin(), dims64.cend(), dims.begin(),
-                 &CheckedNarrowing<int64, int>);
-
-  dest2_size = dims[0] * dims[1] * dims[2] * dims[3] * sizeof(float);
-
-  if (dest2_size > 0) {
-    assert(workspace_allocator);
-    auto allocated = workspace_allocator->AllocateBytes(stream, dest2_size);
-    if (!allocated.ok() || (dest2 = allocated.ValueOrDie()) == nullptr) {
-      LOG(ERROR) << "Failed to allocate backward pooling workspace";
-      return false;
-    }
-  } else {
-    LOG(ERROR) << "Failed to calcuate tensor size to chain forward and backward pooling";
-  }
-
   status = wrap::miopenPoolingForward(
       parent_, ToHandle(dnn_handle_), pooling_desc.handle(), &alpha,
       src_desc.handle(), input_data.opaque(), &beta, dest_desc.handle(),
-      dest2.opaque(), true, workspace.opaque(), workspace_size_in_bytes);
+      nullptr, true, workspace.opaque(), workspace_size_in_bytes, false);
 
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to enqueue forward pooling (before backward) on stream: "
@@ -3250,7 +3180,7 @@ bool MIOpenSupport::DoPoolBackward(
 
   status = wrap::miopenPoolingBackward(
       parent_, ToHandle(dnn_handle_), pooling_desc.handle(), &alpha,
-      dest_desc.handle(), dest2.opaque(), dest_desc.handle(),
+      dest_desc.handle(), output_data.opaque(), dest_desc.handle(),
       input_diff_data.opaque(), src_desc.handle(), input_data.opaque(), &beta,
       src_desc.handle(), output_diff_data->opaque(), workspace.opaque());
 
@@ -3347,6 +3277,8 @@ bool MIOpenSupport::DoNormalizeBackwardWithDimensions(
   status = wrap::miopenLRNGetWorkSpaceSize(parent_, dims.handle(),
                                            &workspace_size_in_bytes);
 
+  VLOG(2) << "LRN workspace size: " << workspace_size_in_bytes;
+
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to obtain workspace size for miopenLRNBackward";
     return false;
@@ -3377,6 +3309,8 @@ bool MIOpenSupport::DoNormalizeBackwardWithDimensions(
                  &CheckedNarrowing<int64, int>);
 
   dest2_size = dimsint[0] * dimsint[1] * dimsint[2] * dimsint[3] * sizeof(float);
+
+  VLOG(2) << "LRN output buffer size: " << dest2_size;
 
   if (dest2_size > 0) {
     assert(workspace_allocator);
