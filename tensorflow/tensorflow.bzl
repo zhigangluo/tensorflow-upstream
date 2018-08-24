@@ -284,24 +284,23 @@ def _make_search_paths(prefix, levels_to_root):
        for search_level in range(levels_to_root + 1)])
 
 def _rpath_linkopts(name):
-  # Search parent directories up to the TensorFlow root directory for shared
-  # object dependencies, even if this op shared object is deeply nested
-  # (e.g. tensorflow/contrib/package:python/ops/_op_lib.so). tensorflow/ is then
-  # the root and tensorflow/libtensorflow_framework.so should exist when
-  # deployed. Other shared object dependencies (e.g. shared between contrib/
-  # ops) are picked up as long as they are in either the same or a parent
-  # directory in the tensorflow/ tree.
-  levels_to_root = native.package_name().count("/") + name.count("/")
-  return select({
-      clean_dep("//tensorflow:darwin"): [
-          "-Wl,%s" % (_make_search_paths("@loader_path", levels_to_root),),
-      ],
-      clean_dep("//tensorflow:windows"): [],
-      clean_dep("//tensorflow:windows_msvc"): [],
-      "//conditions:default": [
-          "-Wl,%s" % (_make_search_paths("\\\$$ORIGIN", levels_to_root),),
-      ],
-  })
+    # Search parent directories up to the TensorFlow root directory for shared
+    # object dependencies, even if this op shared object is deeply nested
+    # (e.g. tensorflow/contrib/package:python/ops/_op_lib.so). tensorflow/ is then
+    # the root and tensorflow/libtensorflow_framework.so should exist when
+    # deployed. Other shared object dependencies (e.g. shared between contrib/
+    # ops) are picked up as long as they are in either the same or a parent
+    # directory in the tensorflow/ tree.
+    levels_to_root = native.package_name().count("/") + name.count("/")
+    return select({
+        clean_dep("//tensorflow:darwin"): [
+            "-Wl,%s" % (_make_search_paths("@loader_path", levels_to_root),),
+        ],
+        clean_dep("//tensorflow:windows"): [],
+        "//conditions:default": [
+            "-Wl,%s" % (_make_search_paths("$$ORIGIN", levels_to_root),),
+        ],
+    })
 
 # Bazel-generated shared objects which must be linked into TensorFlow binaries
 # to define symbols from //tensorflow/core:framework and //tensorflow/core:lib.
