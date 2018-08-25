@@ -21,7 +21,7 @@ namespace tensorflow {
 namespace rtglib {
 namespace convert {
 
-void GetProgram(const NameAttrList& function, void ** p_program, int &bytes, string name) {
+void GetProgram(const NameAttrList& function, void ** p_program, string name) {
     auto attr_map = function.attr();
     AttrValue value = attr_map.at("func");
     int size = value.list().func_size();
@@ -34,7 +34,6 @@ void GetProgram(const NameAttrList& function, void ** p_program, int &bytes, str
         convert.decodeAttr(func);
     }
     DUMP_MIGRAPH(dump_graph::DumpMIGraph("After decode", name, program));
-    bytes = convert.next_offset;
     *p_program = program;
 }
 
@@ -72,7 +71,6 @@ void EvalProgram(void* p_program, Tensor* output, std::vector<const Tensor*>& in
         dims.push_back(size/sizeof(float));
         migraph::shape shape = {migraph::shape::float_type, dims};
         params["scratch"] = {shape, base_ptr};
-        program->add_parameter("scratch", shape);
         program->compile(migraph::gpu::target{});
         DUMP_MIGRAPH(dump_graph::DumpMIGraph("After compile", name, program));
         arg = program->eval(params);

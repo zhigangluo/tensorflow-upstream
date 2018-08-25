@@ -655,7 +655,6 @@ void DecodeConstAttr(const NameAttrList& func, Converter* convert, string& prefi
     convert->getLiteralFromTensor(tensor, li);
     convert->instructions[name] = convert->program->add_literal(li);
     migraph::shape shape = li.get_shape();
-    convert->get_offset(shape);
 }
 
 void DecodeConvolutionAttr(const NameAttrList& func, Converter* convert, string& prefix) {

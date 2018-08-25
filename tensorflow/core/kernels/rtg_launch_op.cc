@@ -82,7 +82,7 @@ RTGLaunchOp::RTGLaunchOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
   OP_REQUIRES_OK(ctx, ctx->GetAttr("function", &func));
   program = nullptr;
   name = func->name();
-  rtglib::convert::GetProgram(*func, &program, required_bytes, name);
+  rtglib::convert::GetProgram(*func, &program, name);
 }
 
 void RTGLaunchOp::Compute(OpKernelContext* ctx) {

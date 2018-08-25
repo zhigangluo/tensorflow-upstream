@@ -83,16 +83,6 @@ struct Converter {
     bool isRegistered(const Node*);
     void add_instruction(const Node*, bool);
     void add_parameter(const NodeDef&, TensorShapeProto&);
-    int get_offset(int bytes, int ele_size) {
-        int cur_offset = ALIGN_BYTES(next_offset, ele_size);
-        next_offset = cur_offset + bytes;
-        return cur_offset;
-    }
-    int get_offset(migraph::shape shape) {
-        int bytes = shape.bytes();
-        int ele_size = bytes/shape.elements();
-        return get_offset(bytes, ele_size);
-    }
     T_RTG_INST_REF add_transpose(const T_RTG_INST_REFS&, int, std::vector<int64_t>&);
     void decodeAttr(const NameAttrList&);
     void getNodeType(const NodeDef&, DataType*);
@@ -109,7 +99,6 @@ struct Converter {
     std::unordered_map<string, AttrEncoder> attr_encoder_registry_;
     std::unordered_map<string, AttrDecoder> attr_decoder_registry_;
     void Init() {
-        next_offset = 0;
         register_op_converters();
         register_attr_encoders();
         register_attr_decoders();
@@ -132,7 +121,6 @@ struct Converter {
     std::unordered_map<string, int> rtgInsCnt;
     migraph::program* program;
     T_INPUT_MAP* inputs;
-    int next_offset;
     static const string prefix;
     static const string postfix;
     static const string param_prefix;

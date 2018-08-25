@@ -24,7 +24,7 @@ limitations under the License.
 namespace tensorflow {
 namespace rtglib {
 namespace convert {
-void GetProgram(const NameAttrList&, void **, int&, string);
+void GetProgram(const NameAttrList&, void **, string);
 void EvalProgram(void*, Tensor*, std::vector<const Tensor*>&, bool, void*, int64, string);
 void GetOutputShape(void *, TensorShape&);
 void AdjustShape( void *, std::vector<const Tensor*>&, string);
