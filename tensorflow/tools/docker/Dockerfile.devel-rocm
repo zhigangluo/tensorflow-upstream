@@ -18,7 +18,7 @@ ENV DEBIAN_FRONTEND noninteractive
 ENV HOME /home/rocm-user
 
 # install packages needed for this image
-RUN sudo apt-get update && sudo apt-get install -y python rpm git mercurial libxml2 libxml2-dev 
+RUN sudo apt-get update && sudo apt-get install -y rpm git mercurial libxml2 libxml2-dev 
 
 # Workaround : build HCC from source using the commit that is known to have fix for issue812
 RUN cd $HOME && git clone --recursive https://github.com/RadeonOpenCompute/hcc.git
@@ -82,10 +82,22 @@ RUN apt-get update --allow-insecure-repositories && DEBIAN_FRONTEND=noninteracti
   cmake-qt-gui \
   ssh \
   curl \
+  git \
+  libcurl3-dev \
+  libfreetype6-dev \
+  libhdf5-serial-dev \
+  libpng12-dev \
+  libzmq3-dev \
+  pkg-config \
+  python-dev \
+  rsync \
+  software-properties-common \
+  unzip \
+  zip \
+  zlib1g-dev \
   apt-utils \
   pkg-config \
   g++-multilib \
-  git \
   libunwind-dev \
   libfftw3-dev \
   libelf-dev \
@@ -102,8 +114,6 @@ RUN apt-get update --allow-insecure-repositories && DEBIAN_FRONTEND=noninteracti
   libnuma-dev \
   pciutils \
   virtualenv \
-  python-pip \
-  python3-pip \
   libxml2 \
   libxml2-dev \
   wget && \
@@ -149,20 +159,69 @@ ARG HCC_HOME=/opt/rocm/hcc
 ARG HIP_PATH=/opt/rocm/hip
 ARG PATH=$HCC_HOME/bin:$HIP_PATH/bin:$PATH
 
-# Copy and run the install scripts.
-COPY install/*.sh /install/
-ARG DEBIAN_FRONTEND=noninteractive
-RUN /install/install_bootstrap_deb_packages.sh
-RUN add-apt-repository -y ppa:openjdk-r/ppa && \
-    add-apt-repository -y ppa:george-edison55/cmake-3.x
-RUN /install/install_deb_packages.sh
-RUN /install/install_pip_packages.sh
-RUN /install/install_bazel.sh
-RUN /install/install_golang.sh
+RUN curl -fSsL -O https://bootstrap.pypa.io/get-pip.py && \
+    python get-pip.py && \
+    rm get-pip.py
+
+RUN pip --no-cache-dir install \
+        Pillow \
+        h5py \
+        ipykernel \
+        jupyter \
+        keras_applications==1.0.4 \
+        keras_preprocessing==1.0.2 \ 
+        matplotlib \
+        mock \
+        numpy==1.14.5 \ 
+        scipy \
+        sklearn \
+        pandas \
+        && \
+    python -m ipykernel.kernelspec
+
+# RUN ln -s -f /usr/bin/python3 /usr/bin/python#
+
+# Set up Bazel.
+
+# Running bazel inside a `docker build` command causes trouble, cf:
+#   https://github.com/bazelbuild/bazel/issues/134
+# The easiest solution is to set up a bazelrc file forcing --batch.
+RUN echo "startup --batch" >>/etc/bazel.bazelrc
+# Similarly, we need to workaround sandboxing issues:
+#   https://github.com/bazelbuild/bazel/issues/418
+RUN echo "build --spawn_strategy=standalone --genrule_strategy=standalone" \
+    >>/etc/bazel.bazelrc
+# Install the most recent bazel release.
+ENV BAZEL_VERSION 0.15.0
+WORKDIR /
+RUN mkdir /bazel && \
+    cd /bazel && \
+    curl -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36" -fSsL -O https://github.com/bazelbuild/bazel/releases/download/$BAZEL_VERSION/bazel-$BAZEL_VERSION-installer-linux-x86_64.sh && \
+    curl -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36" -fSsL -o /bazel/LICENSE.txt https://raw.githubusercontent.com/bazelbuild/bazel/master/LICENSE && \
+    chmod +x bazel-*.sh && \
+    ./bazel-$BAZEL_VERSION-installer-linux-x86_64.sh && \
+    cd / && \
+    rm -f /bazel/bazel-$BAZEL_VERSION-installer-linux-x86_64.sh
+
+# Download and build TensorFlow.
+WORKDIR /tensorflow-upstream
+RUN git clone --branch=.* --depth=1 https://github.com/ROCmSoftwarePlatform/tensorflow-upstream.git .
 
 # Set up the master bazelrc configuration file.
-COPY install/.bazelrc /etc/bazel.bazelrc
+RUN cp tensorflow/tools/ci_build/install/.bazelrc /etc/bazel.bazelrc
 
-# Configure the build for our CUDA configuration.
+# Configure the build for our ROCM configuration.
 ENV TF_NEED_ROCM 1
+ENV CI_BUILD_PYTHON=python
+
+RUN tensorflow/tools/ci_build/builds/configured ROCM \
+    bazel build -c opt --config=rocm \
+        tensorflow/tools/pip_package:build_pip_package
+RUN bazel-bin/tensorflow/tools/pip_package/build_pip_package /tmp/pip && \
+    pip --no-cache-dir install --upgrade /tmp/pip/tensorflow-*.whl && \
+    rm -rf /tmp/pip && \
+    rm -rf /root/.cache
+# Clean up pip wheel and Bazel cache when done.
+
+WORKDIR /root
 

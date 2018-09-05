@@ -17,6 +17,9 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/rocm/rocm_blas.h"
 
+#define EIGEN_USE_GPU
+#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
+
 #include <assert.h>
 #include <complex>
 
@@ -189,6 +192,7 @@ namespace wrap {
   __macro(rocblas_zhpr2)                    */ \
   __macro(rocblas_sgemm)                    \
   __macro(rocblas_dgemm)                    \
+  __macro(rocblas_hgemm)                    \
 /*  __macro(rocblas_cgemm)                    \
   __macro(rocblas_zgemm)                    \
   __macro(rocblas_ssyrk)                    \
@@ -238,6 +242,7 @@ PERFTOOLS_GPUTOOLS_ROCBLAS_V2_WRAP(rocblas_set_stream)
 //PERFTOOLS_GPUTOOLS_ROCBLAS_V2_WRAP(rocblas_set_pointer_mode)
 //PERFTOOLS_GPUTOOLS_ROCBLAS_V2_WRAP(rocblas_get_pointer_mode)
 //PERFTOOLS_GPUTOOLS_ROCBLAS_WRAP(rocblas_sgemm_batched)
+PERFTOOLS_GPUTOOLS_ROCBLAS_WRAP(rocblas_hgemm_strided_batched)
 PERFTOOLS_GPUTOOLS_ROCBLAS_WRAP(rocblas_sgemm_strided_batched)
 //PERFTOOLS_GPUTOOLS_ROCBLAS_WRAP(rocblas_dgemm_batched)
 PERFTOOLS_GPUTOOLS_ROCBLAS_WRAP(rocblas_dgemm_strided_batched)
@@ -1438,8 +1443,44 @@ bool ROCMBlas::DoBlasGemm(
     float alpha, const DeviceMemory<Eigen::half> &a, int lda,
     const DeviceMemory<Eigen::half> &b, int ldb, float beta,
     DeviceMemory<Eigen::half> *c, int ldc) {
-  LOG(ERROR) << "fp16 sgemm is not implemented in this rocBLAS version";
-  return false;
+  VLOG(1) << port::Printf(
+      "doing rocBLAS SGEMM: at=%d bt=%d m=%llu n=%llu "
+      "k=%llu alpha=%f a=%p lda=%d b=%p ldb=%d beta=%f "
+      "c=%p ldc=%d",
+      static_cast<int>(transa), static_cast<int>(transb), m, n, k, alpha,
+      a.opaque(), lda, b.opaque(), ldb, beta, c->opaque(), ldc);
+  if (transa == blas::Transpose::kNoTranspose) {
+    if (lda < static_cast<int64>(m)) {
+      LOG(WARNING) << "GEMM lda was smaller than m (no transpose case); "
+                      "precondition violation";
+    }
+  } else {
+    if (lda < static_cast<int64>(k)) {
+      LOG(WARNING) << "GEMM lda (" << lda << ") was smaller than k (" << k
+                   << ") (transpose case); precondition violation";
+    }
+  }
+  if (transb == blas::Transpose::kNoTranspose) {
+    if (ldb < static_cast<int64>(k)) {
+      LOG(WARNING) << "GEMM ldb (" << ldb << ") was smaller than k (" << k
+                   << ") (no transpose case); precondition violation";
+    }
+  } else {
+    if (ldb < static_cast<int64>(n)) {
+      LOG(WARNING) << "GEMM ldb was smaller than n (transpose case); "
+                      "precondition violation";
+    }
+  }
+  const Eigen::half alpha_half(alpha);
+  const Eigen::half beta_half(beta);
+  return DoBlasInternal(
+      wrap::rocblas_hgemm, stream, true /* = pointer_mode_host */,
+      ROCMBlasTranspose(transa), ROCMBlasTranspose(transb), m, n, k,
+      reinterpret_cast<const rocblas_half*>(&alpha_half),
+      reinterpret_cast<const rocblas_half*>(ROCMMemory(a)), lda,
+      reinterpret_cast<const rocblas_half*>(ROCMMemory(b)), ldb,
+      reinterpret_cast<const rocblas_half*>(&beta_half),
+      reinterpret_cast<rocblas_half*>(ROCMMemoryMutable(c)), ldc);
 }
 
 bool ROCMBlas::DoBlasGemm(Stream *stream, blas::Transpose transa,
@@ -1728,7 +1769,17 @@ bool ROCMBlas::DoBlasGemmWithAlgorithm(
   return false;
 }
 
-template <typename T, typename FuncT>
+template <typename T>
+struct EigenHalfToRocBlasHalf {
+  using type = T;
+};
+  
+template <>
+struct EigenHalfToRocBlasHalf<Eigen::half> {
+  using type = rocblas_half;
+};
+
+  template <typename T, typename FuncT>
 port::Status ROCMBlas::DoBlasGemmBatchedInternal(
     FuncT rocblas_func, Stream *stream, blas::Transpose transa,
     blas::Transpose transb, uint64 m, uint64 n, uint64 k, T alpha,
@@ -1736,12 +1787,19 @@ port::Status ROCMBlas::DoBlasGemmBatchedInternal(
     const port::ArraySlice<DeviceMemory<T> *> &b_ptrs_to_wrappers, int ldb,
     T beta, const port::ArraySlice<DeviceMemory<T> *> &c_ptrs_to_wrappers,
     int ldc, int batch_count, ScratchAllocator *scratch_allocator) {
+
+  // MAPPED_T will be same as T for all types except Eigen::Half
+  // for T = Eigen::half, MAPPED_T = rocblas_half
+  using MAPPED_T = typename EigenHalfToRocBlasHalf<T>::type;  
+    
   // Alocate local vectors to hold device pointers to matrices
-  std::vector<T *> a_raw_ptrs, b_raw_ptrs, c_raw_ptrs;
+  std::vector<MAPPED_T *> a_raw_ptrs, b_raw_ptrs, c_raw_ptrs;
   for (int i = 0; i < batch_count; ++i) {
-    a_raw_ptrs.push_back(static_cast<T *>(a_ptrs_to_wrappers[i]->opaque()));
-    b_raw_ptrs.push_back(static_cast<T *>(b_ptrs_to_wrappers[i]->opaque()));
-    c_raw_ptrs.push_back(static_cast<T *>(c_ptrs_to_wrappers[i]->opaque()));
+    // static_cast does work when converting Eigen::half* to rocblas_half*,
+    // hence the use od reinterpret_cast
+    a_raw_ptrs.push_back(reinterpret_cast<MAPPED_T *>(a_ptrs_to_wrappers[i]->opaque()));
+    b_raw_ptrs.push_back(reinterpret_cast<MAPPED_T *>(b_ptrs_to_wrappers[i]->opaque()));
+    c_raw_ptrs.push_back(reinterpret_cast<MAPPED_T *>(c_ptrs_to_wrappers[i]->opaque()));
   }
 
   //  batch_count <= 1 is base case, no definable matrix stride, set it same as ld*
@@ -1799,13 +1857,17 @@ port::Status ROCMBlas::DoBlasGemmBatchedInternal(
   else
       assert(!(ldb < n || bsc < ldc * k));
 
+
+  MAPPED_T *alpha_ptr = reinterpret_cast<MAPPED_T *>(&alpha);
+  MAPPED_T *beta_ptr = reinterpret_cast<MAPPED_T *>(&beta);
+  
   if(bsa_is_constant && bsb_is_constant && bsc_is_constant)
   {
     bool ok = DoBlasInternal(
             rocblas_func, stream, true /* = pointer_mode_host */,
             ROCMBlasTranspose(transa), ROCMBlasTranspose(transb), m, n, k,
-            ROCMComplex(&alpha), a_raw_ptrs[ 0 ], lda, bsa,
-            b_raw_ptrs[ 0 ], ldb, bsb, ROCMComplex(&beta),
+            ROCMComplex(alpha_ptr), a_raw_ptrs[ 0 ], lda, bsa,
+            b_raw_ptrs[ 0 ], ldb, bsb, ROCMComplex(beta_ptr),
             c_raw_ptrs[ 0 ], ldc, bsc, batch_count);
 
       if (ok) {
@@ -1824,7 +1886,19 @@ bool ROCMBlas::DoBlasGemmBatched(
     const port::ArraySlice<DeviceMemory<Eigen::half> *> &b, int ldb,
     float beta, const port::ArraySlice<DeviceMemory<Eigen::half> *> &c,
     int ldc, int batch_count, ScratchAllocator *scratch_allocator) {
-  return false;
+
+  const Eigen::half alpha_half(alpha);
+  const Eigen::half beta_half(beta);
+  
+  port::Status status = DoBlasGemmBatchedInternal(
+      wrap::rocblas_hgemm_strided_batched, stream, transa, transb, m, n, k,
+      alpha_half, a, lda, b, ldb, beta_half, c, ldc, batch_count,
+      scratch_allocator);
+  if (!status.ok()) {
+    LOG(ERROR) << status;
+  }
+  
+  return status.ok();
 }
 
 

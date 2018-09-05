@@ -11,11 +11,6 @@ DESCRIPTION:
   to this script, it invokes the hipcc compiler. Most arguments are passed
   as is as a string to --compiler-options of hipcc. When "-x rocm" is not
   present, this wrapper invokes gcc with the input arguments as is.
-
-NOTES:
-  Changes to the contents of this file must be propagated from
-  //third_party/gpus/crosstool/crosstool_wrapper_driver_rocm to
-  //third_party/gpus/crosstool/v*/*/clang/bin/crosstool_wrapper_driver_rocm
 """
 
 from __future__ import print_function
@@ -35,6 +30,8 @@ GCC_HOST_COMPILER_PATH = ('%{gcc_host_compiler_path}')
 
 HIPCC_PATH = '%{hipcc_path}'
 PREFIX_DIR = os.path.dirname(GCC_HOST_COMPILER_PATH)
+HIPCC_ENV = '%{hipcc_env}'
+VERBOSE = '%{crosstool_verbose}'=='1'
 
 def Log(s):
   print('gpus/crosstool: {0}'.format(s))
@@ -194,8 +191,11 @@ def InvokeHipcc(argv, log=False):
 
   # TODO(zhengxq): for some reason, 'gcc' needs this help to find 'as'.
   # Need to investigate and fix.
-  cmd = 'PATH=' + PREFIX_DIR + ':$PATH ' + cmd
+  cmd = 'PATH=' + PREFIX_DIR + ':$PATH '\
+        + HIPCC_ENV + ' '\
+        + cmd
   if log: Log(cmd)
+  if VERBOSE: print(cmd)
   return os.system(cmd)
 
 
@@ -209,6 +209,9 @@ def main():
   parser.add_argument('-pass-exit-codes', action='store_true')
   args, leftover = parser.parse_known_args(sys.argv[1:])
 
+  if VERBOSE: print('PWD=' + os.getcwd())
+  if VERBOSE: print('HIPCC_ENV=' + HIPCC_ENV)
+  
   if args.x and args.x[0] == 'rocm':
     if args.rocm_log: Log('-x rocm')
     leftover = [pipes.quote(s) for s in leftover]
@@ -219,8 +222,22 @@ def main():
   if args.pass_exit_codes:
     gpu_compiler_flags = [flag for flag in sys.argv[1:]
                                if not flag.startswith(('-pass-exit-codes'))]
-    if args.rocm_log: Log('Link with hipcc: %s' % (' '.join([HIPCC_PATH] + gpu_compiler_flags)))
-    return subprocess.call([HIPCC_PATH] + gpu_compiler_flags)
+
+    # special handling for $ORIGIN
+    # - guard every argument with ''
+    modified_gpu_compiler_flags = []
+    for flag in gpu_compiler_flags:
+      modified_gpu_compiler_flags.append(
+          "'" + flag + "'")
+
+    HIPCC_ENV_list = HIPCC_ENV.split('=')
+    HIPCC_ENV_dict = dict(zip(HIPCC_ENV_list[::2],HIPCC_ENV_list[1::2]))
+    cmd = HIPCC_ENV.split() + [HIPCC_PATH] + modified_gpu_compiler_flags
+    cmd_str = ' '.join(cmd)
+    if args.rocm_log: Log('Link with hipcc: %s' %(cmd_str))
+    if VERBOSE: print(cmd_str)
+    sub_process = subprocess.Popen([HIPCC_PATH] + modified_gpu_compiler_flags, env=HIPCC_ENV_dict)
+    return sub_process.wait()
 
   # Strip our flags before passing through to the CPU compiler for files which
   # are not -x rocm. We can't just pass 'leftover' because it also strips -x.
@@ -232,7 +249,7 @@ def main():
 
   # XXX: SE codes need to be built with gcc, but need this macro defined
   cpu_compiler_flags.append("-D__HIP_PLATFORM_HCC__")
-
+  if VERBOSE: print(' '.join([CPU_COMPILER] + cpu_compiler_flags))
   return subprocess.call([CPU_COMPILER] + cpu_compiler_flags)
 
 if __name__ == '__main__':

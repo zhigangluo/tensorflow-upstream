@@ -486,7 +486,7 @@ def set_cc_opt_flags(environ_cp):
   elif is_windows():
     default_cc_opt_flags = '/arch:AVX'
   else:
-    default_cc_opt_flags = '-march=haswell'
+    default_cc_opt_flags = '-march=haswell' # ROCm supports Haswell or later architecture
   question = ('Please specify optimization flags to use during compilation when'
               ' bazel option "--config=opt" is specified [Default is %s]: '
              ) % default_cc_opt_flags
@@ -496,7 +496,7 @@ def set_cc_opt_flags(environ_cp):
     write_to_bazelrc('build:opt --copt=%s' % opt)
   # It should be safe on the same build host.
   if not is_ppc64le() and not is_windows():
-    write_to_bazelrc('build:opt --host_copt=-march=haswell')
+    write_to_bazelrc('build:opt --host_copt=-march=native')
   write_to_bazelrc('build:opt --define with_default_optimizations=true')
 
 def set_tf_cuda_clang(environ_cp):
@@ -1503,11 +1503,12 @@ def main():
     else:
       set_trisycl_include_dir(environ_cp)
 
-  set_action_env_var(environ_cp, 'TF_NEED_ROCM', 'ROCm', True)
-  if 'LD_LIBRARY_PATH' in environ_cp and environ_cp.get(
-      'LD_LIBRARY_PATH') != '1':
-    write_action_env_to_bazelrc('LD_LIBRARY_PATH',
-                                environ_cp.get('LD_LIBRARY_PATH'))
+  set_action_env_var(environ_cp, 'TF_NEED_ROCM', 'ROCm', False)
+  if (environ_cp.get('TF_NEED_ROCM') == '1' and
+      'LD_LIBRARY_PATH' in environ_cp and environ_cp.get(
+      'LD_LIBRARY_PATH') != '1'):
+      write_action_env_to_bazelrc('LD_LIBRARY_PATH',
+                                  environ_cp.get('LD_LIBRARY_PATH'))
 
   set_action_env_var(environ_cp, 'TF_NEED_CUDA', 'CUDA', False)
   if (environ_cp.get('TF_NEED_CUDA') == '1' and
@@ -1544,6 +1545,19 @@ def main():
     if environ_cp.get('TF_DOWNLOAD_CLANG') == '1':
       write_to_bazelrc('build --config=download_clang')
       write_to_bazelrc('test --config=download_clang')
+
+  # SYCL / ROCm / CUDA are mutually exclusive.
+  # At most 1 GPU platform can be configured.
+  gpu_platform_count = 0
+  if environ_cp.get('TF_NEED_OPENCL_SYCL') == '1':
+    gpu_platform_count += 1
+  if environ_cp.get('TF_NEED_ROCM') == '1':
+    gpu_platform_count += 1
+  if environ_cp.get('TF_NEED_CUDA') == '1':
+    gpu_platform_count += 1
+  if gpu_platform_count >= 2:
+    raise UserInputError('SYCL / CUDA / ROCm are mututally exclusive. '
+                         'At most 1 GPU platform can be configured.')
 
   set_build_var(environ_cp, 'TF_NEED_MPI', 'MPI', 'with_mpi_support', False)
   if environ_cp.get('TF_NEED_MPI') == '1':

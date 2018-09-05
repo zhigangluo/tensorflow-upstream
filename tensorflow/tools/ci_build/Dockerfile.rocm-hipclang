@@ -10,6 +10,7 @@
 
 ###################################################
 # Stage 1 : build the tools needed for the TF build
+#     Note: experimental! hip-clang build/install
 ###################################################
 
 FROM rocm/rocm-terminal:1.8.2 as tool_builder
@@ -20,14 +21,40 @@ ENV HOME /home/rocm-user
 # install packages needed for this image
 RUN sudo apt-get update && sudo apt-get install -y python rpm git mercurial libxml2 libxml2-dev 
 
-# Workaround : build HCC from source using the commit that is known to have fix for issue812
-RUN cd $HOME && git clone --recursive https://github.com/RadeonOpenCompute/hcc.git
-RUN cd $HOME/hcc  && git checkout -b issue812-fix d530be7
-RUN cd $HOME/hcc && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && sudo make package -j$(nproc) && sudo dpkg -i *.deb
+# Build and install LLVM with Clang and LLD. Checkout clang and lld into llvm/tools/ dir.
+RUN cd $HOME && git clone -b amd-common https://github.com/RadeonOpenCompute/llvm.git
+WORKDIR $HOME/llvm/tools
+RUN git clone -b amd-common http://github.com/radeonopencompute/clang.git
+RUN git clone -b amd-common https://github.com/RadeonOpenCompute/lld.git
+RUN mkdir $HOME/llvm/build
+WORKDIR $HOME/llvm/build
+RUN cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/rocm/llvm -DLLVM_TARGETS_TO_BUILD="AMDGPU;X86" .. && make -j$(nproc) && sudo make -j$(nproc) install
 
-# Workaround: build HIP from source using fork that holds roc-1.8.x with the alternate fix for HIP PR 457
-RUN cd $HOME && git clone -b roc-1.8.x-pr457-altfix https://github.com/deven-amd/HIP.git
-RUN cd $HOME/HIP && mkdir build && cd build && cmake .. && sudo make package -j$(nproc) && sudo dpkg -i *.deb
+# Build and install ROCDL
+WORKDIR $HOME
+RUN git clone -b master https://github.com/RadeonOpenCompute/ROCm-Device-Libs
+RUN mkdir -p $HOME/ROCm-Device-Libs/build
+WORKDIR $HOME/ROCm-Device-Libs/build
+ENV LLVM_BUILD=$HOME/llvm/build
+RUN CC=$LLVM_BUILD/bin/clang cmake -DLLVM_DIR=$LLVM_BUILD -DAMDHSACOD=/opt/rocm/hsa/bin/x86_64/amdhsacod .. && make -j$(nproc) package && sudo dpkg -i ./*.deb
+
+# Build and install HCC
+WORKDIR $HOME
+RUN git clone --recursive -b clang_tot_upgrade https://github.com/RadeonOpenCompute/hcc.git
+RUN mkdir -p $HOME/hcc/build
+WORKDIR $HOME/hcc/build
+RUN cmake -DCMAKE_BUILD_TYPE=Release .. && make -j$(nproc) package && sudo dpkg -i ./*.deb
+
+# Build and install HIP-HCC-RT
+WORKDIR $HOME
+RUN git clone -b master https://github.com/ROCm-Developer-Tools/HIP
+RUN mkdir $HOME/HIP/build
+WORKDIR $HOME/HIP/build
+RUN cmake .. && make -j$(nproc) package && sudo dpkg -i ./*.deb
+
+# Set up environment for hip-clang
+ENV HIP_CLANG_PATH=/opt/rocm/llvm/bin
+ENV DEVICE_LIB_PATH=/opt/rocm/lib
 
 # Workaround : build MIOpen from source using fork of the public repo with the temporary fix for issue #1061 ($HOME env not set)
 RUN sudo apt-get install -y wget unzip libssl-dev libboost-dev libboost-system-dev libboost-filesystem-dev
@@ -119,6 +146,15 @@ RUN apt-get update --allow-insecure-repositories && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# COPY and install llvm built in the previous stage
+RUN rm -rf /opt/rocm/llvm && mkdir -p /opt/rocm/llvm
+COPY --from=tool_builder /opt/rocm/llvm/ /opt/rocm/llvm/
+
+# COPY and install the ROCDL package built in the previous stage
+RUN mkdir -p $HOME/pkgs/ROCm-Device-Libs
+COPY --from=tool_builder /home/rocm-user/ROCm-Device-Libs/build/*.deb $HOME/pkgs/ROCm-Device-Libs/
+RUN cd $HOME/pkgs/ROCm-Device-Libs && dpkg -i *.deb
+
 # COPY and install the hcc package built in the previous stage
 RUN mkdir -p $HOME/pkgs/hcc
 COPY --from=tool_builder /home/rocm-user/hcc/build/*.deb $HOME/pkgs/hcc/
@@ -144,10 +180,9 @@ ENV PATH="$OPENCL_ROOT/bin:${PATH}"
 # Add target file to help determine which device(s) to build for
 RUN echo -e "gfx803\ngfx900" >> /opt/rocm/bin/target.lst
 
-# Setup environment variables, and add those environment variables at the end of ~/.bashrc 
-ARG HCC_HOME=/opt/rocm/hcc
-ARG HIP_PATH=/opt/rocm/hip
-ARG PATH=$HCC_HOME/bin:$HIP_PATH/bin:$PATH
+# Set up environment for hip-clang
+ENV HIP_CLANG_PATH=/opt/rocm/llvm/bin
+ENV DEVICE_LIB_PATH=/opt/rocm/lib
 
 # Copy and run the install scripts.
 COPY install/*.sh /install/

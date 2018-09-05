@@ -118,21 +118,6 @@ def _host_compiler_includes(repository_ctx, cc):
   # Add numpy headers
   inc_dirs.append("/usr/lib/python2.7/dist-packages/numpy/core/include")
 
-  # Add HIP headers
-  inc_dirs.append("/opt/rocm/hip/include")
-
-  # Add rocrand and hiprand headers
-  inc_dirs.append("/opt/rocm/rocrand/include")
-  inc_dirs.append("/opt/rocm/hiprand/include")
-
-  # Add rocfft headers
-  inc_dirs.append("/opt/rocm/rocfft/include")
-
-  # Add rocBLAS headers
-  inc_dirs.append("/opt/rocm/rocblas/include")
-
-  # Add MIOpen headers
-  inc_dirs.append("/opt/rocm/miopen/include")
   entries = []
   for inc_dir in inc_dirs:
     entries.append("  cxx_builtin_include_directory: \"%s\"" % inc_dir)
@@ -154,13 +139,42 @@ def _rocm_include_path(repository_ctx, rocm_config):
     host compiler include directories, which can be added to the CROSSTOOL
     file.
   """
-  target_dir = ""
+  inc_dirs = []
+
+  # general ROCm include path
+  inc_dirs.append(rocm_config.rocm_toolkit_path + '/include')
+
+  # Add HSA headers
+  inc_dirs.append("/opt/rocm/hsa/include")
+
+  # Add HIP headers
+  inc_dirs.append("/opt/rocm/include/hip")
+  inc_dirs.append("/opt/rocm/include/hip/hcc_detail")
+
+  # Add rocrand and hiprand headers
+  inc_dirs.append("/opt/rocm/rocrand/include")
+  inc_dirs.append("/opt/rocm/hiprand/include")
+
+  # Add rocfft headers
+  inc_dirs.append("/opt/rocm/rocfft/include")
+
+  # Add rocBLAS headers
+  inc_dirs.append("/opt/rocm/rocblas/include")
+
+  # Add MIOpen headers
+  inc_dirs.append("/opt/rocm/miopen/include")
+
+  # Add hcc headers
+  inc_dirs.append("/opt/rocm/hcc/include")
+  inc_dirs.append("/opt/rocm/hcc/compiler/lib/clang/7.0.0/include/")
+  inc_dirs.append("/opt/rocm/hcc/lib/clang/7.0.0/include")
+  # Newer hcc builds use/are based off of clang 8.0.0.
+  inc_dirs.append("/opt/rocm/hcc/compiler/lib/clang/8.0.0/include/")
+  inc_dirs.append("/opt/rocm/hcc/lib/clang/8.0.0/include")
+
   inc_entries = []
-  if target_dir != "":
-    inc_entries.append("  cxx_builtin_include_directory: \"%s\"" % target_dir)
-  default_include = rocm_config.rocm_toolkit_path + '/include'
-  inc_entries.append("  cxx_builtin_include_directory: \"%s\"" %
-                     default_include)
+  for inc_dir in inc_dirs:
+    inc_entries.append("  cxx_builtin_include_directory: \"%s\"" % inc_dir)
   return "\n".join(inc_entries)
 
 def _enable_rocm(repository_ctx):
@@ -196,6 +210,37 @@ def _amdgpu_targets(repository_ctx):
       auto_configure_fail("Invalid AMDGPU target: %s" % amdgpu_target)
   return amdgpu_targets
 
+def _hipcc_env(repository_ctx):
+  """Returns the environment variable string for hipcc.
+
+  Args:
+    repository_ctx: The repository context.
+
+  Returns:
+    A string containing environment variables for hipcc.
+  """
+  hipcc_env = ""
+  for name in ["HIP_CLANG_PATH", "DEVICE_LIB_PATH", "HIP_VDI_HOME",\
+               "HIPCC_VERBOSE", "HIP_AUTO_INCLUDE_HEADER"]:
+    if name in repository_ctx.os.environ:
+      hipcc_env = hipcc_env + " " + name + "=" + \
+                repository_ctx.os.environ[name].strip()
+  return hipcc_env.strip()
+
+def _crosstool_verbose(repository_ctx):
+  """Returns the environment variable value CROSSTOOL_VERBOSE.
+
+  Args:
+    repository_ctx: The repository context.
+
+  Returns:
+    A string containing value of environment variable CROSSTOOL_VERBOSE.
+  """
+  name = "CROSSTOOL_VERBOSE"
+  if name in repository_ctx.os.environ:
+    return repository_ctx.os.environ[name].strip()
+  return "0"
+
 def _cpu_value(repository_ctx):
   """Returns the name of the host operating system.
 
@@ -206,10 +251,6 @@ def _cpu_value(repository_ctx):
     A string containing the name of the host operating system.
   """
   os_name = repository_ctx.os.name.lower()
-  if os_name.startswith("mac os"):
-    return "Darwin"
-  if os_name.find("windows") != -1:
-    return "Windows"
   result = repository_ctx.execute(["uname", "-s"])
   return result.stdout.strip()
 
@@ -217,7 +258,7 @@ def _lib_name(lib, cpu_value, version="", static=False):
   """Constructs the platform-specific name of a library.
 
   Args:
-    lib: The name of the library, such as "rocmrt"
+    lib: The name of the library, such as "hip"
     cpu_value: The name of the host operating system.
     version: The version of the library.
     static: True the library is static or False if it is a shared object.
@@ -225,34 +266,25 @@ def _lib_name(lib, cpu_value, version="", static=False):
   Returns:
     The platform-specific name of the library.
   """
-  if cpu_value in ("Linux", "FreeBSD"):
+  if cpu_value in ("Linux"):
     if static:
       return "lib%s.a" % lib
     else:
       if version:
         version = ".%s" % version
       return "lib%s.so%s" % (lib, version)
-  elif cpu_value == "Windows":
-    return "%s.lib" % lib
-  elif cpu_value == "Darwin":
-    if static:
-      return "lib%s.a" % lib
-    else:
-      if version:
-        version = ".%s" % version
-    return "lib%s%s.dylib" % (lib, version)
   else:
     auto_configure_fail("Invalid cpu_value: %s" % cpu_value)
 
 def _find_rocm_lib(lib, repository_ctx, cpu_value, basedir, version="",
                    static=False):
-  """Finds the given CUDA or cuDNN library on the system.
+  """Finds the given ROCm libraries on the system.
 
   Args:
-    lib: The name of the library, such as "rocmrt"
+    lib: The name of the library, such as "hip"
     repository_ctx: The repository context.
     cpu_value: The name of the host operating system.
-    basedir: The install directory of CUDA or cuDNN.
+    basedir: The install directory of ROCm.
     version: The version of the library.
     static: True if static library, False if shared object.
 
@@ -274,11 +306,6 @@ def _find_rocm_lib(lib, repository_ctx, cpu_value, basedir, version="",
     if path.exists:
       return struct(file_name=file_name, path=str(path.realpath))
 
-  elif cpu_value == "Windows":
-    path = repository_ctx.path("%s/lib/x64/%s" % (basedir, file_name))
-    if path.exists:
-      return struct(file_name=file_name, path=str(path.realpath))
-
   path = repository_ctx.path("%s/lib/%s" % (basedir, file_name))
   if path.exists:
     return struct(file_name=file_name, path=str(path.realpath))
@@ -289,11 +316,11 @@ def _find_rocm_lib(lib, repository_ctx, cpu_value, basedir, version="",
   auto_configure_fail("Cannot find rocm library %s" % file_name)
 
 def _find_libs(repository_ctx, rocm_config):
-  """Returns the CUDA and cuDNN libraries on the system.
+  """Returns the ROCm libraries on the system.
 
   Args:
     repository_ctx: The repository context.
-    rocm_config: The CUDA config as returned by _get_rocm_config
+    rocm_config: The ROCm config as returned by _get_rocm_config
 
   Returns:
     Map of library names to structs of filename and path as returned by
@@ -312,10 +339,6 @@ def _find_libs(repository_ctx, rocm_config):
       "miopen": _find_rocm_lib(
           "MIOpen", repository_ctx, cpu_value, rocm_config.rocm_toolkit_path + "/miopen"),
   }
-
-def _rocmrt_static_linkopt(cpu_value):
-  """Returns additional platform-specific linkopts for rocmrt."""
-  return "" if cpu_value == "Darwin" else "\"-lrt\","
 
 def _get_rocm_config(repository_ctx):
   """Detects and returns information about the ROCm installation on the system.
@@ -389,10 +412,7 @@ def _create_dummy_repository(repository_ctx):
        })
   _tpl(repository_ctx, "rocm:BUILD",
        {
-           "%{rocmrt_static_lib}": _lib_name("rocmrt_static", cpu_value,
-                                             static=True),
-           "%{rocmrt_static_linkopt}": _rocmrt_static_linkopt(cpu_value),
-           "%{rocmrt_lib}": _lib_name("rocmrt", cpu_value),
+           "%{hip_lib}": _lib_name("hip", cpu_value),
            "%{rocblas_lib}": _lib_name("rocblas", cpu_value),
            "%{miopen_lib}": _lib_name("miopen", cpu_value),
            "%{rocfft_lib}": _lib_name("rocfft", cpu_value),
@@ -562,9 +582,7 @@ def _create_local_rocm_repository(repository_ctx):
        })
   _tpl(repository_ctx, "rocm:BUILD",
        {
-           "%{rocmrt_static_lib}": rocm_libs["hip"].file_name,
-           "%{rocmrt_static_linkopt}": '',
-           "%{rocmrt_lib}": rocm_libs["hip"].file_name,
+           "%{hip_lib}": rocm_libs["hip"].file_name,
            "%{rocblas_lib}": rocm_libs["rocblas"].file_name,
            "%{rocfft_lib}": rocm_libs["rocfft"].file_name,
            "%{hiprand_lib}": rocm_libs["hiprand"].file_name,
@@ -593,6 +611,8 @@ def _create_local_rocm_repository(repository_ctx):
        {
            "%{cpu_compiler}": str(cc),
            "%{hipcc_path}": "/opt/rocm/bin/hipcc",
+           "%{hipcc_env}": _hipcc_env(repository_ctx),
+           "%{crosstool_verbose}": _crosstool_verbose(repository_ctx),
            "%{gcc_host_compiler_path}": str(cc),
            "%{rocm_amdgpu_targets}": ",".join(
                ["\"%s\"" % c for c in rocm_config.amdgpu_targets]),

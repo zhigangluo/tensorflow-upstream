@@ -125,7 +125,7 @@ __device__ inline unsigned GpuLaneId() {
   asm("mov.u32 %0, %%laneid;" : "=r"(lane_id));
 #elif TENSORFLOW_USE_ROCM
   // ROCM TODO add ROCM implementation
-  lane_id = hc::__lane_id();
+  lane_id = __lane_id();
 #endif
   return lane_id;
 }
@@ -380,9 +380,8 @@ __device__ T GpuShuffleXorSync(unsigned mask, T value, int lane_mask,
 
 
 #if TENSORFLOW_USE_ROCM
-template<>
 __device__ inline Eigen::half GpuShuffleXorSync(unsigned mask, Eigen::half value, int lane_mask,
-                                int width) {
+                                int width = warpSize) {
   assert(!(width & width - 1));
   assert(detail::GpuValidateShuffleSyncMask(
       mask, detail::GpuShuffleXorGetSrcLane(lane_mask, width)));

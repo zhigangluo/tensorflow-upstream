@@ -284,24 +284,23 @@ def _make_search_paths(prefix, levels_to_root):
        for search_level in range(levels_to_root + 1)])
 
 def _rpath_linkopts(name):
-  # Search parent directories up to the TensorFlow root directory for shared
-  # object dependencies, even if this op shared object is deeply nested
-  # (e.g. tensorflow/contrib/package:python/ops/_op_lib.so). tensorflow/ is then
-  # the root and tensorflow/libtensorflow_framework.so should exist when
-  # deployed. Other shared object dependencies (e.g. shared between contrib/
-  # ops) are picked up as long as they are in either the same or a parent
-  # directory in the tensorflow/ tree.
-  levels_to_root = native.package_name().count("/") + name.count("/")
-  return select({
-      clean_dep("//tensorflow:darwin"): [
-          "-Wl,%s" % (_make_search_paths("@loader_path", levels_to_root),),
-      ],
-      clean_dep("//tensorflow:windows"): [],
-      clean_dep("//tensorflow:windows_msvc"): [],
-      "//conditions:default": [
-          "-Wl,%s" % (_make_search_paths("\\\$$ORIGIN", levels_to_root),),
-      ],
-  })
+    # Search parent directories up to the TensorFlow root directory for shared
+    # object dependencies, even if this op shared object is deeply nested
+    # (e.g. tensorflow/contrib/package:python/ops/_op_lib.so). tensorflow/ is then
+    # the root and tensorflow/libtensorflow_framework.so should exist when
+    # deployed. Other shared object dependencies (e.g. shared between contrib/
+    # ops) are picked up as long as they are in either the same or a parent
+    # directory in the tensorflow/ tree.
+    levels_to_root = native.package_name().count("/") + name.count("/")
+    return select({
+        clean_dep("//tensorflow:darwin"): [
+            "-Wl,%s" % (_make_search_paths("@loader_path", levels_to_root),),
+        ],
+        clean_dep("//tensorflow:windows"): [],
+        "//conditions:default": [
+            "-Wl,%s" % (_make_search_paths("$$ORIGIN", levels_to_root),),
+        ],
+    })
 
 # Bazel-generated shared objects which must be linked into TensorFlow binaries
 # to define symbols from //tensorflow/core:framework and //tensorflow/core:lib.
@@ -747,27 +746,26 @@ def tf_gpu_cc_test(name,
       linkstatic=linkstatic,
       linkopts=linkopts,
       args=args)
-  if if_cuda_is_configured(True) or if_rocm_is_configured(True):
-      tf_cc_test(
-          name=name,
-          srcs=srcs,
-          suffix="_gpu",
-          deps=deps + [
-              clean_dep("//tensorflow/core:gpu_runtime"),
-          ],
-          linkstatic=select({
-              # TODO(allenl): Remove Mac static linking when Bazel 0.6 is out.
-              clean_dep("//tensorflow:darwin"): 1,
-              "@local_config_cuda//cuda:using_nvcc": 1,
-              "@local_config_cuda//cuda:using_clang": 1,
-              "//conditions:default": 0,
-          }),
-          tags=tags + tf_gpu_tests_tags(),
-          data=data,
-          size=size,
-          extra_copts=extra_copts,
-          linkopts=linkopts,
-          args=args)
+  tf_cc_test(
+      name=name,
+      srcs=srcs,
+      suffix="_gpu",
+      deps=deps + [
+          clean_dep("//tensorflow/core:gpu_runtime"),
+      ],
+      linkstatic=select({
+          # TODO(allenl): Remove Mac static linking when Bazel 0.6 is out.
+          clean_dep("//tensorflow:darwin"): 1,
+          "@local_config_cuda//cuda:using_nvcc": 1,
+          "@local_config_cuda//cuda:using_clang": 1,
+          "//conditions:default": 0,
+      }),
+      tags=tags + tf_gpu_tests_tags(),
+      data=data,
+      size=size,
+      extra_copts=extra_copts,
+      linkopts=linkopts,
+      args=args)
 
 register_extension_info(
     extension_name = "tf_gpu_cc_test",
@@ -918,7 +916,7 @@ register_extension_info(
     label_regex_for_dep = "{extension_name}",
 )
 
-def _cuda_copts():
+def _cuda_copts(opts=[]):
   """Gets the appropriate set of copts for (maybe) CUDA compilation.
 
     If we're doing CUDA compilation, returns copts for our particular CUDA
@@ -933,10 +931,10 @@ def _cuda_copts():
       ]),
       "@local_config_cuda//cuda:using_clang": ([
           "-fcuda-flush-denormals-to-zero",
-      ]),
+      ]) + if_cuda_is_configured(opts)
   })
 
-def _rocm_copts():
+def _rocm_copts(opts=[]):
   """Gets the appropriate set of copts for (maybe) ROCm compilation.
 
     If we're doing ROCm compilation, returns copts for our particular ROCm
@@ -947,7 +945,7 @@ def _rocm_copts():
       "//conditions:default": [],
       "@local_config_rocm//rocm:using_hipcc": ([
           "",
-      ]),
+      ]) + if_rocm_is_configured(opts)
   })
 
 # Build defs for TensorFlow kernels
@@ -965,7 +963,7 @@ def tf_gpu_kernel_library(srcs,
                           deps=[],
                           hdrs=[],
                           **kwargs):
-  copts=copts + tf_copts() + _cuda_copts() + _rocm_copts() + if_cuda_is_configured(gpu_copts) + if_rocm_is_configured(gpu_copts)
+  copts = copts + tf_copts() + _cuda_copts(opts=gpu_copts) + _rocm_copts(opts=gpu_copts)
   kwargs["features"] = kwargs.get("features", []) + ["-use_header_modules"]
 
   native.cc_library(
@@ -1791,21 +1789,25 @@ def tf_version_info_genrule():
       tools=[clean_dep("//tensorflow/tools/git:gen_git_source.py")],)
 
 def tf_py_build_info_genrule():
-  native.genrule(
-      name="py_build_info_gen",
-      outs=["platform/build_info.py"],
-      cmd=
-     "$(location //tensorflow/tools/build_info:gen_build_info.py) --raw_generate \"$@\" --build_config " + if_cuda("cuda", "cpu"),
-      local=1,
-      tools=[clean_dep("//tensorflow/tools/build_info:gen_build_info.py")],)
+    native.genrule(
+        name = "py_build_info_gen",
+        outs = ["platform/build_info.py"],
+        cmd =
+            "$(location //tensorflow/tools/build_info:gen_build_info.py) --raw_generate \"$@\" "
+            + " --is_config_cuda " + if_cuda("True", "False")
+            + " --is_config_rocm " + if_rocm("True", "False"),
+        local = 1,
+        tools = [clean_dep("//tensorflow/tools/build_info:gen_build_info.py")],
+    )
 
-def cc_library_with_android_deps(deps,
-                                 android_deps=[],
-                                 common_deps=[],
-                                 copts=tf_copts(),
-                                 **kwargs):
-  deps = if_not_android(deps) + if_android(android_deps) + common_deps
-  native.cc_library(deps=deps, copts=copts, **kwargs)
+def cc_library_with_android_deps(
+        deps,
+        android_deps = [],
+        common_deps = [],
+        copts = tf_copts(),
+        **kwargs):
+    deps = if_not_android(deps) + if_android(android_deps) + common_deps
+    native.cc_library(deps = deps, copts = copts, **kwargs)
 
 register_extension_info(
     extension_name = "cc_library_with_android_deps",

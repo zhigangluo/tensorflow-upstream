@@ -26,6 +26,17 @@ Keep up to date with release announcements and security updates by
 subscribing to
 [announce@tensorflow.org](https://groups.google.com/a/tensorflow.org/forum/#!forum/announce).
 
+**Tensorflow ROCm port**
+This project is based on TensorFlow 1.10.0. It has been verified to work with the latest ROCm1.8.2 release. Please follow the instructions [here](https://github.com/RadeonOpenCompute/ROCm-docker/blob/master/quick-start.md) to set up your ROCm stack.
+
+A docker container: **rocm/tensorflow:latest(https://hub.docker.com/r/rocm/tensorflow/)** is readily available to be used.
+
+The Wheels:
+- Python 2: http://repo.radeon.com/rocm/misc/tensorflow/tensorflow-1.10.0-cp27-cp27m-linux_x86_64.whl
+- Python 3: http://repo.radeon.com/rocm/misc/tensorflow/tensorflow-1.10.0-cp35-cp35m-linux_x86_64.whl
+
+For details on Tensorflow ROCm port, please take a look at the [ROCm-specific README file](README.ROCm.md).
+
 ## Installation
 *See [Installing TensorFlow](https://www.tensorflow.org/get_started/os_setup.html) for instructions on how to install our release binaries or how to build from source.*
 
