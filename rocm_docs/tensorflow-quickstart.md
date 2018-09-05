@@ -171,7 +171,7 @@ cd $HOME
 git clone https://github.com/tensorflow/benchmarks.git
 cd benchmarks
 
-# Temporary workaround to allow support for TF 1.8 without NCCL
+# Temporary workaround to allow support for TF 1.10 without NCCL
 
 git checkout -b may22 ddb23306fdc60fefe620e6ce633bcd645561cb0d && \
 sed -i 's|from tensorflow.contrib import nccl|#from tensorflow.contrib import nccl|g' ./scripts/tf_cnn_benchmarks/variable_mgr.py
