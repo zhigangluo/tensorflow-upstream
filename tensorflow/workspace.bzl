@@ -107,19 +107,16 @@ def tf_workspace(path_prefix="", tf_repo_name=""):
      strip_prefix = "abseil-cpp-9613678332c976568272c8f4a78631a29159271d",
      build_file = clean_dep("//third_party:com_google_absl.BUILD"),
   )
-
   tf_http_archive(
       name = "eigen_archive",
-            urls = [
-	      "https://mirror.bazel.build/bitbucket.org/eigen/eigen/get/8475e3c056d3.tar.gz",
-	      "https://bitbucket.org/eigen/eigen/get/8475e3c056d3.tar.gz",
+      urls = [
+          "https://mirror.bazel.build/github.com/ROCmSoftwarePlatform/eigen-upstream/archive/e85e22959ae92994776c9b05828cd986aa1291e8.tar.gz",
+          "https://github.com/ROCmSoftwarePlatform/eigen-upstream/archive/e85e22959ae92994776c9b05828cd986aa1291e8.tar.gz",
       ],
-      sha256 = "32b2e2f8751ac6ef223e2cd6ba70718fbc3c810463763083497f1ba203e13573",
-      strip_prefix = "eigen-eigen-8475e3c056d3",
-      build_file = clean_dep("//third_party:eigen.BUILD"),
-      patch_file = clean_dep("//third_party:eigen_fix_gpu_compilation.patch"),
+     sha256 = "40f5c5e4f3be755b007cf97dfb1984f4c3d595ac6d22ef7be5a1a3a0fc3fbc18",
+     strip_prefix = "eigen-upstream-e85e22959ae92994776c9b05828cd986aa1291e8",
+     build_file = clean_dep("//third_party:eigen.BUILD"),
   )
-
   tf_http_archive(
       name = "arm_compiler",
       sha256 = "970285762565c7890c6c087d262b0a18286e7d0384f13a37786d8521773bc969",
