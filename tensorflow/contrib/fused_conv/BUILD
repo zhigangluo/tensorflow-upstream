@@ -73,10 +73,11 @@ tf_kernel_library(
         "//tensorflow/core:lib_proto_parsing",
         "//tensorflow/core:stream_executor",
         "//tensorflow/core/kernels:bounds_check",
+        # "//tensorflow/core/kernels:conv_ops",
         "//tensorflow/core/kernels:conv_2d_hdrs",
         "//tensorflow/core/kernels:conv_ops_gpu_hdrs",
         "//tensorflow/core/kernels:gpu_util_hdrs",
-        "//tensorflow/core/kernels:ops_util_hdrs",
+        "//tensorflow/core/kernels:ops_util",
         "//third_party/eigen3",
         ] + if_cuda_is_configured([
             "@local_config_cuda//cuda:cudnn_header",]
@@ -95,10 +96,11 @@ tf_custom_op_library(
     deps = [
         "//tensorflow/core:lib_proto_parsing",
         "//tensorflow/core/kernels:bounds_check_lib",
+        # "//tensorflow/core/kernels:conv_ops",
         "//tensorflow/core/kernels:conv_2d_hdrs",
         "//tensorflow/core/kernels:conv_ops_gpu_hdrs",
         "//tensorflow/core/kernels:gpu_util_hdrs",
-        "//tensorflow/core/kernels:ops_util_hdrs",
+        "//tensorflow/core/kernels:ops_util",
         ] + if_cuda_is_configured([
             "@local_config_cuda//cuda:cudnn_header",]
         ),

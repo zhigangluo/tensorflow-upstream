@@ -150,7 +150,8 @@ def GetTestConfigs():
   Returns:
     all the valid test configs as tuples of data_format and use_gpu.
   """
-  test_configs = [("NCHW", True), ("NHWC", True)]
+  # test_configs = [("NCHW", True), ("NHWC", True)]
+  test_configs = [("NCHW", True)]
   return test_configs
 
 
@@ -160,7 +161,8 @@ class FusedConv2DBiasActivationTest(test.TestCase):
     return [dtypes.float32]
 
   def _FilterFormatsToTest(self, use_gpu):
-    return ["HWIO", "OIHW"]
+    # return ["HWIO", "OIHW"]
+    return ["OIHW"]
 
   def _SetupValuesForDevice(self, tensor_in_sizes, filter_in_sizes, bias,
                             strides, padding, activation_mode, data_format,
@@ -314,585 +316,585 @@ class FusedConv2DBiasActivationTest(test.TestCase):
         strides=[1, 1],
         padding="VALID")
 
-  def testConv2DEmpty(self, gpu_only=True):
-    if gpu_only and not test.is_gpu_available():
-      tf_logging.info("Skipping Conv2DEmpty test.")
-      return
-    # expected_output = []
-    self._VerifyValues(
-        tensor_in_sizes=[0, 2, 3, 3],
-        filter_in_sizes=[1, 1, 3, 3],
-        bias=[0.0, 0.0, 0.0],
-        strides=[1, 1],
-        padding="VALID")
+  # def testConv2DEmpty(self, gpu_only=True):
+  #   if gpu_only and not test.is_gpu_available():
+  #     tf_logging.info("Skipping Conv2DEmpty test.")
+  #     return
+  #   # expected_output = []
+  #   self._VerifyValues(
+  #       tensor_in_sizes=[0, 2, 3, 3],
+  #       filter_in_sizes=[1, 1, 3, 3],
+  #       bias=[0.0, 0.0, 0.0],
+  #       strides=[1, 1],
+  #       padding="VALID")
 
-  def testConv2D2x2Filter(self, gpu_only=True):
-    if gpu_only and not test.is_gpu_available():
-      tf_logging.info("Skipping Conv2D2x2Filter test.")
-      return
-    # expected_output = [0.0, 0.0, 0.0, 401.0, 533.0, 665.0]
-    self._VerifyValues(
-        tensor_in_sizes=[1, 2, 3, 3],
-        filter_in_sizes=[2, 2, 3, 3],
-        bias=[-2500.0, -2500.0, -2500.0],
-        strides=[1, 1],
-        padding="VALID")
+  # def testConv2D2x2Filter(self, gpu_only=True):
+  #   if gpu_only and not test.is_gpu_available():
+  #     tf_logging.info("Skipping Conv2D2x2Filter test.")
+  #     return
+  #   # expected_output = [0.0, 0.0, 0.0, 401.0, 533.0, 665.0]
+  #   self._VerifyValues(
+  #       tensor_in_sizes=[1, 2, 3, 3],
+  #       filter_in_sizes=[2, 2, 3, 3],
+  #       bias=[-2500.0, -2500.0, -2500.0],
+  #       strides=[1, 1],
+  #       padding="VALID")
 
-  def testConv2D1x2Filter(self, gpu_only=True):
-    if gpu_only and not test.is_gpu_available():
-      tf_logging.info("Skipping Conv2D1x2Filter test.")
-      return
-    # expected_output = [
-    #    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 190.0, 265.0, 340.0, 343.0, 436.0, 529.0
-    # ]
-    self._VerifyValues(
-        tensor_in_sizes=[1, 2, 3, 3],
-        filter_in_sizes=[1, 2, 3, 3],
-        bias=[-500.0, -500.0, -500.0],
-        strides=[1, 1],
-        padding="VALID")
+  # def testConv2D1x2Filter(self, gpu_only=True):
+  #   if gpu_only and not test.is_gpu_available():
+  #     tf_logging.info("Skipping Conv2D1x2Filter test.")
+  #     return
+  #   # expected_output = [
+  #   #    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 190.0, 265.0, 340.0, 343.0, 436.0, 529.0
+  #   # ]
+  #   self._VerifyValues(
+  #       tensor_in_sizes=[1, 2, 3, 3],
+  #       filter_in_sizes=[1, 2, 3, 3],
+  #       bias=[-500.0, -500.0, -500.0],
+  #       strides=[1, 1],
+  #       padding="VALID")
 
-  def testConv2D2x2FilterStride2(self, gpu_only=True):
-    if gpu_only and not test.is_gpu_available():
-      tf_logging.info("Skipping Conv2D2x2FilterStride2 test.")
-      return
-    # expected_output = [0.0, 67.0, 163.0]
-    self._VerifyValues(
-        tensor_in_sizes=[1, 2, 3, 3],
-        filter_in_sizes=[2, 2, 3, 3],
-        bias=[-2300.0, -2300.0, -2300.0],
-        strides=[2, 2],
-        padding="VALID")
+  # def testConv2D2x2FilterStride2(self, gpu_only=True):
+  #   if gpu_only and not test.is_gpu_available():
+  #     tf_logging.info("Skipping Conv2D2x2FilterStride2 test.")
+  #     return
+  #   # expected_output = [0.0, 67.0, 163.0]
+  #   self._VerifyValues(
+  #       tensor_in_sizes=[1, 2, 3, 3],
+  #       filter_in_sizes=[2, 2, 3, 3],
+  #       bias=[-2300.0, -2300.0, -2300.0],
+  #       strides=[2, 2],
+  #       padding="VALID")
 
-  def testConv2D2x2FilterStride2Same(self, gpu_only=True):
-    if gpu_only and not test.is_gpu_available():
-      tf_logging.info("Skipping Conv2D2x2FilterStride2Same test.")
-      return
-    # expected_output = [0.0, 2367.0, 2463.0, 1230.0, 1305.0, 1380.0]
-    self._VerifyValues(
-        tensor_in_sizes=[1, 2, 3, 3],
-        filter_in_sizes=[2, 2, 3, 3],
-        bias=[-2300.0, -1000.0, -1000.0],
-        strides=[2, 2],
-        padding="SAME")
+  # def testConv2D2x2FilterStride2Same(self, gpu_only=True):
+  #   if gpu_only and not test.is_gpu_available():
+  #     tf_logging.info("Skipping Conv2D2x2FilterStride2Same test.")
+  #     return
+  #   # expected_output = [0.0, 2367.0, 2463.0, 1230.0, 1305.0, 1380.0]
+  #   self._VerifyValues(
+  #       tensor_in_sizes=[1, 2, 3, 3],
+  #       filter_in_sizes=[2, 2, 3, 3],
+  #       bias=[-2300.0, -1000.0, -1000.0],
+  #       strides=[2, 2],
+  #       padding="SAME")
 
-  def testConv2D2x2FilterStride1x2(self, gpu_only=True):
-    if gpu_only and not test.is_gpu_available():
-      tf_logging.info("Skipping Conv2D2x2FilterStride1x2 test.")
-      return
-    # expected_output = [0.0, 0.0, 8.0, 28.0, 48.0, 68.0]
-    self._VerifyValues(
-        tensor_in_sizes=[1, 3, 6, 1],
-        filter_in_sizes=[2, 2, 1, 1],
-        bias=[-90.0],
-        strides=[1, 2],
-        padding="VALID")
+  # def testConv2D2x2FilterStride1x2(self, gpu_only=True):
+  #   if gpu_only and not test.is_gpu_available():
+  #     tf_logging.info("Skipping Conv2D2x2FilterStride1x2 test.")
+  #     return
+  #   # expected_output = [0.0, 0.0, 8.0, 28.0, 48.0, 68.0]
+  #   self._VerifyValues(
+  #       tensor_in_sizes=[1, 3, 6, 1],
+  #       filter_in_sizes=[2, 2, 1, 1],
+  #       bias=[-90.0],
+  #       strides=[1, 2],
+  #       padding="VALID")
 
-  def testConv2DKernelSmallerThanStrideValid(self, gpu_only=True):
-    if gpu_only and not test.is_gpu_available():
-      tf_logging.info("Skipping Conv2DKernelSmallerThanStrideValid test.")
-      return
-    # expected_output = [0, 0, 175, 205]
-    self._VerifyValues(
-        tensor_in_sizes=[1, 7, 7, 1],
-        filter_in_sizes=[2, 2, 1, 1],
-        bias=[-100.0],
-        strides=[3, 3],
-        padding="VALID")
+  # def testConv2DKernelSmallerThanStrideValid(self, gpu_only=True):
+  #   if gpu_only and not test.is_gpu_available():
+  #     tf_logging.info("Skipping Conv2DKernelSmallerThanStrideValid test.")
+  #     return
+  #   # expected_output = [0, 0, 175, 205]
+  #   self._VerifyValues(
+  #       tensor_in_sizes=[1, 7, 7, 1],
+  #       filter_in_sizes=[2, 2, 1, 1],
+  #       bias=[-100.0],
+  #       strides=[3, 3],
+  #       padding="VALID")
 
-  def testConv2DKernelSmallerThanStrideSame(self, gpu_only=True):
-    if gpu_only and not test.is_gpu_available():
-      tf_logging.info("Skipping Conv2DKernelSmallerThanStrideSame test.")
-      return
-    # expected = [0, 0, 2, 4]
-    self._VerifyValues(
-        tensor_in_sizes=[1, 3, 3, 1],
-        filter_in_sizes=[1, 1, 1, 1],
-        bias=[-5.0],
-        strides=[2, 2],
-        padding="SAME")
+  # def testConv2DKernelSmallerThanStrideSame(self, gpu_only=True):
+  #   if gpu_only and not test.is_gpu_available():
+  #     tf_logging.info("Skipping Conv2DKernelSmallerThanStrideSame test.")
+  #     return
+  #   # expected = [0, 0, 2, 4]
+  #   self._VerifyValues(
+  #       tensor_in_sizes=[1, 3, 3, 1],
+  #       filter_in_sizes=[1, 1, 1, 1],
+  #       bias=[-5.0],
+  #       strides=[2, 2],
+  #       padding="SAME")
 
-    # expected = [0, 0, 4, 6]
-    self._VerifyValues(
-        tensor_in_sizes=[1, 4, 4, 1],
-        filter_in_sizes=[1, 1, 1, 1],
-        bias=[-5.0],
-        strides=[2, 2],
-        padding="SAME")
+  #   # expected = [0, 0, 4, 6]
+  #   self._VerifyValues(
+  #       tensor_in_sizes=[1, 4, 4, 1],
+  #       filter_in_sizes=[1, 1, 1, 1],
+  #       bias=[-5.0],
+  #       strides=[2, 2],
+  #       padding="SAME")
 
-    # expected = [4, 0, 1, 0]
-    self._VerifyValues(
-        tensor_in_sizes=[1, 4, 4, 1],
-        filter_in_sizes=[2, 2, 1, 1],
-        bias=[-40.0],
-        strides=[3, 3],
-        padding="SAME")
+  #   # expected = [4, 0, 1, 0]
+  #   self._VerifyValues(
+  #       tensor_in_sizes=[1, 4, 4, 1],
+  #       filter_in_sizes=[2, 2, 1, 1],
+  #       bias=[-40.0],
+  #       strides=[3, 3],
+  #       padding="SAME")
 
-  def testConv2DKernelSizeMatchesInputSize(self, gpu_only=True):
-    if gpu_only and not test.is_gpu_available():
-      tf_logging.info("Skipping Conv2DKernelSizeMatchesInputSize test.")
-      return
-    # expected = [0, 5]
-    self._VerifyValues(
-        tensor_in_sizes=[1, 2, 2, 1],
-        filter_in_sizes=[2, 2, 1, 2],
-        bias=[-50.0, -55.0],
-        strides=[1, 1],
-        padding="VALID")
+  # def testConv2DKernelSizeMatchesInputSize(self, gpu_only=True):
+  #   if gpu_only and not test.is_gpu_available():
+  #     tf_logging.info("Skipping Conv2DKernelSizeMatchesInputSize test.")
+  #     return
+  #   # expected = [0, 5]
+  #   self._VerifyValues(
+  #       tensor_in_sizes=[1, 2, 2, 1],
+  #       filter_in_sizes=[2, 2, 1, 2],
+  #       bias=[-50.0, -55.0],
+  #       strides=[1, 1],
+  #       padding="VALID")
 
-    # expected = [0, 2, 282, 322]
-    self._VerifyValues(
-        tensor_in_sizes=[1, 8, 8, 1],
-        filter_in_sizes=[2, 2, 1, 1],
-        bias=[-200.0],
-        strides=[4, 4],
-        padding="SAME")
+  #   # expected = [0, 2, 282, 322]
+  #   self._VerifyValues(
+  #       tensor_in_sizes=[1, 8, 8, 1],
+  #       filter_in_sizes=[2, 2, 1, 1],
+  #       bias=[-200.0],
+  #       strides=[4, 4],
+  #       padding="SAME")
 
-  def testShapeFunctionEdgeCases(self):
-    # All shapes unknown.
-    c1 = fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
-        array_ops.placeholder(dtypes.float32),
-        array_ops.placeholder(dtypes.float32),
-        array_ops.placeholder(dtypes.float32),
-        strides=[1, 1, 1, 1],
-        padding="SAME",
-        activation_mode="Relu")
-    self.assertEqual([None, None, None, None], c1.get_shape().as_list())
+  # def testShapeFunctionEdgeCases(self):
+  #   # All shapes unknown.
+  #   c1 = fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
+  #       array_ops.placeholder(dtypes.float32),
+  #       array_ops.placeholder(dtypes.float32),
+  #       array_ops.placeholder(dtypes.float32),
+  #       strides=[1, 1, 1, 1],
+  #       padding="SAME",
+  #       activation_mode="Relu")
+  #   self.assertEqual([None, None, None, None], c1.get_shape().as_list())
 
-    # Incorrect input shape.
-    with self.assertRaises(ValueError):
-      fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
-          array_ops.placeholder(dtypes.float32, shape=[1, 3]),
-          array_ops.placeholder(dtypes.float32),
-          array_ops.placeholder(dtypes.float32),
-          strides=[1, 1, 1, 1],
-          padding="SAME",
-          activation_mode="Relu")
+  #   # Incorrect input shape.
+  #   with self.assertRaises(ValueError):
+  #     fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
+  #         array_ops.placeholder(dtypes.float32, shape=[1, 3]),
+  #         array_ops.placeholder(dtypes.float32),
+  #         array_ops.placeholder(dtypes.float32),
+  #         strides=[1, 1, 1, 1],
+  #         padding="SAME",
+  #         activation_mode="Relu")
 
-    # Incorrect filter shape.
-    with self.assertRaises(ValueError):
-      fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
-          array_ops.placeholder(dtypes.float32),
-          array_ops.placeholder(dtypes.float32, shape=[1, 3]),
-          array_ops.placeholder(dtypes.float32),
-          strides=[1, 1, 1, 1],
-          padding="SAME",
-          activation_mode="Relu")
+  #   # Incorrect filter shape.
+  #   with self.assertRaises(ValueError):
+  #     fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
+  #         array_ops.placeholder(dtypes.float32),
+  #         array_ops.placeholder(dtypes.float32, shape=[1, 3]),
+  #         array_ops.placeholder(dtypes.float32),
+  #         strides=[1, 1, 1, 1],
+  #         padding="SAME",
+  #         activation_mode="Relu")
 
-    # Depth mismatch.
-    with self.assertRaises(ValueError):
-      fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
-          array_ops.placeholder(dtypes.float32, shape=[32, 20, 20, 3]),
-          array_ops.placeholder(dtypes.float32, shape=[4, 4, 2, 2]),
-          array_ops.placeholder(dtypes.float32),
-          strides=[1, 1, 1, 1],
-          padding="SAME",
-          activation_mode="Relu")
+  #   # Depth mismatch.
+  #   with self.assertRaises(ValueError):
+  #     fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
+  #         array_ops.placeholder(dtypes.float32, shape=[32, 20, 20, 3]),
+  #         array_ops.placeholder(dtypes.float32, shape=[4, 4, 2, 2]),
+  #         array_ops.placeholder(dtypes.float32),
+  #         strides=[1, 1, 1, 1],
+  #         padding="SAME",
+  #         activation_mode="Relu")
 
-  def testOpEdgeCases(self, gpu_only=True):
-    if gpu_only and not test.is_gpu_available():
-      tf_logging.info("Skipping OpEdgeCases tests.")
-      return
-    with self.test_session() as sess:
-      # Illegal strides.
-      with self.assertRaisesRegexp(errors_impl.InvalidArgumentError,
-                                   "Convolutional strides are not supported in "
-                                   "the batch or depth dimensions."):
-        sess.run(
-            fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
-                array_ops.placeholder(dtypes.float32),
-                array_ops.placeholder(dtypes.float32),
-                array_ops.placeholder(dtypes.float32),
-                strides=[2, 1, 1, 1],
-                padding="SAME",
-                activation_mode="Relu"))
-      with self.assertRaisesRegexp(errors_impl.InvalidArgumentError,
-                                   "Convolutional strides are not supported in "
-                                   "the batch or depth dimensions."):
-        sess.run(
-            fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
-                array_ops.placeholder(dtypes.float32),
-                array_ops.placeholder(dtypes.float32),
-                array_ops.placeholder(dtypes.float32),
-                strides=[1, 1, 1, 2],
-                padding="SAME",
-                activation_mode="Relu"))
+  # def testOpEdgeCases(self, gpu_only=True):
+  #   if gpu_only and not test.is_gpu_available():
+  #     tf_logging.info("Skipping OpEdgeCases tests.")
+  #     return
+  #   with self.test_session() as sess:
+  #     # Illegal strides.
+  #     with self.assertRaisesRegexp(errors_impl.InvalidArgumentError,
+  #                                  "Convolutional strides are not supported in "
+  #                                  "the batch or depth dimensions."):
+  #       sess.run(
+  #           fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
+  #               array_ops.placeholder(dtypes.float32),
+  #               array_ops.placeholder(dtypes.float32),
+  #               array_ops.placeholder(dtypes.float32),
+  #               strides=[2, 1, 1, 1],
+  #               padding="SAME",
+  #               activation_mode="Relu"))
+  #     with self.assertRaisesRegexp(errors_impl.InvalidArgumentError,
+  #                                  "Convolutional strides are not supported in "
+  #                                  "the batch or depth dimensions."):
+  #       sess.run(
+  #           fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
+  #               array_ops.placeholder(dtypes.float32),
+  #               array_ops.placeholder(dtypes.float32),
+  #               array_ops.placeholder(dtypes.float32),
+  #               strides=[1, 1, 1, 2],
+  #               padding="SAME",
+  #               activation_mode="Relu"))
 
-      # Illegal activation mode.
-      with self.assertRaisesRegexp(ValueError,
-                                   "Op passed string 'Tanh' not in:"):
-        sess.run(
-            fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
-                array_ops.placeholder(dtypes.float32),
-                array_ops.placeholder(dtypes.float32),
-                array_ops.placeholder(dtypes.float32),
-                strides=[1, 1, 1, 1],
-                padding="SAME",
-                activation_mode="Tanh"))
+  #     # Illegal activation mode.
+  #     with self.assertRaisesRegexp(ValueError,
+  #                                  "Op passed string 'Tanh' not in:"):
+  #       sess.run(
+  #           fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
+  #               array_ops.placeholder(dtypes.float32),
+  #               array_ops.placeholder(dtypes.float32),
+  #               array_ops.placeholder(dtypes.float32),
+  #               strides=[1, 1, 1, 1],
+  #               padding="SAME",
+  #               activation_mode="Tanh"))
 
-      # Filter larger than input.
-      with self.assertRaisesRegexp(ValueError, "Negative dimension size"):
-        sess.run(
-            fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
-                array_ops.placeholder(dtypes.float32, shape=[32, 20, 20, 3]),
-                array_ops.placeholder(dtypes.float32, shape=[20, 21, 3, 2]),
-                array_ops.placeholder(dtypes.float32, shape=[2]),
-                strides=[1, 1, 1, 1],
-                padding="VALID",
-                activation_mode="Relu"))
-      with self.assertRaisesRegexp(ValueError, "Negative dimension size"):
-        sess.run(
-            fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
-                array_ops.placeholder(dtypes.float32, shape=[32, 20, 20, 3]),
-                array_ops.placeholder(dtypes.float32, shape=[21, 20, 3, 2]),
-                array_ops.placeholder(dtypes.float32, shape=[2]),
-                strides=[1, 1, 1, 1],
-                padding="VALID",
-                activation_mode="Relu"))
-
-
-def GetInceptionFwdTest(input_size, filter_size, stride, padding,
-                        gpu_only=True):
-
-  def Test(self):
-    if gpu_only and not test.is_gpu_available():
-      tf_logging.info("Skipping InceptionFwd %s", (input_size, filter_size,
-                                                   stride, padding))
-      return
-    tf_logging.info("Testing InceptionFwd %s", (input_size, filter_size, stride,
-                                                padding))
-    self._CompareFwdValues(input_size, filter_size, [stride, stride], padding)
-
-  return Test
+  #     # Filter larger than input.
+  #     with self.assertRaisesRegexp(ValueError, "Negative dimension size"):
+  #       sess.run(
+  #           fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
+  #               array_ops.placeholder(dtypes.float32, shape=[32, 20, 20, 3]),
+  #               array_ops.placeholder(dtypes.float32, shape=[20, 21, 3, 2]),
+  #               array_ops.placeholder(dtypes.float32, shape=[2]),
+  #               strides=[1, 1, 1, 1],
+  #               padding="VALID",
+  #               activation_mode="Relu"))
+  #     with self.assertRaisesRegexp(ValueError, "Negative dimension size"):
+  #       sess.run(
+  #           fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
+  #               array_ops.placeholder(dtypes.float32, shape=[32, 20, 20, 3]),
+  #               array_ops.placeholder(dtypes.float32, shape=[21, 20, 3, 2]),
+  #               array_ops.placeholder(dtypes.float32, shape=[2]),
+  #               strides=[1, 1, 1, 1],
+  #               padding="VALID",
+  #               activation_mode="Relu"))
 
 
-def CalculateConvolvedOutputDim(input_dim, filter_dim, stride, padding_type):
-  """Calculates the size of an output dimension of a strided convolution.
+# def GetInceptionFwdTest(input_size, filter_size, stride, padding,
+#                         gpu_only=True):
 
-  Given the sizes of the corresponding dimension of the input and filter shapes,
-  and the stride and padding_types, calculates the size of the output dimension.
-  This function can be called separately for each input dimension.
+#   def Test(self):
+#     if gpu_only and not test.is_gpu_available():
+#       tf_logging.info("Skipping InceptionFwd %s", (input_size, filter_size,
+#                                                    stride, padding))
+#       return
+#     tf_logging.info("Testing InceptionFwd %s", (input_size, filter_size, stride,
+#                                                 padding))
+#     self._CompareFwdValues(input_size, filter_size, [stride, stride], padding)
 
-  Args:
-    input_dim: An `int` specifying the size of the input dimension.
-    filter_dim: An `int` specifying the size of the filter dimension.
-    stride: An `int` specifying the step size of the convolution along the
-      input dimension.
-    padding_type: either 'VALID' or 'SAME'.
-
-  Returns:
-    The size of the output dimension.
-  """
-  if padding_type == "VALID":
-    return (input_dim - filter_dim + stride) // stride
-  else:  # padding_type == 'SAME'
-    return (input_dim + stride - 1) // stride
+#   return Test
 
 
-def NchwVectCToNchw(in_tensor):
-  # [N, C / 4, H, W, 4] => [N, C / 4, 4, H, W] == [N, C, H, W]
-  t = array_ops.transpose(in_tensor, [0, 1, 4, 2, 3])
-  n = in_tensor.shape.dims[0].value
-  c = in_tensor.shape.dims[1].value * in_tensor.shape.dims[4].value
-  h = in_tensor.shape.dims[2].value
-  w = in_tensor.shape.dims[3].value
-  return array_ops.reshape(t, [n, c, h, w])
+# def CalculateConvolvedOutputDim(input_dim, filter_dim, stride, padding_type):
+#   """Calculates the size of an output dimension of a strided convolution.
+
+#   Given the sizes of the corresponding dimension of the input and filter shapes,
+#   and the stride and padding_types, calculates the size of the output dimension.
+#   This function can be called separately for each input dimension.
+
+#   Args:
+#     input_dim: An `int` specifying the size of the input dimension.
+#     filter_dim: An `int` specifying the size of the filter dimension.
+#     stride: An `int` specifying the step size of the convolution along the
+#       input dimension.
+#     padding_type: either 'VALID' or 'SAME'.
+
+#   Returns:
+#     The size of the output dimension.
+#   """
+#   if padding_type == "VALID":
+#     return (input_dim - filter_dim + stride) // stride
+#   else:  # padding_type == 'SAME'
+#     return (input_dim + stride - 1) // stride
 
 
-def OihwVectIToHwio(in_tensor):
-  # [O, I / 4, H, W, 4] => [O, I / 4, 4, H, W] == [O, I, H, W]
-  t = array_ops.transpose(in_tensor, [2, 3, 1, 4, 0])
-  o = in_tensor.shape.dims[0].value
-  i = in_tensor.shape.dims[1].value * in_tensor.shape.dims[4].value
-  h = in_tensor.shape.dims[2].value
-  w = in_tensor.shape.dims[3].value
-  return array_ops.reshape(t, [h, w, i, o])
+# def NchwVectCToNchw(in_tensor):
+#   # [N, C / 4, H, W, 4] => [N, C / 4, 4, H, W] == [N, C, H, W]
+#   t = array_ops.transpose(in_tensor, [0, 1, 4, 2, 3])
+#   n = in_tensor.shape.dims[0].value
+#   c = in_tensor.shape.dims[1].value * in_tensor.shape.dims[4].value
+#   h = in_tensor.shape.dims[2].value
+#   w = in_tensor.shape.dims[3].value
+#   return array_ops.reshape(t, [n, c, h, w])
 
 
-def NchwToNchwVectC(in_tensor):
-  n, c, h, w = in_tensor.shape.as_list()
-  assert c % 4 == 0
-  t = array_ops.reshape(in_tensor, [n, c // 4, 4, h, w])
-  return array_ops.transpose(t, [0, 1, 3, 4, 2])
+# def OihwVectIToHwio(in_tensor):
+#   # [O, I / 4, H, W, 4] => [O, I / 4, 4, H, W] == [O, I, H, W]
+#   t = array_ops.transpose(in_tensor, [2, 3, 1, 4, 0])
+#   o = in_tensor.shape.dims[0].value
+#   i = in_tensor.shape.dims[1].value * in_tensor.shape.dims[4].value
+#   h = in_tensor.shape.dims[2].value
+#   w = in_tensor.shape.dims[3].value
+#   return array_ops.reshape(t, [h, w, i, o])
+
+
+# def NchwToNchwVectC(in_tensor):
+#   n, c, h, w = in_tensor.shape.as_list()
+#   assert c % 4 == 0
+#   t = array_ops.reshape(in_tensor, [n, c // 4, 4, h, w])
+#   return array_ops.transpose(t, [0, 1, 3, 4, 2])
 
 
 def HwioToOihw(in_tensor):
   return array_ops.transpose(in_tensor, [3, 2, 0, 1])
 
 
-def SimulateFusedConv2dBiasActivationInt8(conv_input_scale, conv_input, kernel,
-                                          padding, strides, side_input_scale,
-                                          side_input, biases, apply_relu):
-  """Simulates the int8 fused 2-D convolution op using separate float ops.
+# def SimulateFusedConv2dBiasActivationInt8(conv_input_scale, conv_input, kernel,
+#                                           padding, strides, side_input_scale,
+#                                           side_input, biases, apply_relu):
+#   """Simulates the int8 fused 2-D convolution op using separate float ops.
 
-    The arguments and return values have the same format, meanings and
-    restrictions as the actual op.
-  Args:
-    conv_input_scale: A scalar 'float'.
-    conv_input: A `Tensor` of type `qint8` in NCHW_VECT_C layout.
-    kernel: A `Tensor` of type `qint8` in OIHW_VECT_I layout.
-    padding: A `string` from: `"SAME", "VALID"`.
-    strides: A list of `ints`.
-    side_input_scale: A scalar 'float'.
-    side_input: A `Tensor` of type `qint8` in NCHW_VECT_C layout.
-    biases: A `Tensor` of type `float32` in NCHW layout.
-    apply_relu: A boolean to specify whether to apply "Relu" activation function
-      that clips outputs to the range [0, 127], or "None" activation that clips
-      to the range [-128, 127].
-  Returns:
-    A `Tensor` of type `qint8` in NCHW_VECT_C layout.
-  """
-  conv_result = nn_ops.conv2d(
-      NchwVectCToNchw(gen_array_ops.dequantize(conv_input, -128, 127)),
-      OihwVectIToHwio(gen_array_ops.dequantize(kernel, -128, 127)),
-      strides=strides,
-      padding=padding,
-      data_format="NCHW") * conv_input_scale
+#     The arguments and return values have the same format, meanings and
+#     restrictions as the actual op.
+#   Args:
+#     conv_input_scale: A scalar 'float'.
+#     conv_input: A `Tensor` of type `qint8` in NCHW_VECT_C layout.
+#     kernel: A `Tensor` of type `qint8` in OIHW_VECT_I layout.
+#     padding: A `string` from: `"SAME", "VALID"`.
+#     strides: A list of `ints`.
+#     side_input_scale: A scalar 'float'.
+#     side_input: A `Tensor` of type `qint8` in NCHW_VECT_C layout.
+#     biases: A `Tensor` of type `float32` in NCHW layout.
+#     apply_relu: A boolean to specify whether to apply "Relu" activation function
+#       that clips outputs to the range [0, 127], or "None" activation that clips
+#       to the range [-128, 127].
+#   Returns:
+#     A `Tensor` of type `qint8` in NCHW_VECT_C layout.
+#   """
+#   conv_result = nn_ops.conv2d(
+#       NchwVectCToNchw(gen_array_ops.dequantize(conv_input, -128, 127)),
+#       OihwVectIToHwio(gen_array_ops.dequantize(kernel, -128, 127)),
+#       strides=strides,
+#       padding=padding,
+#       data_format="NCHW") * conv_input_scale
 
-  conv_and_side_inputs = conv_result + side_input_scale * NchwVectCToNchw(
-      gen_array_ops.dequantize(side_input, -128, 127))
+#   conv_and_side_inputs = conv_result + side_input_scale * NchwVectCToNchw(
+#       gen_array_ops.dequantize(side_input, -128, 127))
 
-  output = nn_ops.bias_add(conv_and_side_inputs, biases, data_format="NCHW")
-  if apply_relu:
-    output = nn_ops.relu(output)
+#   output = nn_ops.bias_add(conv_and_side_inputs, biases, data_format="NCHW")
+#   if apply_relu:
+#     output = nn_ops.relu(output)
 
-  result, _, _ = gen_array_ops.quantize_v2(
-      NchwToNchwVectC(output), -128, 127, dtypes.qint8)
-  return result
+#   result, _, _ = gen_array_ops.quantize_v2(
+#       NchwToNchwVectC(output), -128, 127, dtypes.qint8)
+#   return result
 
 
-class FusedConvInt8Tests(test.TestCase):
-  _test_params = [
-      {
-          "batch_size": 1,
-          "input_channels": 4,
-          "output_channels": 4,
-          "input_height": 8,
-          "input_width": 8,
-          "filter_height": 6,
-          "filter_width": 6,
-          "vertical_stride": 2,
-          "horizontal_stride": 2,
-          "conv_input_scale": 0.002,
-          "side_input_scale": 0.0,
-          "bias_scale": 1,
-          "padding_type": "SAME"
-      },
-      {
-          "batch_size": 1,
-          "input_channels": 4,
-          "output_channels": 4,
-          "input_height": 6,
-          "input_width": 6,
-          "filter_height": 6,
-          "filter_width": 6,
-          "vertical_stride": 2,
-          "horizontal_stride": 2,
-          "conv_input_scale": 0.002,
-          "side_input_scale": 0.0,
-          "bias_scale": 1,
-          "padding_type": "SAME"
-      },
-      {
-          "batch_size": 2,
-          "input_channels": 8,
-          "output_channels": 16,
-          "input_height": 8,
-          "input_width": 8,
-          "filter_height": 3,
-          "filter_width": 3,
-          "vertical_stride": 2,
-          "horizontal_stride": 2,
-          "conv_input_scale": 0.002,
-          "side_input_scale": 0.0,
-          "bias_scale": 1,
-          "padding_type": "VALID"
-      },
-      {
-          "batch_size": 2,
-          "input_channels": 8,
-          "output_channels": 16,
-          "input_height": 8,
-          "input_width": 8,
-          "filter_height": 3,
-          "filter_width": 3,
-          "vertical_stride": 2,
-          "horizontal_stride": 2,
-          "conv_input_scale": 0.002,
-          "side_input_scale": 0.0,
-          "bias_scale": 1,
-          "padding_type": "SAME"
-      },
-      {
-          "batch_size": 2,
-          "input_channels": 8,
-          "output_channels": 16,
-          "input_height": 8,
-          "input_width": 8,
-          "filter_height": 3,
-          "filter_width": 3,
-          "vertical_stride": 2,
-          "horizontal_stride": 2,
-          "conv_input_scale": 0.002,
-          "side_input_scale": 0.5,
-          "bias_scale": 1,
-          "padding_type": "VALID"
-      },
-      {
-          "batch_size": 2,
-          "input_channels": 16,
-          "output_channels": 16,
-          "input_height": 9,
-          "input_width": 9,
-          "filter_height": 3,
-          "filter_width": 3,
-          "vertical_stride": 1,
-          "horizontal_stride": 1,
-          "conv_input_scale": 0.001,
-          "side_input_scale": 0.5,
-          "bias_scale": 1,
-          "padding_type": "SAME"
-      },
-      {
-          "batch_size": 3,
-          "input_channels": 8,
-          "output_channels": 8,
-          "input_height": 9,
-          "input_width": 9,
-          "filter_height": 5,
-          "filter_width": 5,
-          "vertical_stride": 1,
-          "horizontal_stride": 1,
-          "conv_input_scale": 0.001,
-          "side_input_scale": 0.5,
-          "bias_scale": 1,
-          "padding_type": "SAME"
-      },
-      {
-          "batch_size": 3,
-          "input_channels": 8,
-          "output_channels": 8,
-          "input_height": 9,
-          "input_width": 9,
-          "filter_height": 7,
-          "filter_width": 1,
-          "vertical_stride": 2,
-          "horizontal_stride": 1,
-          "conv_input_scale": 0.002,
-          "side_input_scale": 0.5,
-          "bias_scale": 1,
-          "padding_type": "SAME"
-      },
-      {
-          "batch_size": 3,
-          "input_channels": 8,
-          "output_channels": 8,
-          "input_height": 9,
-          "input_width": 9,
-          "filter_height": 1,
-          "filter_width": 7,
-          "vertical_stride": 1,
-          "horizontal_stride": 1,
-          "conv_input_scale": 0.002,
-          "side_input_scale": 0.5,
-          "bias_scale": 1,
-          "padding_type": "SAME"
-      },
-  ]
+# class FusedConvInt8Tests(test.TestCase):
+#   _test_params = [
+#       {
+#           "batch_size": 1,
+#           "input_channels": 4,
+#           "output_channels": 4,
+#           "input_height": 8,
+#           "input_width": 8,
+#           "filter_height": 6,
+#           "filter_width": 6,
+#           "vertical_stride": 2,
+#           "horizontal_stride": 2,
+#           "conv_input_scale": 0.002,
+#           "side_input_scale": 0.0,
+#           "bias_scale": 1,
+#           "padding_type": "SAME"
+#       },
+#       {
+#           "batch_size": 1,
+#           "input_channels": 4,
+#           "output_channels": 4,
+#           "input_height": 6,
+#           "input_width": 6,
+#           "filter_height": 6,
+#           "filter_width": 6,
+#           "vertical_stride": 2,
+#           "horizontal_stride": 2,
+#           "conv_input_scale": 0.002,
+#           "side_input_scale": 0.0,
+#           "bias_scale": 1,
+#           "padding_type": "SAME"
+#       },
+#       {
+#           "batch_size": 2,
+#           "input_channels": 8,
+#           "output_channels": 16,
+#           "input_height": 8,
+#           "input_width": 8,
+#           "filter_height": 3,
+#           "filter_width": 3,
+#           "vertical_stride": 2,
+#           "horizontal_stride": 2,
+#           "conv_input_scale": 0.002,
+#           "side_input_scale": 0.0,
+#           "bias_scale": 1,
+#           "padding_type": "VALID"
+#       },
+#       {
+#           "batch_size": 2,
+#           "input_channels": 8,
+#           "output_channels": 16,
+#           "input_height": 8,
+#           "input_width": 8,
+#           "filter_height": 3,
+#           "filter_width": 3,
+#           "vertical_stride": 2,
+#           "horizontal_stride": 2,
+#           "conv_input_scale": 0.002,
+#           "side_input_scale": 0.0,
+#           "bias_scale": 1,
+#           "padding_type": "SAME"
+#       },
+#       {
+#           "batch_size": 2,
+#           "input_channels": 8,
+#           "output_channels": 16,
+#           "input_height": 8,
+#           "input_width": 8,
+#           "filter_height": 3,
+#           "filter_width": 3,
+#           "vertical_stride": 2,
+#           "horizontal_stride": 2,
+#           "conv_input_scale": 0.002,
+#           "side_input_scale": 0.5,
+#           "bias_scale": 1,
+#           "padding_type": "VALID"
+#       },
+#       {
+#           "batch_size": 2,
+#           "input_channels": 16,
+#           "output_channels": 16,
+#           "input_height": 9,
+#           "input_width": 9,
+#           "filter_height": 3,
+#           "filter_width": 3,
+#           "vertical_stride": 1,
+#           "horizontal_stride": 1,
+#           "conv_input_scale": 0.001,
+#           "side_input_scale": 0.5,
+#           "bias_scale": 1,
+#           "padding_type": "SAME"
+#       },
+#       {
+#           "batch_size": 3,
+#           "input_channels": 8,
+#           "output_channels": 8,
+#           "input_height": 9,
+#           "input_width": 9,
+#           "filter_height": 5,
+#           "filter_width": 5,
+#           "vertical_stride": 1,
+#           "horizontal_stride": 1,
+#           "conv_input_scale": 0.001,
+#           "side_input_scale": 0.5,
+#           "bias_scale": 1,
+#           "padding_type": "SAME"
+#       },
+#       {
+#           "batch_size": 3,
+#           "input_channels": 8,
+#           "output_channels": 8,
+#           "input_height": 9,
+#           "input_width": 9,
+#           "filter_height": 7,
+#           "filter_width": 1,
+#           "vertical_stride": 2,
+#           "horizontal_stride": 1,
+#           "conv_input_scale": 0.002,
+#           "side_input_scale": 0.5,
+#           "bias_scale": 1,
+#           "padding_type": "SAME"
+#       },
+#       {
+#           "batch_size": 3,
+#           "input_channels": 8,
+#           "output_channels": 8,
+#           "input_height": 9,
+#           "input_width": 9,
+#           "filter_height": 1,
+#           "filter_width": 7,
+#           "vertical_stride": 1,
+#           "horizontal_stride": 1,
+#           "conv_input_scale": 0.002,
+#           "side_input_scale": 0.5,
+#           "bias_scale": 1,
+#           "padding_type": "SAME"
+#       },
+#   ]
 
-  def runTest(self, test_param, apply_relu):
-    batch_size = test_param["batch_size"]
-    input_channels = test_param["input_channels"]
-    output_channels = test_param["output_channels"]
-    input_height = test_param["input_height"]
-    input_width = test_param["input_width"]
-    filter_height = test_param["filter_height"]
-    filter_width = test_param["filter_width"]
-    vertical_stride = test_param["vertical_stride"]
-    horizontal_stride = test_param["horizontal_stride"]
-    conv_input_scale = test_param["conv_input_scale"]
-    side_input_scale = test_param["side_input_scale"]
-    bias_scale = test_param["bias_scale"]
-    padding_type = test_param["padding_type"]
+#   def runTest(self, test_param, apply_relu):
+#     batch_size = test_param["batch_size"]
+#     input_channels = test_param["input_channels"]
+#     output_channels = test_param["output_channels"]
+#     input_height = test_param["input_height"]
+#     input_width = test_param["input_width"]
+#     filter_height = test_param["filter_height"]
+#     filter_width = test_param["filter_width"]
+#     vertical_stride = test_param["vertical_stride"]
+#     horizontal_stride = test_param["horizontal_stride"]
+#     conv_input_scale = test_param["conv_input_scale"]
+#     side_input_scale = test_param["side_input_scale"]
+#     bias_scale = test_param["bias_scale"]
+#     padding_type = test_param["padding_type"]
 
-    conv_input, _, _ = gen_array_ops.quantize_v2(
-        random_ops.random_uniform(
-            [batch_size, input_channels // 4, input_height, input_width, 4],
-            minval=-0.0,
-            maxval=1.0,
-            dtype=dtypes.float32), -1.0, 1.0, dtypes.qint8)
+#     conv_input, _, _ = gen_array_ops.quantize_v2(
+#         random_ops.random_uniform(
+#             [batch_size, input_channels // 4, input_height, input_width, 4],
+#             minval=-0.0,
+#             maxval=1.0,
+#             dtype=dtypes.float32), -1.0, 1.0, dtypes.qint8)
 
-    kernel, _, _ = gen_array_ops.quantize_v2(
-        random_ops.random_uniform(
-            [
-                output_channels, input_channels // 4, filter_height,
-                filter_width, 4
-            ],
-            minval=-1.0,
-            maxval=1.0,
-            dtype=dtypes.float32), -1.0, 1.0, dtypes.qint8)
+#     kernel, _, _ = gen_array_ops.quantize_v2(
+#         random_ops.random_uniform(
+#             [
+#                 output_channels, input_channels // 4, filter_height,
+#                 filter_width, 4
+#             ],
+#             minval=-1.0,
+#             maxval=1.0,
+#             dtype=dtypes.float32), -1.0, 1.0, dtypes.qint8)
 
-    output_height = CalculateConvolvedOutputDim(input_height, filter_height,
-                                                vertical_stride, padding_type)
-    output_width = CalculateConvolvedOutputDim(input_width, filter_width,
-                                               horizontal_stride, padding_type)
-    tf_logging.info("output_height=", output_height, ", output_width=",
-                    output_width)
+#     output_height = CalculateConvolvedOutputDim(input_height, filter_height,
+#                                                 vertical_stride, padding_type)
+#     output_width = CalculateConvolvedOutputDim(input_width, filter_width,
+#                                                horizontal_stride, padding_type)
+#     tf_logging.info("output_height=", output_height, ", output_width=",
+#                     output_width)
 
-    side_input, _, _ = gen_array_ops.quantize_v2(
-        random_ops.random_uniform(
-            [batch_size, output_channels // 4, output_height, output_width, 4],
-            minval=0.0,
-            maxval=1.0,
-            dtype=dtypes.float32), -1.0, 1.0, dtypes.qint8)
+#     side_input, _, _ = gen_array_ops.quantize_v2(
+#         random_ops.random_uniform(
+#             [batch_size, output_channels // 4, output_height, output_width, 4],
+#             minval=0.0,
+#             maxval=1.0,
+#             dtype=dtypes.float32), -1.0, 1.0, dtypes.qint8)
 
-    biases = random_ops.random_uniform(
-        [output_channels],
-        minval=-10 * bias_scale,
-        maxval=20 * bias_scale,
-        dtype=dtypes.float32)
+#     biases = random_ops.random_uniform(
+#         [output_channels],
+#         minval=-10 * bias_scale,
+#         maxval=20 * bias_scale,
+#         dtype=dtypes.float32)
 
-    strides = [1, 1, vertical_stride, horizontal_stride]
+#     strides = [1, 1, vertical_stride, horizontal_stride]
 
-    actual = fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
-        conv_input,
-        kernel,
-        biases,
-        strides=strides,
-        padding=padding_type,
-        conv_input_scale=conv_input_scale,
-        side_input_scale=side_input_scale,
-        side_input=side_input,
-        activation_mode="Relu" if apply_relu else "None",
-        data_format="NCHW_VECT_C",
-        filter_format="OIHW_VECT_I")
+#     actual = fused_conv2d_bias_activation_op.fused_conv2d_bias_activation(
+#         conv_input,
+#         kernel,
+#         biases,
+#         strides=strides,
+#         padding=padding_type,
+#         conv_input_scale=conv_input_scale,
+#         side_input_scale=side_input_scale,
+#         side_input=side_input,
+#         activation_mode="Relu" if apply_relu else "None",
+#         data_format="NCHW_VECT_C",
+#         filter_format="OIHW_VECT_I")
 
-    expected = SimulateFusedConv2dBiasActivationInt8(
-        conv_input_scale, conv_input, kernel, padding_type, strides,
-        side_input_scale, side_input, biases, apply_relu)
+#     expected = SimulateFusedConv2dBiasActivationInt8(
+#         conv_input_scale, conv_input, kernel, padding_type, strides,
+#         side_input_scale, side_input, biases, apply_relu)
 
-    with self.test_session(use_gpu=True) as sess:
-      actual_y, expected_y = sess.run([actual, expected])
-      tf_logging.info("actual_y = ", actual_y)
-      tf_logging.info("expected_y = ", expected_y)
-      self.assertTrue(np.array_equal(actual_y, expected_y))
+#     with self.test_session(use_gpu=True) as sess:
+#       actual_y, expected_y = sess.run([actual, expected])
+#       tf_logging.info("actual_y = ", actual_y)
+#       tf_logging.info("expected_y = ", expected_y)
+#       self.assertTrue(np.array_equal(actual_y, expected_y))
 
-  def testFusedConvInt8(self):
-    if not test.is_gpu_available(
-        cuda_only=True, min_cuda_compute_capability=(6, 1)):
-      tf_logging.info("int8 test skipped because not run with --config=cuda or "
-                      "no GPUs with compute capability >= 6.1 are available.")
-      return
-    for apply_relu in [True, False]:
-      for test_param in self._test_params:
-        self.runTest(test_param, apply_relu)
+#   def testFusedConvInt8(self):
+#     if not test.is_gpu_available(
+#         cuda_only=True, min_cuda_compute_capability=(6, 1)):
+#       tf_logging.info("int8 test skipped because not run with --config=cuda or "
+#                       "no GPUs with compute capability >= 6.1 are available.")
+#       return
+#     for apply_relu in [True, False]:
+#       for test_param in self._test_params:
+#         self.runTest(test_param, apply_relu)
 
 
 if __name__ == "__main__":
-  for index, (input_size_, filter_size_, output_size_, stride_,
-              padding_) in enumerate(GetShrunkInceptionShapes()):
-    setattr(FusedConv2DBiasActivationTest, "testInceptionFwd_" + str(index),
-            GetInceptionFwdTest(input_size_, filter_size_, stride_, padding_))
+  # for index, (input_size_, filter_size_, output_size_, stride_,
+  #             padding_) in enumerate(GetShrunkInceptionShapes()):
+  #   setattr(FusedConv2DBiasActivationTest, "testInceptionFwd_" + str(index),
+  #           GetInceptionFwdTest(input_size_, filter_size_, stride_, padding_))
 
   # TODO(b/35359731)
   # Fwd, BckInput, and BackFilter to test that for certain input parameter
@@ -900,10 +902,10 @@ if __name__ == "__main__":
   # in such case, winograd nonfused algorithm is added as one option of the
   # conv autotune, and cuDNN version is smaller than 7, the following tests
   # will fail.
-  ishape = [1, 400, 400, 1]
-  fshape = [1, 1, 1, 256]
-  oshape = [1, 400, 400, 256]
-  setattr(FusedConv2DBiasActivationTest,
-          "testInceptionFwd_No_Winograd_Nonfused",
-          GetInceptionFwdTest(ishape, fshape, 1, "SAME", gpu_only=True))
+  # ishape = [1, 400, 400, 1]
+  # fshape = [1, 1, 1, 256]
+  # oshape = [1, 400, 400, 256]
+  # setattr(FusedConv2DBiasActivationTest,
+  #         "testInceptionFwd_No_Winograd_Nonfused",
+  #         GetInceptionFwdTest(ishape, fshape, 1, "SAME", gpu_only=True))
   test.main()

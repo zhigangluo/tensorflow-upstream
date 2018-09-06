@@ -265,6 +265,8 @@ typedef AutoTuneSingleton<ConvBiasActivationAutoTuneGroup, FusedConvParameters,
                           dnn::AlgorithmConfig>
     AutoTuneConvBiasActivation;
 
+
+#ifdef DEVEN // only testing NCHW 
 // Allocates 'transformed_tensor' and transforms 'nhwc_tensor' into it
 // using the specified 'batch_size', 'rows', 'cols', and 'depth' dimensions.
 template <typename T, size_t NDIMS>
@@ -286,7 +288,8 @@ Status TransformNHWCToNCHW(OpKernelContext* ctx, const Tensor& nhwc_tensor,
   *result = transformed_tensor;
   return Status::OK();
 }
-
+#endif // DEVEN
+  
 // Adjusts padding so cudnn supports it. Sets `adjusted_padding` to be the
 // adjusted padding, and `extra_padding_before` and `extra_padding_after` to be
 // the extra padding that FusedConv needs to apply before calling cudnn.
@@ -356,6 +359,8 @@ void LaunchFusedConv2DBiasActivationOp<GPUDevice, T, BiasType, ScaleType>::
   const Tensor* conv_input = &conv_input_param;
 
   Tensor maybe_padded_conv_input;
+  
+  #ifdef DEVEN // only testing VALID
   if (padding == Eigen::PADDING_SAME) {
     // Total padding on rows and cols is
     // Pr = (R' - 1) * S + Kr - R
@@ -411,7 +416,8 @@ void LaunchFusedConv2DBiasActivationOp<GPUDevice, T, BiasType, ScaleType>::
       conv_input_cols = new_conv_input_cols;
     }
   }
-
+  #endif // DEVEN
+  
   Tensor maybe_transformed_conv_input, maybe_transformed_side_input;
   Tensor maybe_transformed_output;
   const Tensor* side_input = &side_input_param;
@@ -420,6 +426,7 @@ void LaunchFusedConv2DBiasActivationOp<GPUDevice, T, BiasType, ScaleType>::
   // NOTE: Here and elsewhere, checking 'is_int8x4' may look unnecessary
   // and inefficient, but it is actually both a time and code size optimization,
   // since 'is_int8x4' is a constexpr determined by the template parameter.
+  #ifdef DEVEN  // only testing NCHW 
   if (!is_int8x4 && data_format == FORMAT_NHWC) {
     OP_REQUIRES_OK(ctx, (TransformNHWCToNCHW<T, rank>(
                             ctx, *conv_input, batch_size, conv_input_rows,
@@ -443,7 +450,8 @@ void LaunchFusedConv2DBiasActivationOp<GPUDevice, T, BiasType, ScaleType>::
       output = &maybe_transformed_output;
     }
   }
-
+  #endif // DEVEN
+  
   constexpr auto data_layout = is_int8x4 ? dnn::DataLayout::kBatchDepthYX4
                                          : dnn::DataLayout::kBatchDepthYX;
   constexpr auto filter_layout = is_int8x4 ? dnn::FilterLayout::kOutputInputYX4
@@ -494,6 +502,7 @@ void LaunchFusedConv2DBiasActivationOp<GPUDevice, T, BiasType, ScaleType>::
   // For qint8, we have already checked filter is OIHW_VECT_I in the
   // constructor, but we need to test for is_int8x4 so the if block doesn't
   // generate code for qint8.
+  #ifdef DEVEN // only testing IOHW
   if (!is_int8x4 && filter_format == FORMAT_HWIO) {
     // Shuffle filter tensor from HWIO to OIHW:
     OP_REQUIRES_OK(ctx, ctx->allocate_temp(
@@ -506,6 +515,7 @@ void LaunchFusedConv2DBiasActivationOp<GPUDevice, T, BiasType, ScaleType>::
         To32Bit(maybe_transformed_filter.tensor<T, 4>()));
     filter = &maybe_transformed_filter;
   }
+  #endif // DEVEN
 
   auto conv_input_ptr =
       AsDeviceMemory(reinterpret_cast<const typename RawType<T>::type*>(
@@ -526,11 +536,15 @@ void LaunchFusedConv2DBiasActivationOp<GPUDevice, T, BiasType, ScaleType>::
   auto bias_ptr = AsDeviceMemory(bias.template flat<BiasType>().data(),
                                  bias.template flat<BiasType>().size());
 
+  #ifdef DEVEN
   static int64 ConvolveScratchSize = GetDnnWorkspaceLimit(
       // default value is in bytes despite the name of the environment variable
       "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32  // 4GB
   );
-
+  #else 
+  static int64 ConvolveScratchSize = 1LL << 32;
+  #endif // DEVEN
+							  
   int device_id = stream->parent()->device_ordinal();
   FusedConvParameters fused_conv_parameters = {
       batch_size,
@@ -631,6 +645,7 @@ void LaunchFusedConv2DBiasActivationOp<GPUDevice, T, BiasType, ScaleType>::
                                     filter->shape().DebugString(), ")"));
   }
 
+  #ifdef DEVEN  // only testing NCHW
   // Convert the output tensor back from NCHW to NHWC if necessary.
   if (!is_int8x4 && (data_format == FORMAT_NHWC) && (output_depth > 1)) {
     functor::NCHWToNHWC<GPUDevice, T, 4>()(
@@ -638,6 +653,8 @@ void LaunchFusedConv2DBiasActivationOp<GPUDevice, T, BiasType, ScaleType>::
         const_cast<const Tensor*>(output)->tensor<T, 4>(),
         output_param->tensor<T, 4>());
   }
+  #endif // DEVEN
+  
 }
 
 // Forward declarations of the functor specializations for GPU used above.
@@ -667,6 +684,7 @@ REGISTER_KERNEL_BUILDER(
         .HostMemory("side_input_scale"),
     FusedConv2DBiasActivationOp<GPUDevice, float, float, float>);
 
+#ifdef DEVEN  // only testing float 
 REGISTER_KERNEL_BUILDER(
     Name("FusedConv2DBiasActivation")
         .Device(DEVICE_GPU)
@@ -675,6 +693,7 @@ REGISTER_KERNEL_BUILDER(
         .HostMemory("conv_input_scale")
         .HostMemory("side_input_scale"),
     FusedConv2DBiasActivationOp<GPUDevice, qint8, float, float>);
+#endif // DEVEN  
 
 #endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
