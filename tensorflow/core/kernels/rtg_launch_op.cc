@@ -128,7 +128,10 @@ void RTGLaunchOp::Compute(OpKernelContext* ctx) {
             LOG(WARNING) << allocated.status().error_message();
         }
     }
+    rtglib::convert::CompileProgram(program, output, input_ptrs, use_gpu, scratch_mem_ptr, scratch_mem_size, name);
+#if 0    
     rtglib::convert::EvalProgram(program, output, input_ptrs, use_gpu, scratch_mem_ptr, scratch_mem_size, name);
+#endif    
     ctx->set_output(0, *output);
     
 #if 0    

@@ -37,7 +37,7 @@ void GetProgram(const NameAttrList& function, void ** p_program, string name) {
     *p_program = program;
 }
 
-void EvalProgram(void* p_program, Tensor* output, std::vector<const Tensor*>& input_ptrs, bool use_gpu, void* scratch_mem_ptr, int64 size, string name)
+void CompileProgram(void* p_program, Tensor* output, std::vector<const Tensor*>& input_ptrs, bool use_gpu, void* scratch_mem_ptr, int64 size, string name)
 {
     migraph::program* program = reinterpret_cast<migraph::program*>(p_program);
     Converter convert(program, nullptr);
@@ -64,6 +64,67 @@ void EvalProgram(void* p_program, Tensor* output, std::vector<const Tensor*>& in
     if (!use_gpu) {
         program->compile(migraph::cpu::cpu_target{});
         DUMP_MIGRAPH(dump_graph::DumpMIGraph("After compile", name, program));
+#if 1
+        arg = program->eval(params);
+#endif        
+    } else  {
+        params["output"] = {output_shape, output_ptr};
+        std::vector<std::size_t> dims;
+        dims.push_back(size/sizeof(float));
+        migraph::shape shape = {migraph::shape::float_type, dims};
+        params["scratch"] = {shape, base_ptr};
+        program->compile(migraph::gpu::target{}, {}, params);
+        DUMP_MIGRAPH(dump_graph::DumpMIGraph("After compile", name, program));
+#if 1        
+        arg = program->eval(params);
+#endif        
+    }
+#if 0
+    const TensorShape dst_shape = output->shape();    
+    const migraph::shape arg_shape = arg.get_shape();
+    TensorShape src_shape;
+    convert.getTensorShape(arg_shape, src_shape);
+    CHECK(src_shape.IsSameSize(dst_shape));
+    if (!use_gpu) {
+        memcpy(const_cast<char*> (output->tensor_data().data()),
+               arg.cast<char>(), arg_shape.bytes());
+    } else {
+#if 1
+        migraph::argument ret = {arg_shape, output_ptr};
+        migraph::argument val = migraph::gpu::from_gpu(ret);
+        float* f_ptr = val.cast<float>();
+        float ele = f_ptr[0];
+#endif                
+        
+    }
+#endif    
+}
+
+void EvalProgram(void* p_program, Tensor* output, std::vector<const Tensor*>& input_ptrs, bool use_gpu, void* scratch_mem_ptr, int64 size, string name)
+{
+    migraph::program* program = reinterpret_cast<migraph::program*>(p_program);
+    Converter convert(program, nullptr);
+    migraph::shape output_shape = convert.getShape(output);
+    char* output_ptr = const_cast<char*> (output->tensor_data().data());
+    migraph::argument arg;
+    int param_cnt = 0;
+    std::unordered_map<string, migraph::argument> params;
+    char* base_ptr = reinterpret_cast<char*> (scratch_mem_ptr);
+
+    for (auto ins : migraph::iterator_for(*program)) {
+        string name = ins->op.name();
+        if (convert.starts_with(name, Converter::param_prefix)) {
+            name = migraph::any_cast<migraph::builtin::param>(ins->op).parameter;
+            if ((name != "scratch") && (name != "output")) {
+                const Tensor* ptr = input_ptrs[param_cnt++];
+                migraph::shape shape = convert.getShape(ptr);
+                char* data = const_cast<char*> (ptr->tensor_data().data());
+                migraph::argument arg = {shape, data};
+                params[name] = arg;
+            }
+        }
+    }
+    if (!use_gpu) {
         arg = program->eval(params);
     } else  {
         params["output"] = {output_shape, output_ptr};
@@ -71,8 +132,6 @@ void EvalProgram(void* p_program, Tensor* output, std::vector<const Tensor*>& in
         dims.push_back(size/sizeof(float));
         migraph::shape shape = {migraph::shape::float_type, dims};
         params["scratch"] = {shape, base_ptr};
-        program->compile(migraph::gpu::target{});
-        DUMP_MIGRAPH(dump_graph::DumpMIGraph("After compile", name, program));
         arg = program->eval(params);
     }
     const TensorShape dst_shape = output->shape();    
@@ -92,7 +151,7 @@ void EvalProgram(void* p_program, Tensor* output, std::vector<const Tensor*>& in
 #endif                
         
     }
-}
+}    
 
 void GetOutputShape(void * p_program, TensorShape& ret_shape)
 {
