@@ -23,10 +23,11 @@ limitations under the License.
 #include <vector>
 
 #include "tensorflow/contrib/lite/allocation.h"
-#include "tensorflow/contrib/lite/context.h"
-#include "tensorflow/contrib/lite/error_reporter.h"
+#include "tensorflow/contrib/lite/c/c_api_internal.h"
+#include "tensorflow/contrib/lite/core/api/error_reporter.h"
 #include "tensorflow/contrib/lite/memory_planner.h"
 #include "tensorflow/contrib/lite/profiling/profiler.h"
+#include "tensorflow/contrib/lite/stderr_reporter.h"
 
 namespace tflite {
 
@@ -135,6 +136,11 @@ class Interpreter {
   // Each index is bound check and this modifies the consistent_ flag of the
   // interpreter.
   TfLiteStatus SetVariables(std::vector<int> variables);
+
+  // Ensure the internal node storage memory allocates at least `count`
+  // spots for node. NOTE, this doesn't actually add operators. This is an
+  // efficiency optimization that is subject to change.
+  void ReserveNodes(int count);
 
   // Adds a node with the given parameters and returns the index of the new
   // node in `node_index` (optionally). Interpreter will take ownership of
@@ -329,6 +335,19 @@ class Interpreter {
 
   // Set the number of threads available to the interpreter.
   void SetNumThreads(int num_threads);
+
+  // Allow float16 precision for FP32 calculation when possible.
+  // default: not allow.
+  // WARNING: This is an experimental API and subject to change.
+  void SetAllowFp16PrecisionForFp32(bool allow) {
+    context_.allow_fp32_relax_to_fp16 = allow;
+  }
+
+  // Get the half precision flag.
+  // WARNING: This is an experimental API and subject to change.
+  bool GetAllowFp16PrecisionForFp32() const {
+    return context_.allow_fp32_relax_to_fp16;
+  }
 
   // Allow a delegate to look at the graph and modify the graph to handle
   // parts of the graph themselves. After this is called, the graph may

@@ -26,9 +26,6 @@ limitations under the License.
 namespace xla {
 namespace {
 
-using ::testing::Eq;
-using ::testing::HasSubstr;
-
 class WhileTransformerTest : public HloTestBase {
  protected:
   WhileTransformerTest()
@@ -118,7 +115,8 @@ class WhileTransformerTest : public HloTestBase {
   }
 
   void RunCopyInsertionPass() {
-    HloVerifier verifier;
+    HloVerifier verifier(/*layout_sensitive=*/false,
+                         /*allow_mixed_precision=*/false);
     TF_ASSERT_OK(verifier.Run(module_.get()).status());
     CopyInsertion copy_insertion;
     TF_ASSERT_OK(copy_insertion.Run(module_.get()).status());

@@ -21,6 +21,8 @@ from __future__ import print_function
 import numpy as np
 
 from tensorflow.python import keras
+from tensorflow.python.eager import context
+from tensorflow.python.framework import test_util
 from tensorflow.python.keras import testing_utils
 from tensorflow.python.platform import test
 from tensorflow.python.training.adam import AdamOptimizer
@@ -83,23 +85,23 @@ def _test_optimizer(optimizer, target=0.75):
 class KerasOptimizersTest(test.TestCase):
 
   def test_sgd(self):
-    with self.test_session():
+    with self.cached_session():
       _test_optimizer(keras.optimizers.SGD(lr=0.01,
                                            momentum=0.9,
                                            nesterov=True))
 
   def test_rmsprop(self):
-    with self.test_session():
+    with self.cached_session():
       _test_optimizer(keras.optimizers.RMSprop())
       _test_optimizer(keras.optimizers.RMSprop(decay=1e-3))
 
   def test_adagrad(self):
-    with self.test_session():
+    with self.cached_session():
       _test_optimizer(keras.optimizers.Adagrad())
       _test_optimizer(keras.optimizers.Adagrad(decay=1e-3))
 
   def test_adadelta(self):
-    with self.test_session():
+    with self.cached_session():
       _test_optimizer(keras.optimizers.Adadelta(), target=0.6)
       # Accuracy seems dependent on the initialization. Even adding tf.Print
       # nodes in the graph seemed to affect the initialization seed, and hence
@@ -107,28 +109,28 @@ class KerasOptimizersTest(test.TestCase):
       _test_optimizer(keras.optimizers.Adadelta(decay=1e-3), target=0.4)
 
   def test_adam(self):
-    with self.test_session():
+    with self.cached_session():
       _test_optimizer(keras.optimizers.Adam())
       _test_optimizer(keras.optimizers.Adam(decay=1e-3))
       _test_optimizer(keras.optimizers.Adam(amsgrad=True))
 
   def test_adamax(self):
-    with self.test_session():
+    with self.cached_session():
       _test_optimizer(keras.optimizers.Adamax())
       _test_optimizer(keras.optimizers.Adamax(decay=1e-3))
 
   def test_nadam(self):
-    with self.test_session():
+    with self.cached_session():
       _test_optimizer(keras.optimizers.Nadam())
 
   def test_clipnorm(self):
-    with self.test_session():
+    with self.cached_session():
       _test_optimizer(keras.optimizers.SGD(lr=0.01,
                                            momentum=0.9,
                                            clipnorm=0.5))
 
   def test_clipvalue(self):
-    with self.test_session():
+    with self.cached_session():
       _test_optimizer(keras.optimizers.SGD(lr=0.01,
                                            momentum=0.9,
                                            clipvalue=0.5))
@@ -140,6 +142,7 @@ class KerasOptimizersTest(test.TestCase):
         2, input_shape=(3,), kernel_constraint=keras.constraints.MaxNorm(1)))
     # This is possible
     model.compile(loss='mean_squared_error', optimizer=optimizer)
+    keras.backend.track_tf_optimizer(optimizer)
     model.fit(np.random.random((5, 3)),
               np.random.random((5, 2)),
               epochs=1,
@@ -153,13 +156,15 @@ class KerasOptimizersTest(test.TestCase):
     with self.assertRaises(NotImplementedError):
       optimizer.from_config(None)
 
+  @test_util.run_in_graph_and_eager_modes
   def test_tfoptimizer_iterations(self):
-    with self.test_session():
+    with self.cached_session():
       optimizer = keras.optimizers.TFOptimizer(AdamOptimizer(0.01))
       model = keras.models.Sequential()
       model.add(keras.layers.Dense(
           2, input_shape=(3,), kernel_constraint=keras.constraints.MaxNorm(1)))
       model.compile(loss='mean_squared_error', optimizer=optimizer)
+      keras.backend.track_tf_optimizer(optimizer)
       self.assertEqual(keras.backend.get_value(model.optimizer.iterations), 0)
 
       model.fit(np.random.random((55, 3)),
@@ -169,11 +174,15 @@ class KerasOptimizersTest(test.TestCase):
                 verbose=0)
       self.assertEqual(keras.backend.get_value(model.optimizer.iterations), 11)
 
-      model.fit(np.random.random((20, 3)),
-                np.random.random((20, 2)),
-                steps_per_epoch=8,
-                verbose=0)
-      self.assertEqual(keras.backend.get_value(model.optimizer.iterations), 19)
+      if not context.executing_eagerly():
+        # TODO(kathywu): investigate why training with an array input and
+        # setting the argument steps_per_epoch does not work in eager mode.
+        model.fit(np.random.random((20, 3)),
+                  np.random.random((20, 2)),
+                  steps_per_epoch=8,
+                  verbose=0)
+        self.assertEqual(
+            keras.backend.get_value(model.optimizer.iterations), 19)
 
   def test_negative_clipvalue_or_clipnorm(self):
     with self.assertRaises(ValueError):

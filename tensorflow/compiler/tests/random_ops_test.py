@@ -35,11 +35,12 @@ class RandomOpsTest(xla_test.XLATestCase):
   """Test cases for random-number generating operators."""
 
   def _random_types(self):
-    return set(self.numeric_types) - set(self.complex_types)
+    return set(self.numeric_types) - set(
+        self.complex_types) - {np.uint8, np.int8}
 
   def _testRngIsNotConstant(self, rng, dtype):
     # Tests that 'rng' does not always return the same value.
-    with self.test_session() as sess:
+    with self.cached_session() as sess:
       with self.test_scope():
         x = rng(dtype)
 
@@ -79,7 +80,7 @@ class RandomOpsTest(xla_test.XLATestCase):
       if (self.device in ["XLA_GPU", "XLA_CPU"
                          ]) and (dtype in [dtypes.bfloat16, dtypes.half]):
         continue
-      with self.test_session() as sess:
+      with self.cached_session() as sess:
         with self.test_scope():
           x = random_ops.random_uniform(
               shape=[1000], dtype=dtype, minval=-2, maxval=33)
@@ -99,7 +100,7 @@ class RandomOpsTest(xla_test.XLATestCase):
     count = 10000000
     # TODO(b/34339814): implement inverse erf support for non-F32 types.
     for dtype in [dtypes.float32]:
-      with self.test_session() as sess:
+      with self.cached_session() as sess:
         with self.test_scope():
           x = random_ops.truncated_normal(shape=[count], dtype=dtype)
         y = sess.run(x)
@@ -147,7 +148,7 @@ class RandomOpsTest(xla_test.XLATestCase):
     # TODO(b/26783907): this test requires the CPU backend to implement sort.
     if self.device in ["XLA_CPU"]:
       return
-    with self.test_session() as sess:
+    with self.cached_session() as sess:
       with self.test_scope():
         x = math_ops.range(1 << 16)
         shuffle = random_ops.random_shuffle(x)
@@ -158,7 +159,7 @@ class RandomOpsTest(xla_test.XLATestCase):
       self.assertAllEqual(set(result), set(expected))
 
   def testShuffle2d(self):
-    with self.test_session() as sess:
+    with self.cached_session() as sess:
       with self.test_scope():
         x = array_ops.diag(math_ops.range(20))
         shuffle = random_ops.random_shuffle(x)

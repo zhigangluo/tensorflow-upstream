@@ -40,13 +40,15 @@ class FloatAddOpModel : public SingleOpModelWithNNAPI {
  public:
   FloatAddOpModel(const TensorData& input1, const TensorData& input2,
                   const TensorData& output,
-                  ActivationFunctionType activation_type) {
+                  ActivationFunctionType activation_type,
+                  bool allow_fp32_relax_to_fp16 = false) {
     input1_ = AddInput(input1);
     input2_ = AddInput(input2);
     output_ = AddOutput(output);
     SetBuiltinOp(BuiltinOperator_ADD, BuiltinOptions_AddOptions,
                  CreateAddOptions(builder_, activation_type).Union());
-    BuildInterpreter({GetShape(input1_), GetShape(input2_)});
+    BuildInterpreter({GetShape(input1_), GetShape(input2_)},
+                     allow_fp32_relax_to_fp16);
   }
 
   int input1() { return input1_; }
@@ -69,6 +71,19 @@ TEST(NNAPIDelegate, AddWithNoActivation) {
   m.PopulateTensor<float>(m.input2(), {0.1, 0.2, 0.3, 0.5});
   m.Invoke();
   EXPECT_THAT(m.GetOutput(), ElementsAreArray({-1.9, 0.4, 1.0, 1.3}));
+}
+
+// Do a test with the NN API using no activation.
+// The test allows computing FP32 with FP16 precision. In this particular case,
+// calculating in FP32 or FP16 should produce the same results.
+TEST(NNAPIDelegate, AddWithNoActivationRelaxed) {
+  FloatAddOpModel m(
+      {TensorType_FLOAT32, {1, 2, 2, 1}}, {TensorType_FLOAT32, {1, 2, 2, 1}},
+      {TensorType_FLOAT32, {}}, ActivationFunctionType_NONE, true);
+  m.PopulateTensor<float>(m.input1(), {-2.0, -1.0, 1.0, 2.0});
+  m.PopulateTensor<float>(m.input2(), {1.0, 2.0, 3.0, 4.0});
+  m.Invoke();
+  EXPECT_THAT(m.GetOutput(), ElementsAreArray({-1.0, 1.0, 4.0, 6.0}));
 }
 
 // Do a test with the NN api with relu.
@@ -1773,15 +1788,16 @@ class RNNOpModel : public SingleOpModelWithNNAPI {
     weights_ = AddInput(weights);
     recurrent_weights_ = AddInput(recurrent_weights);
     bias_ = AddInput(TensorType_FLOAT32);
-    hidden_state_ = AddOutput(TensorType_FLOAT32);
+    hidden_state_ = AddInput(TensorType_FLOAT32, true);
     output_ = AddOutput(TensorType_FLOAT32);
     SetBuiltinOp(
         BuiltinOperator_RNN, BuiltinOptions_RNNOptions,
         CreateRNNOptions(builder_, ActivationFunctionType_RELU).Union());
-    BuildInterpreter({{batches_, input_size_},
-                      {units_, input_size_},
-                      {units_, units_},
-                      {units_}});
+    BuildInterpreter({{batches_, input_size_},  // input tensor
+                      {units_, input_size_},    // weights tensor
+                      {units_, units_},         // recurrent weights tensor
+                      {units_},                 // bias tensor
+                      {batches_, units_}});     // hidden state tensor
   }
 
   void SetBias(std::initializer_list<float> f) { PopulateTensor(bias_, f); }
@@ -1800,14 +1816,6 @@ class RNNOpModel : public SingleOpModelWithNNAPI {
 
   void SetInput(int offset, float* begin, float* end) {
     PopulateTensor(input_, offset, begin, end);
-  }
-
-  void ResetHiddenState() {
-    const int zero_buffer_size = units_ * batches_;
-    std::unique_ptr<float[]> zero_buffer(new float[zero_buffer_size]);
-    memset(zero_buffer.get(), 0, zero_buffer_size * sizeof(float));
-    PopulateTensor(hidden_state_, 0, zero_buffer.get(),
-                   zero_buffer.get() + zero_buffer_size);
   }
 
   std::vector<float> GetOutput() { return ExtractVector<float>(output_); }
@@ -1835,7 +1843,6 @@ TEST(NNAPIDelegate, RnnBlackBoxTest) {
   rnn.SetBias(rnn_bias);
   rnn.SetRecurrentWeights(rnn_recurrent_weights);
 
-  rnn.ResetHiddenState();
   const int input_sequence_size = sizeof(rnn_input) / sizeof(float) /
                                   (rnn.input_size() * rnn.num_batches());
 
@@ -1968,16 +1975,20 @@ class BaseSVDFOpModel : public SingleOpModelWithNNAPI {
     weights_feature_ = AddInput(weights_feature_type);
     weights_time_ = AddInput(weights_time_type);
     bias_ = AddNullInput();
-    state_ = AddOutput(TensorType_FLOAT32);
+    const int num_filters = units * rank;
+    activation_state_ = AddInput(
+        TensorData{TensorType_FLOAT32, {batches, memory_size * num_filters}},
+        /*is_variable=*/true);
     output_ = AddOutput(TensorType_FLOAT32);
     SetBuiltinOp(
         BuiltinOperator_SVDF, BuiltinOptions_SVDFOptions,
         CreateSVDFOptions(builder_, rank, ActivationFunctionType_NONE).Union());
     BuildInterpreter({
-        {batches_, input_size_},        // Input tensor
-        {units_ * rank, input_size_},   // weights_feature tensor
-        {units_ * rank, memory_size_},  // weights_time tensor
-        {units_}                        // bias tensor
+        {batches_, input_size_},              // input tensor
+        {units_ * rank, input_size_},         // weights_feature tensor
+        {units_ * rank, memory_size_},        // weights_time tensor
+        {units_},                             // bias tensor
+        {batches, memory_size * num_filters}  // activation_state tensor
     });
   }
 
@@ -1996,15 +2007,6 @@ class BaseSVDFOpModel : public SingleOpModelWithNNAPI {
     PopulateTensor(input_, offset, begin, end);
   }
 
-  // Resets the state of SVDF op by filling it with 0's.
-  void ResetState() {
-    const int zero_buffer_size = rank_ * units_ * batches_ * memory_size_;
-    std::unique_ptr<float[]> zero_buffer(new float[zero_buffer_size]);
-    memset(zero_buffer.get(), 0, zero_buffer_size * sizeof(float));
-    PopulateTensor(state_, 0, zero_buffer.get(),
-                   zero_buffer.get() + zero_buffer_size);
-  }
-
   // Extracts the output tensor from the SVDF op.
   std::vector<float> GetOutput() { return ExtractVector<float>(output_); }
 
@@ -2017,7 +2019,7 @@ class BaseSVDFOpModel : public SingleOpModelWithNNAPI {
   int weights_feature_;
   int weights_time_;
   int bias_;
-  int state_;
+  int activation_state_;
   int output_;
 
   int batches_;
@@ -2081,7 +2083,6 @@ TEST(NNAPIDelegate, SVDFBlackBoxTestRank1) {
        -0.10781813, 0.27201805,  0.14324132,  -0.23681851, -0.27115166,
        -0.01580888, -0.14943552, 0.15465137,  0.09784451,  -0.0337657});
 
-  svdf.ResetState();
   svdf.VerifyGoldens(svdf_input, svdf_golden_output_rank_1, sizeof(svdf_input));
 }
 
@@ -2120,7 +2121,6 @@ TEST(NNAPIDelegate, SVDFBlackBoxTestRank2) {
        0.27179423,  -0.04710215, 0.31069002,  0.22672787,  0.09580326,
        0.08682203,  0.1258215,   0.1851041,   0.29228821,  0.12366763});
 
-  svdf.ResetState();
   svdf.VerifyGoldens(svdf_input, svdf_golden_output_rank_2, sizeof(svdf_input));
 }
 
@@ -2192,8 +2192,12 @@ class LSTMOpModel : public SingleOpModelWithNNAPI {
       projection_bias_ = AddNullInput();
     }
 
-    output_state_ = AddOutput(TensorType_FLOAT32);
-    cell_state_ = AddOutput(TensorType_FLOAT32);
+    // Adding the 2 input state tensors.
+    input_activation_state_ =
+        AddInput(TensorData{TensorType_FLOAT32, {n_batch_, n_output_}}, true);
+    input_cell_state_ =
+        AddInput(TensorData{TensorType_FLOAT32, {n_batch_, n_cell_}}, true);
+
     output_ = AddOutput(TensorType_FLOAT32);
 
     SetBuiltinOp(BuiltinOperator_LSTM, BuiltinOptions_LSTMOptions,
@@ -2269,22 +2273,6 @@ class LSTMOpModel : public SingleOpModelWithNNAPI {
 
   void SetProjectionBias(std::initializer_list<float> f) {
     PopulateTensor(projection_bias_, f);
-  }
-
-  void ResetOutputState() {
-    const int zero_buffer_size = n_cell_ * n_batch_;
-    std::unique_ptr<float[]> zero_buffer(new float[zero_buffer_size]);
-    memset(zero_buffer.get(), 0, zero_buffer_size * sizeof(float));
-    PopulateTensor(output_state_, 0, zero_buffer.get(),
-                   zero_buffer.get() + zero_buffer_size);
-  }
-
-  void ResetCellState() {
-    const int zero_buffer_size = n_cell_ * n_batch_;
-    std::unique_ptr<float[]> zero_buffer(new float[zero_buffer_size]);
-    memset(zero_buffer.get(), 0, zero_buffer_size * sizeof(float));
-    PopulateTensor(cell_state_, 0, zero_buffer.get(),
-                   zero_buffer.get() + zero_buffer_size);
   }
 
   void SetInput(int offset, const float* begin, const float* end) {
@@ -2495,10 +2483,6 @@ TEST_F(NoCifgNoPeepholeNoProjectionNoClippingLstmTest, LstmBlackBoxTest) {
   lstm.SetRecurrentToForgetWeights(recurrent_to_forget_weights_);
   lstm.SetRecurrentToOutputWeights(recurrent_to_output_weights_);
 
-  // Resetting cell_state and output_state
-  lstm.ResetCellState();
-  lstm.ResetOutputState();
-
   VerifyGoldens(lstm_input_, lstm_golden_output_, &lstm);
 }
 
@@ -2601,10 +2585,6 @@ TEST_F(CifgNoPeepholeNoProjectionNoClippingLstmTest, LstmBlackBoxTest) {
 
   lstm.SetCellToForgetWeights(cell_to_forget_weights_);
   lstm.SetCellToOutputWeights(cell_to_output_weights_);
-
-  // Resetting cell_state and output_state
-  lstm.ResetCellState();
-  lstm.ResetOutputState();
 
   VerifyGoldens(lstm_input_, lstm_golden_output_, &lstm);
 }
@@ -3265,10 +3245,6 @@ TEST_F(NoCifgPeepholeProjectionClippingLstmTest, LstmBlackBoxTest) {
   lstm.SetCellToOutputWeights(cell_to_output_weights_);
 
   lstm.SetProjectionWeights(projection_weights_);
-
-  // Resetting cell_state and output_state
-  lstm.ResetCellState();
-  lstm.ResetOutputState();
 
   VerifyGoldens(lstm_input_, lstm_golden_output_, &lstm);
 }

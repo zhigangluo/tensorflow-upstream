@@ -71,7 +71,7 @@ class MinimizeLossStepTest(test.TestCase, parameterized.TestCase):
 
       self.evaluate(distribution.initialize())
       if not context.executing_eagerly():
-        with self.test_session() as sess:
+        with self.cached_session() as sess:
           run_step = sess.make_callable(run_step())
       self.evaluate(variables_lib.global_variables_initializer())
 
@@ -108,7 +108,7 @@ class MinimizeLossStepTest(test.TestCase, parameterized.TestCase):
                 model_fn, iterator.get_next(), run_concurrently=layer.built))
 
       if not context.executing_eagerly():
-        with self.test_session() as sess:
+        with self.cached_session() as sess:
           run_step = sess.make_callable(run_step())
         self.evaluate(variables_lib.global_variables_initializer())
 
@@ -168,7 +168,7 @@ class MinimizeLossStepTest(test.TestCase, parameterized.TestCase):
 
       self.evaluate(distribution.initialize())
       if not context.executing_eagerly():
-        with self.test_session() as sess:
+        with self.cached_session() as sess:
           run_step = sess.make_callable(run_step())
       self.evaluate(variables_lib.global_variables_initializer())
 
@@ -183,6 +183,10 @@ class MinimizeLossStepTest(test.TestCase, parameterized.TestCase):
                 "dense/kernel", "dense/bias", "beta1_power", "beta2_power",
                 "dense/kernel/Adam", "dense/kernel/Adam_1", "dense/bias/Adam",
                 "dense/bias/Adam_1"
+            ],
+            "Adagrad": [
+                "dense/kernel/Adagrad", "dense/kernel",
+                "dense/bias/Adagrad", "dense/bias"
             ]
         }
         variables = variables_map[optimizer_fn().get_name()]
@@ -249,7 +253,7 @@ class MinimizeLossStepTest(test.TestCase, parameterized.TestCase):
 
       self.evaluate(distribution.initialize())
       if not context.executing_eagerly():
-        with self.test_session() as sess:
+        with self.cached_session() as sess:
           run_step = sess.make_callable(run_step())
       self.evaluate(variables_lib.global_variables_initializer())
 
@@ -343,7 +347,7 @@ class MinimizeLossStepTest(test.TestCase, parameterized.TestCase):
 
       self.evaluate(distribution.initialize())
       if not context.executing_eagerly():
-        with self.test_session() as sess:
+        with self.cached_session() as sess:
           run_step = sess.make_callable(run_step())
       self.evaluate(variables_lib.global_variables_initializer())
 
@@ -466,7 +470,7 @@ class MinimizeLossStepTest(test.TestCase, parameterized.TestCase):
 
       self.evaluate(distribution.initialize())
       if not context.executing_eagerly():
-        with self.test_session() as sess:
+        with self.cached_session() as sess:
           run_step = sess.make_callable(run_step())
       self.evaluate(variables_lib.global_variables_initializer())
 

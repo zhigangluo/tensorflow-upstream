@@ -30,6 +30,7 @@ load(
     "//tensorflow:tensorflow.bzl",
     "if_android",
     "tf_cc_test",
+    "tf_cc_test_mkl",
     "tf_cc_tests",
     "tf_cc_binary",
     "tf_copts",
@@ -495,16 +496,6 @@ cc_library(
     ],
 )
 
-cc_library(
-    name = "warn_about_ints",
-    srcs = ["warn_about_ints.cc"],
-    hdrs = ["warn_about_ints.h"],
-    deps = [
-        "//tensorflow/core:framework",
-        "//tensorflow/core:protos_all_cc",
-    ],
-)
-
 # Private support libraries ---------------------------------------------------
 
 cc_header_only_library(
@@ -653,14 +644,7 @@ cc_library(
         ":split_v_op",
         ":strided_slice_op",
         ":tile_ops",
-    ] + if_mkl(
-        [
-            ":mkl_transpose_op",
-        ],
-        [
-            ":transpose_op",
-        ],
-    ) + [
+        ":transpose_op",
         ":unique_op",
         ":unpack_op",
         ":unravel_index_op",
@@ -903,24 +887,13 @@ tf_kernel_library(
     deps = ARRAY_DEPS,
 )
 
-if_mkl(
-    [tf_mkl_kernel_library(
-        name = "mkl_transpose_op",
-        srcs = [
-            "mkl_transpose_op.cc",
-            "transpose_op.cc",
-        ],
-        hdrs = ["transpose_op.h"],
-        deps = ARRAY_DEPS + mkl_deps(),
-    )],
-    [tf_kernel_library(
-        name = "transpose_op",
-        srcs = [
-            "transpose_op.cc",
-        ],
-        hdrs = ["transpose_op.h"],
-        deps = ARRAY_DEPS,
-    )],
+tf_kernel_library(
+    name = "transpose_op",
+    srcs = [
+        "transpose_op.cc",
+    ],
+    hdrs = ["transpose_op.h"],
+    deps = ARRAY_DEPS + if_mkl([":mkl_transpose_op"]),
 )
 
 tf_kernel_library(
@@ -1290,6 +1263,7 @@ tf_cuda_cc_test(
     srcs = ["gather_op_test.cc"],
     deps = [
         ":gather_op",
+        ":host_constant_op",
         ":ops_testutil",
         ":ops_util",
         "//tensorflow/core:core_cpu",
@@ -2302,6 +2276,31 @@ tf_cc_tests(
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
         "//tensorflow/core:testlib",
+    ],
+)
+
+cc_library(
+    name = "eigen_benchmark",
+    testonly = 1,
+    hdrs = [
+        "eigen_benchmark.h",
+        ":eigen_helpers",
+    ],
+    deps = [
+        "//tensorflow/core:framework",
+        "//third_party/eigen3",
+    ],
+)
+
+tf_cc_test(
+    name = "eigen_benchmark_cpu_test",
+    srcs = ["eigen_benchmark_cpu_test.cc"],
+    deps = [
+        ":eigen_benchmark",
+        ":eigen_helpers",
+        "//tensorflow/core:test",
+        "//tensorflow/core:test_main",
+        "//third_party/eigen3",
     ],
 )
 
@@ -3534,13 +3533,13 @@ tf_kernel_library(
 tf_kernel_library(
     name = "softplus_op",
     prefix = "softplus_op",
-    deps = NN_DEPS + [":warn_about_ints"],
+    deps = NN_DEPS,
 )
 
 tf_kernel_library(
     name = "softsign_op",
     prefix = "softsign_op",
-    deps = NN_DEPS + [":warn_about_ints"],
+    deps = NN_DEPS,
 )
 
 tf_kernel_library(
@@ -3775,7 +3774,7 @@ tf_kernel_library(
         "spacetobatch_functor.h",
         "spacetobatch_functor_gpu.cu.cc",
     ],
-    visibility = ["//visibility:private"],
+    visibility = [":friends"],
     deps = [
         ":bounds_check",
         "//tensorflow/core:framework",
@@ -4205,6 +4204,7 @@ cc_library(
         "hinge-loss.h",
         "logistic-loss.h",
         "loss.h",
+        "poisson-loss.h",
         "smooth-hinge-loss.h",
         "squared-loss.h",
     ],
@@ -4451,10 +4451,46 @@ tf_kernel_library(
     deps = STRING_DEPS + ["@com_googlesource_code_re2//:re2"],
 )
 
+tf_cc_test(
+    name = "regex_replace_op_test",
+    size = "small",
+    srcs = ["regex_replace_op_test.cc"],
+    deps = [
+        ":regex_replace_op",
+        "//tensorflow/core:core_cpu",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:lib",
+        "//tensorflow/core:protos_all_cc",
+        "//tensorflow/core:test",
+        "//tensorflow/core:test_main",
+        "//tensorflow/core:testlib",
+        "//tensorflow/core/kernels:ops_testutil",
+        "//tensorflow/core/kernels:ops_util",
+    ],
+)
+
 tf_kernel_library(
     name = "string_split_op",
     prefix = "string_split_op",
     deps = STRING_DEPS,
+)
+
+tf_cc_test(
+    name = "string_split_op_test",
+    size = "small",
+    srcs = ["string_split_op_test.cc"],
+    deps = [
+        ":string_split_op",
+        "//tensorflow/core:core_cpu",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:lib",
+        "//tensorflow/core:protos_all_cc",
+        "//tensorflow/core:test",
+        "//tensorflow/core:test_main",
+        "//tensorflow/core:testlib",
+        "//tensorflow/core/kernels:ops_testutil",
+        "//tensorflow/core/kernels:ops_util",
+    ],
 )
 
 tf_kernel_library(
@@ -4467,6 +4503,25 @@ tf_kernel_library(
     name = "substr_op",
     prefix = "substr_op",
     deps = STRING_DEPS,
+)
+
+tf_cc_test(
+    name = "substr_op_test",
+    size = "small",
+    srcs = ["substr_op_test.cc"],
+    deps = [
+        ":substr_op",
+        "//tensorflow/core:core_cpu",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:lib",
+        "//tensorflow/core:lib_internal",
+        "//tensorflow/core:protos_all_cc",
+        "//tensorflow/core:test",
+        "//tensorflow/core:test_main",
+        "//tensorflow/core:testlib",
+        "//tensorflow/core/kernels:ops_testutil",
+        "//tensorflow/core/kernels:ops_util",
+    ],
 )
 
 tf_kernel_library(
@@ -5068,7 +5123,6 @@ filegroup(
         "training_ops.h",
         "transpose_functor.h",
         "transpose_op.h",
-        "warn_about_ints.h",
         "where_op.h",
         "xent_op.h",
     ],
@@ -5150,6 +5204,7 @@ filegroup(
         "fifo_queue.cc",
         "fifo_queue_op.cc",
         "fused_batch_norm_op.cc",
+        "listdiff_op.cc",
         "population_count_op.cc",
         "population_count_op.h",
         "winograd_transform.h",
@@ -5245,7 +5300,6 @@ filegroup(
         "transpose_functor_cpu.cc",
         "transpose_op.cc",
         "unique_op.cc",
-        "warn_about_ints.cc",
         "where_op.cc",
         "xent_op.cc",
         ":android_extended_ops_headers",
@@ -6175,6 +6229,26 @@ tf_mkl_kernel_library(
     ] + mkl_deps(),
 )
 
+tf_cc_test_mkl(
+    name = "mkl_conv_ops_test",
+    size = "small",
+    srcs = ["mkl_conv_ops_test.cc"],
+    deps = [
+        ":ops_testutil",
+        ":ops_util",
+        "//tensorflow/cc:cc_ops",
+        "//tensorflow/core:core_cpu",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:framework_internal",
+        "//tensorflow/core:lib",
+        "//tensorflow/core:protos_all_cc",
+        "//tensorflow/core:tensorflow",
+        "//tensorflow/core:test",
+        "//tensorflow/core:test_main",
+        "//tensorflow/core:testlib",
+    ],
+)
+
 tf_mkl_kernel_library(
     name = "mkl_tfconv_op",
     prefix = "mkl_tfconv",
@@ -6298,6 +6372,15 @@ tf_mkl_kernel_library(
     ],
     prefix = "mkl_cwise_ops_common",
     deps = NN_DEPS + mkl_deps() + [":cwise_op"],
+)
+
+tf_mkl_kernel_library(
+    name = "mkl_transpose_op",
+    srcs = [
+        "mkl_transpose_op.cc",
+    ],
+    hdrs = ["transpose_op.h"],
+    deps = ARRAY_DEPS + mkl_deps(),
 )
 
 # NOTE(lespeholt): This rule is deprecated, please use:
