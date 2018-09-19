@@ -187,6 +187,7 @@ function main() {
   PKG_NAME_FLAG=""
   PROJECT_NAME=""
   GPU_BUILD=0
+  ROCM_BUILD=0
   NIGHTLY_BUILD=0
   SRCDIR=""
   DSTDIR=""
