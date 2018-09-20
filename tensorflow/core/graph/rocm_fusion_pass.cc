@@ -249,7 +249,6 @@ namespace tensorflow {
 	VLOG(kVlogLevel_) << "=============" << "Found Fusion Candidate NA : \n"
 			  << "\t" << n1 << std::endl
 			  << "\t" << n2 << std::endl
-			  << "\t" << n3 << std::endl
 	  ;
       }
     }

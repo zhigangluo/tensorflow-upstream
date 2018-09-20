@@ -2414,12 +2414,12 @@ bool MIOpenSupport::DoFusedConvolveImpl(
           << "\nfilter.handle() = " << filter.handle()
           << "\nfilter_data.opaque() = " << filter_data.opaque()
           << "\nconv.handle() = " << conv.handle()
-	  // << "\nalgo = " << algo_desc.algo_id()
-          // << "\nscratch.opaque() = " << scratch.opaque()
-          // << "\nscratch.size() = " << scratch.size()
+    // << "\nalgo = " << algo_desc.algo_id()
+    // << "\nscratch.opaque() = " << scratch.opaque()
+    // << "\nscratch.size() = " << scratch.size()
           << "\nside_input_scale = " << side_input_scale
           << "\noutput_nd.handle() = " << output_nd.handle()
-          // << "\nside_input_data_ptr = " << side_input_data_ptr
+    // << "\nside_input_data_ptr = " << side_input_data_ptr
           << "\nbias_nd.handle() = " << bias_nd.handle()
           << "\nbiases.opaque() = " << biases.opaque()
           << "\nactivation_desc.handle() = " << activation_desc.handle()
@@ -2440,6 +2440,7 @@ bool MIOpenSupport::DoFusedConvolveImpl(
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "call to miopenCompileFusionPlan (CBA) failed: "
 	       << ToString(status);
+    return false;
   }
 
   fusion_plan.set_convolution_args(filter_data.opaque());
@@ -2453,6 +2454,7 @@ bool MIOpenSupport::DoFusedConvolveImpl(
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "call to miopenExecuteFusionPlan (CBA) failed: "
 	       << ToString(status);
+    return false;
   }
   
   if (is_profiling) {
@@ -2469,6 +2471,7 @@ bool MIOpenSupport::DoFusedConvolveImpl(
     if (!is_profiling) {
       LOG(FATAL) << "failed to enqueue fused-convolution on stream: "
 		 << ToString(status);
+      return false;
     }
   }
   
