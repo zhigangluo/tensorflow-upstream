@@ -20,6 +20,7 @@ limitations under the License.
 #include <memory>
 #include <queue>
 #include <set>
+#include <list>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -39,7 +40,10 @@ limitations under the License.
 #include "tensorflow/core/graph/rocm_fusion_pass.h"
 
 namespace tensorflow {
+namespace rocm_fusion_pass {
 
+  const int kVlogLevel = -1;
+  
   // Util routines - Start
   // These routines should be moved to a shared file if we end up with more than one rocm graph pass
   
@@ -60,7 +64,16 @@ namespace tensorflow {
     return out;
   }
 
+  void DumpNodeList(int lvl, string message, std::list<Node*> nodes) {
 
+    VLOG(lvl) << "===========";
+    VLOG(lvl) << message;
+    for (auto n : nodes) {
+      VLOG(lvl) << "\t" << n;
+    }
+    VLOG(lvl) << "===========";
+  }
+  
   bool isGpuPartition(StringPiece fullname) {
     const char* const kGPUDeviceStr = "GPU";
     DeviceNameUtils::ParsedName p;
@@ -88,6 +101,38 @@ namespace tensorflow {
   }
   // Util routines - End
 
+
+  // absract base class for an individual fusion operation
+  class ROCmFusionBase {
+
+  public :
+    
+    ROCmFusionBase(std::unique_ptr<Graph>* g, std::set<Node*>& fn)
+      : graph_(g)
+      , fused_nodes_(fn)
+    {}
+
+    virtual ~ROCmFusionBase() {}
+    
+    void DoFusion(Node* n) {
+      if (IsFusionEligible(n)) {
+	CreateFusionOp();
+      }
+    }
+
+  protected:
+
+    // routine to determine whether any sequence of nodes *ending* at the given
+    // node is eligible for fusion. 
+    virtual bool IsFusionEligible(Node* n) = 0;
+
+    // routine to create a fused op corresponding to some sequence of nodes
+    // *ending* at the given node (which was specified in the previous call).
+    virtual void CreateFusionOp() = 0;
+      
+    std::unique_ptr<Graph>* graph_; 
+    std::set<Node*>& fused_nodes_;
+  };
   
   class ROCmFusionPass : public GraphOptimizationPass {
   public:
@@ -99,15 +144,14 @@ namespace tensorflow {
     // helper function that does all the work for this pass
     bool RunPass(std::unique_ptr<Graph>* g);
 
-    void CheckFusionConvBiasActv(std::unique_ptr<Graph>* g, Node* n);
-
-    void CheckFusionConvBiasNormActv(std::unique_ptr<Graph>* g, Node* n);
-
-    void CheckFusionNormActv(std::unique_ptr<Graph>* g, Node* n);
-    
   private:
 
-    const int kVlogLevel_ = -1;
+    void InitializeFusions(std::vector<ROCmFusionBase*>& fusions,
+			   std::unique_ptr<Graph>* g,
+			   std::set<Node*>& fused_nodes);
+
+    void RemoveFusedNodes(std::set<Node*>& fused_nodes);
+
   };
 
   // Register the ROCmFusionPass with the registry.
@@ -119,11 +163,87 @@ namespace tensorflow {
   REGISTER_OPTIMIZATION(OptimizationPassRegistry::POST_PARTITIONING, // grouping
 			1, // phase number
 			ROCmFusionPass);
+
+
+  // Convolution-Bias-BatchNorm-Activation Fusion
+  class ROCmFusionCBNA : public ROCmFusionBase {
+
+  public:
+
+    ROCmFusionCBNA(std::unique_ptr<Graph>* g, std::set<Node*>& fn)
+      : ROCmFusionBase(g, fn)
+      , conv_(nullptr)
+      , bias_(nullptr)
+      , norm_(nullptr)
+      , actv_(nullptr)
+    {}
+
+  protected:
+
+    bool IsFusionEligible(Node* n) override;
+
+    void CreateFusionOp() override;
+
+    Node* conv_;
+    Node* bias_;
+    Node* norm_;
+    Node* actv_;
+  };
+
+
+  // Convolution-Bias-Activation Fusion
+  class ROCmFusionCBA : public ROCmFusionBase {
+
+  public:
+
+    ROCmFusionCBA(std::unique_ptr<Graph>* g, std::set<Node*>& fn)
+      : ROCmFusionBase(g, fn)
+      , conv_(nullptr)
+      , bias_(nullptr)
+      , actv_(nullptr)
+    {}
+
+  protected:
+
+    bool IsFusionEligible(Node* n) override;
+
+    void CreateFusionOp() override;
+
+    Node* conv_;
+    Node* bias_;
+    Node* actv_;
+  };
+
+
   
+  // BatchNorm-Activation Fusion
+  class ROCmFusionNA : public ROCmFusionBase {
+
+  public:
+
+    ROCmFusionNA(std::unique_ptr<Graph>* g, std::set<Node*>& fn)
+      : ROCmFusionBase(g, fn)
+      , norm_(nullptr)
+      , actv_(nullptr)
+    {}
+
+  protected:
+
+    bool IsFusionEligible(Node* n) override;
+
+    void CreateFusionOp() override;
+
+    Node* norm_;
+    Node* actv_;
+  };
+
   bool RunROCmFusionPass(std::unique_ptr<Graph>* g) {
     return ROCmFusionPass().RunPass(g);
   }
 
+
+  
+  
   Status ROCmFusionPass::Run(const GraphOptimizationPassOptions& options) {
 
     // Check if the graph is present, should be either in
@@ -137,7 +257,7 @@ namespace tensorflow {
 
       if (isGpuPartition(pg.first)) {
 
-	VLOG(kVlogLevel_) << "Running ROCmFusionPass for partition : " << pg.first ;
+	VLOG(kVlogLevel) << "Running ROCmFusionPass for partition : " << pg.first ;
 
 	// Get the ownership of a graph
 	std::unique_ptr<Graph>* ng = std::move(&(pg.second));
@@ -150,7 +270,7 @@ namespace tensorflow {
 
       } else {
 	
-	VLOG(kVlogLevel_) << "Skipping ROCmFusionPass for partition : " << pg.first ;
+	VLOG(kVlogLevel) << "Skipping ROCmFusionPass for partition : " << pg.first ;
       }
     }
 
@@ -159,101 +279,131 @@ namespace tensorflow {
 
   
   bool ROCmFusionPass::RunPass(std::unique_ptr<Graph>* g) {
-    
+
     // DumpGraph("Before running ROCmFusionPass", &**g);
 
+    std::vector<ROCmFusionBase*> fusions;
+    std::set<Node*> fused_nodes;
+    
+    // Initialize a vector of all the fusion operations we currently support
+    InitializeFusions(fusions, g, fused_nodes);
+    
     std::vector<Node*> order;
-    // GetReversePostOrder(**g, &order);  // This will give us topological sort.
     GetPostOrder(**g, &order);  // This will give us reverse topological sort.
 
     for (Node* n : order) {
 
-      // VLOG(kVlogLevel_) << n;
+      // VLOG(kVlogLevel) << n;
+
+      if (fused_nodes.count(n)) { // we have fused this node...skip it
+	continue;
+      }
       
-      CheckFusionConvBiasNormActv(g, n);
-      
-      CheckFusionConvBiasActv(g, n);
-      
-      CheckFusionNormActv(g, n);
+      for (auto fusion : fusions) {
+	fusion->DoFusion(n);
+      }
     }
+
+    // Remove fused nodes from the graph
+    RemoveFusedNodes(fused_nodes);
     
     // DumpGraph("After running ROCmFusionPass", &**g);
     return true;
   }
 
-  
-  void ROCmFusionPass::CheckFusionConvBiasNormActv(std::unique_ptr<Graph>* g, Node* n4) {
-    
-    if (isOpNorm(n4)) {
+  void ROCmFusionPass::InitializeFusions(std::vector<ROCmFusionBase*>& fusions,
+					 std::unique_ptr<Graph>* g,
+					 std::set<Node*>& fused_nodes) {
 
+    fusions.push_back(new ROCmFusionCBNA(g, fused_nodes));
+    fusions.push_back(new ROCmFusionCBA(g, fused_nodes));
+    fusions.push_back(new ROCmFusionNA(g, fused_nodes));
+  }
+  
+  void ROCmFusionPass::RemoveFusedNodes(std::set<Node*>& fused_nodes) {
+  }
+
+  
+  bool ROCmFusionCBNA::IsFusionEligible(Node* n4) {
+    
+    if (isOpActv(n4)) { // activation node
       Node* n3 = nullptr;
       TF_CHECK_OK(n4->input_node(0, &n3));
-
-      if (isOpActv(n3)) {
-	Node* n2 = nullptr;
-	TF_CHECK_OK(n3->input_node(0, &n2));
-
-	if (isOpBias(n2)) {
-
-	  Node* n1 = nullptr;
-	  TF_CHECK_OK(n2->input_node(0, &n1));
-	
-	  if (isOpConv(n1)) {
-	  
-	    VLOG(kVlogLevel_) << "=============" << "Found Fusion Candidate CBNA : \n"
-			      << "\t" << n1 << std::endl
-			      << "\t" << n2 << std::endl
-			      << "\t" << n3 << std::endl
-			      << "\t" << n4 << std::endl
-	      ;
+      if (isOpNorm(n3)) { // preceded by a batchnorm node
+  	Node* n2 = nullptr;
+  	TF_CHECK_OK(n3->input_node(0, &n2));
+  	if (isOpBias(n2)) { // preceded by a bias node
+  	  Node* n1 = nullptr;
+  	  TF_CHECK_OK(n2->input_node(0, &n1));
+	  if (isOpConv(n1)) { // preceded by a convolution node
+	    conv_ = n1;
+	    bias_ = n2;
+	    norm_ = n3;
+	    actv_ = n4;
+	    DumpNodeList(kVlogLevel, "Found Fusion Candidate CBNA : ", {conv_, bias_, norm_, actv_});
+	    return true;
 	  }
 	}
       }
     }
+    
+    return false;
+  }
+  
+  
+  void ROCmFusionCBNA::CreateFusionOp() {
+    
   }
 
-  
-  void ROCmFusionPass::CheckFusionConvBiasActv(std::unique_ptr<Graph>* g, Node* n3) {
-    
-    if (isOpActv(n3)) {
+  bool ROCmFusionCBA::IsFusionEligible(Node* n3) {
 
+    // First check whether we have the right sequence of ops
+    bool is_eligible_sequence = false;
+    if (isOpActv(n3)) { // activation node
       Node* n2 = nullptr;
       TF_CHECK_OK(n3->input_node(0, &n2));
-
-      if (isOpBias(n2)) {
-
+      if (isOpBias(n2)) { // preceded by a bias node
   	Node* n1 = nullptr;
 	TF_CHECK_OK(n2->input_node(0, &n1));
-	
-  	if (isOpConv(n1)) {
-	  
-	  VLOG(kVlogLevel_) << "=============" << "Found Fusion Candidate CBA : \n"
-			    << "\t" << n1 << std::endl
-			    << "\t" << n2 << std::endl
-			    << "\t" << n3 << std::endl
-	    ;
+  	if (isOpConv(n1)) { // precedded by a convolution node
+	  conv_ = n1;
+	  bias_ = n2;
+	  actv_ = n3;
+	  DumpNodeList(kVlogLevel, "Found Fusion Candidate CBA : ", {conv_, bias_, actv_});
+	  is_eligible_sequence = true;
   	}
       }
     }
+
+    if (is_eligible_sequence) {
+      return true;
+    }
+
+    return false;
   }
   
-  void ROCmFusionPass::CheckFusionNormActv(std::unique_ptr<Graph>* g, Node* n2) {
-    
-    if (isOpActv(n2)) {
+  void ROCmFusionCBA::CreateFusionOp() {
+  }
 
+  bool ROCmFusionNA::IsFusionEligible(Node* n2) {
+    
+    if (isOpActv(n2)) { // activation node
       Node* n1 = nullptr;
       TF_CHECK_OK(n2->input_node(0, &n1));
-	
-      if (isOpNorm(n1)) {
-	  
-	VLOG(kVlogLevel_) << "=============" << "Found Fusion Candidate NA : \n"
-			  << "\t" << n1 << std::endl
-			  << "\t" << n2 << std::endl
-	  ;
+      if (isOpNorm(n1)) { // preceded by a batchnorm node
+	norm_ = n1;
+	actv_ = n2;
+	DumpNodeList(kVlogLevel, "Found Fusion Candidate NA : ", {norm_, actv_});
+	return true;
       }
     }
+    return false;
   }
   
+  void ROCmFusionNA::CreateFusionOp() {
+  }
+
+}  // namespace rocm_fusion_pass
 }  // namespace tensorflow
 
 #endif // TENSORFLOW_USE_ROCM

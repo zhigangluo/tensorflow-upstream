@@ -192,7 +192,7 @@ static port::ThreadPool* GetROCmThreadpool() {
   __macro(miopenDestroyActivationDescriptor)		   \
   __macro(miopenSetActivationDescriptor)		   \
   __macro(miopenCreateFusionPlan)			   \
-  __macro(miopenDestroyFusionPlanDescriptor)		   \
+  __macro(miopenDestroyFusionPlan)			   \
   __macro(miopenCompileFusionPlan)			   \
   __macro(miopenExecuteFusionPlan)			   \
   __macro(miopenCreateOpConvForward)			   \
@@ -712,15 +712,15 @@ class ScopedFusionPlanBase {
   
   virtual ~ScopedFusionPlanBase() {
 
-    miopenStatus_t status = wrap::miopenDestroyFusionPlanDescriptor(parent_, fusion_plan_);
+    miopenStatus_t status = wrap::miopenDestroyFusionPlan(parent_, fusion_plan_);
     if (status != miopenStatusSuccess) {
-      LOG(FATAL) << "call to miopenDestroyFusionPlanDescriptor failed: "
+      LOG(FATAL) << "call to miopenDestroyFusionPlan failed: "
 		 << ToString(status);
     }
 
     status = wrap::miopenDestroyOperatorArgs(parent_, fusion_args_);
     if (status != miopenStatusSuccess) {
-      LOG(FATAL) << "call to miopenDestroyFusionPlanDescriptor failed: "
+      LOG(FATAL) << "call to miopenDestroyFusionPlan failed: "
 		 << ToString(status);
     }
   }
