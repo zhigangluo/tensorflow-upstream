@@ -6395,6 +6395,15 @@ tf_kernel_library(
     ],
 )
 
+tf_kernel_library(
+    name = "rocm_fusion_ops",
+    prefix = "rocm_fusion_ops",
+    deps = [
+        "//tensorflow/core:framework",
+        "//tensorflow/core/kernels:conv_2d_hdrs",
+    ],
+)
+
 # -----------------------------------------------------------------------------
 # Google-internal targets.  These must be at the end for syncrepo.
 
