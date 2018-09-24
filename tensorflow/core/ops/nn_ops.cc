@@ -2199,17 +2199,20 @@ expected to invoke these operators.
 #ifdef TENSORFLOW_USE_ROCM
 
 REGISTER_OP("_ROCmFusedConvBiasActv")
+
     .Input("conv_input: T")
     .Input("filter: T")
     .Input("bias: T")
+
     .Output("output: T")
+
     .Attr("T: {float}")
     .Attr("strides: list(int)")
-    .Attr(GetPaddingAttrString())
+    .Attr("padding: {'SAME', 'VALID'}")
     .Attr("data_format: {'NHWC', 'NCHW'} = 'NHWC'")
-    .Attr("activation_mode: {'Relu', 'None'} = 'Relu'")
     .Attr("dilations: list(int) = [1, 1, 1, 1]")
-    .Attr("compiled_fusion_plan_handle: int")
+    .Attr("activation_mode: {'Relu', 'None'} = 'Relu'")
+
     .SetShapeFn([](shape_inference::InferenceContext* c) {
       using shape_inference::ShapeHandle;
       using shape_inference::DimensionHandle;
