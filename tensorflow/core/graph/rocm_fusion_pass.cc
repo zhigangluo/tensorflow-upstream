@@ -254,6 +254,12 @@ namespace rocm_fusion_pass {
   
   Status ROCmFusionPass::Run(const GraphOptimizationPassOptions& options) {
 
+    // skip the fusion pass if the env var TF_ROCM_DISABLE_FUSION is set
+    const char* disable_fusion = getenv("TF_ROCM_DISABLE_FUSION");
+    if (disable_fusion != nullptr) {
+      return Status::OK();
+    }
+    
     // Check if the graph is present, should be either in
     // - options.graph (for all but POST_PARTITIONING grouping)
     // - options.partition_graphs (for POST_PARTITIONING_grouping)
@@ -299,7 +305,7 @@ namespace rocm_fusion_pass {
     std::vector<Node*> order;
     GetPostOrder(**g, &order);  // This will give us reverse topological sort.
 
-    for (Node* n : order) {
+    for (const Node* n : order) {
 
       // VLOG(kVlogLevel) << n;
 
@@ -473,6 +479,8 @@ namespace rocm_fusion_pass {
       string df_conv_str, df_bias_str;
       TF_CHECK_OK(GetNodeAttr(d->conv->def(), kAttr_data_format, &df_conv_str));
       TF_CHECK_OK(GetNodeAttr(d->bias->def(), kAttr_data_format, &df_bias_str));
+
+      VLOG(kVlogLevel) << "ROCmFusionPass - data_format = " << df_conv_str;
       
       TensorFormat df_conv, df_bias;
       CHECK_EQ(FormatFromString(df_conv_str, &df_conv), true);
