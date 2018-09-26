@@ -30,6 +30,7 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor_slice.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
 
+#include "tensorflow/core/kernels/rocm_fusion_ops.h"
 #include "tensorflow/core/kernels/conv_2d.h" 
 #include "tensorflow/core/kernels/conv_ops_gpu.h"
 
@@ -67,18 +68,11 @@ namespace tensorflow {
       string activation_mode_str;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("activation_mode", &activation_mode_str));
       OP_REQUIRES_OK(ctx, GetActivationModeFromString(activation_mode_str, &activation_mode_));
-
-      VLOG(-1) << "ROCmFusionKernelCBA -"
-	       << " , " << data_format_str
-	       << " , " << filter_format_str
-	       << " , " << activation_mode_str;
     }
 
     
     void Compute(OpKernelContext* ctx) override {
       
-      VLOG(-1) << "_ROCmFusionKernelCBA invoked!";
-
       const Tensor& conv_input = ctx->input(0);
       const Tensor& filter = ctx->input(1);
       const Tensor& bias = ctx->input(2);
@@ -123,14 +117,10 @@ namespace tensorflow {
 	// if the padding type is SAME, we need to pad the input first
 	if (padding_type_ == Padding::SAME) {
 	  
-	  VLOG(-1) << "_ROCmFusionKernelCBA invoked! -----  Padding::SAME";
-	  
 	  // if either the padding_rows and padding_cols are odd, we need to a zero padding row and/or col to the input
 	  const bool rows_odd = (padding_rows % 2);
 	  const bool cols_odd = (padding_cols % 2);
 	  if (rows_odd || cols_odd) {
-	    
-	    VLOG(-1) << "_ROCmFusionKernelCBA invoked! -----  Padding::SAME - ODD";
 	    
 	    int64 new_input_rows = input_rows + rows_odd;
 	    int64 new_input_cols = input_cols + cols_odd;
@@ -161,8 +151,6 @@ namespace tensorflow {
 	// 2, allocate a temporary tensor to hold the fusion op output (which will be in NCHW format)
 	if (data_format_ == FORMAT_NHWC) {
 	  
-	  VLOG(-1) << "_ROCmFusionKernelCBA invoked! -----  FORMAT_NHWC before";
-	  
 	  // allocate a temporary tensor to store the NCHW input
 	  Tensor transformed_input;
 	  TensorShape nchw_shape_input = ShapeFromFormat(FORMAT_NCHW, batch_size, input_rows, input_cols, input_channels);
@@ -187,8 +175,6 @@ namespace tensorflow {
 
 	// if the filter format in HWIO, we need to convert the filter tensor to OIHW format
 	if (filter_format_ == FORMAT_HWIO) {
-	  
-	  VLOG(-1) << "_ROCmFusionKernelCBA invoked! -----  FORMAT_HWIO";
 	  
 	  // allocate a temporary tensor to store the OIHW filter
 	  Tensor transformed_filter;
@@ -241,22 +227,33 @@ namespace tensorflow {
 	  .set_zero_padding_width(padding_cols / 2);
 
 
-	auto input_ptr = AsDeviceMemory(fusion_input.template flat<T>().data(), fusion_input.template flat<T>().size());
-	auto filter_ptr = AsDeviceMemory(fusion_filter.template flat<T>().data(), fusion_filter.template flat<T>().size());
-	auto bias_ptr = AsDeviceMemory(fusion_bias.template flat<T>().data(), fusion_bias.template flat<T>().size());
-	auto output_ptr = AsDeviceMemory(fusion_output.template flat<T>().data(), fusion_output.template flat<T>().size());
-
-	// auto dnn_activation_mode = GetDnnActivationMode(activation_mode_);
+	auto conv_input_data = AsDeviceMemory(fusion_input.template flat<T>().data(), fusion_input.template flat<T>().size());
+	auto filter_data = AsDeviceMemory(fusion_filter.template flat<T>().data(), fusion_filter.template flat<T>().size());
+	auto bias_data = AsDeviceMemory(fusion_bias.template flat<T>().data(), fusion_bias.template flat<T>().size());
+	auto dnn_activation_mode = GetDnnActivationMode(activation_mode_);
+	
+	auto output_data = AsDeviceMemory(fusion_output.template flat<T>().data(), fusion_output.template flat<T>().size());
 
 	auto* stream = ctx->op_device_context()->stream();
 	int device_id = stream->parent()->device_ordinal();
+
+	bool miopen_status = stream->ThenFusedConvolveBiasActivation
+	  (conv_input_desc, conv_input_data,
+	   filter_desc, filter_data,
+	   conv_desc,
+	   bias_desc, bias_data,
+	   dnn_activation_mode,
+	   output_desc, &output_data)
+	  .ok();
+
+	if (!miopen_status) {
+	  ctx->SetStatus(errors::Internal("MIOpen CBA FusionOp launch Failure"));
+	}
 
 	// ---------
 
 	// if the data format is NHWC, we need to convert the fusion op output back to MHWC format
 	if (data_format_ == FORMAT_NHWC) {
-	  
-	  VLOG(-1) << "_ROCmFusionKernelCBA invoked! -----  FORMAT_NHWC after";
 	  
 	  functor::NCHWToNHWC<GPUDevice, T, 4>
 	    ()(ctx->eigen_device<GPUDevice>(),

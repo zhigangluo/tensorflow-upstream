@@ -2325,6 +2325,18 @@ class DnnSupport {
     return false;
   }
 
+  virtual bool DoFusedConvolutionBiasActivation(
+      Stream* stream,
+      const dnn::BatchDescriptor& conv_input_descriptor, const DeviceMemory<float>& conv_input_data, 
+      const dnn::FilterDescriptor& filter_descriptor, const DeviceMemory<float>& filter_data,
+      const dnn::ConvolutionDescriptor& convolution_descriptor,
+      const dnn::BatchDescriptor& bias_descriptor, const DeviceMemory<float>& bias_data,
+      dnn::ActivationMode activation_mode,
+      const dnn::BatchDescriptor& output_descriptor, DeviceMemory<float>* output_data,
+      dnn::ProfileResult* output_profile_result) {
+    return false;
+  }
+  
  private:
   SE_DISALLOW_COPY_AND_ASSIGN(DnnSupport);
 };
