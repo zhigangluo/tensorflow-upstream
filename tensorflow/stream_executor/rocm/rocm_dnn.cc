@@ -39,6 +39,9 @@ limitations under the License.
 #include "tensorflow/stream_executor/scratch_allocator.h"
 #include "tensorflow/stream_executor/stream.h"
 #include "tensorflow/stream_executor/stream_executor_pimpl.h"
+
+#include "tensorflow/core/lib/hash/hash.h"
+
 // clang-format off
 #include "rocm/include/miopen/miopen.h"
 // clang-format on
@@ -194,6 +197,7 @@ static port::ThreadPool* GetROCmThreadpool() {
   __macro(miopenCreateFusionPlan)			   \
   __macro(miopenDestroyFusionPlan)			   \
   __macro(miopenCompileFusionPlan)			   \
+  __macro(miopenFusionPlanGetOp)			   \
   __macro(miopenExecuteFusionPlan)			   \
   __macro(miopenCreateOpConvForward)			   \
   __macro(miopenCreateOpBiasForward)			   \
@@ -216,6 +220,128 @@ MIOPEN_DNN_ROUTINE_EACH(PERFTOOLS_GPUTOOLS_MIOPEN_WRAP)
 
 }  // namespace wrap
 
+
+namespace  {
+
+  // These routines should be ideally provided as an MIOpen API.
+  // They are called for *every* _ROCMmFusedOp*::Compute call, and they need to be efficient!
+  // Instead of calculating the hash value by quering the MIOpen Get* APIs for the descriptor components,
+  // it would be a lot more efficient if, MIOpen calculated the hash value when creating the descriptor,
+  // stored it on the descriptor datastructure, and provided an API routine to query it.
+
+  const int kMaxMIOpenTensorSize = 5;
+  
+  uint64 GetHashValue(miopenTensorDescriptor_t tensor_desc) {
+
+    miopenDataType_t dataType = miopenFloat;
+    int dims[kMaxMIOpenTensorSize] = {0};  
+    int strides[kMaxMIOpenTensorSize] = {0};
+    miopenGetTensorDescriptor(tensor_desc, &dataType, dims, strides);
+    
+    uint64 hashValue = tensorflow::hash<int>()(static_cast<int>(dataType));
+    for (int dim : dims) hashValue = tensorflow::Hash64Combine(hashValue, tensorflow::hash<int>()(dim));
+    for (int stride : strides) hashValue = tensorflow::Hash64Combine(hashValue, tensorflow::hash<int>()(stride));
+    
+    return hashValue;
+  }
+  
+  uint64 GetHashValue(miopenConvolutionDescriptor_t conv_desc) {
+
+    miopenConvolutionMode_t c_mode = miopenConvolution;
+    int pad_h = 0, pad_w = 0, u = 0, v = 0, dilation_h = 0, dilation_w = 0;
+    miopenGetConvolutionDescriptor(conv_desc, &c_mode, &pad_h, &pad_w, &u, &v, &dilation_h, &dilation_w);
+
+    uint64 hashValue = tensorflow::hash<int>()(static_cast<int>(c_mode));
+    hashValue = tensorflow::Hash64Combine(hashValue, tensorflow::hash<int>()(pad_h));
+    hashValue = tensorflow::Hash64Combine(hashValue, tensorflow::hash<int>()(pad_w));
+    hashValue = tensorflow::Hash64Combine(hashValue, tensorflow::hash<int>()(u));
+    hashValue = tensorflow::Hash64Combine(hashValue, tensorflow::hash<int>()(v));
+    hashValue = tensorflow::Hash64Combine(hashValue, tensorflow::hash<int>()(dilation_h));
+    hashValue = tensorflow::Hash64Combine(hashValue, tensorflow::hash<int>()(dilation_w));
+    
+    return hashValue;
+  }
+  
+  uint64 GetHashValue(miopenActivationDescriptor_t actv_desc) {
+
+    miopenActivationMode_t mode = miopenActivationPASTHRU;
+    double alpha = 0.0, beta = 0.0, gamma = 0.0;
+    miopenGetActivationDescriptor(actv_desc, &mode, &alpha, &beta, &gamma);
+    
+    uint64 hashValue = tensorflow::hash<int>()(static_cast<int>(mode));
+    hashValue = tensorflow::Hash64Combine(hashValue, tensorflow::hash<double>()(alpha));
+    hashValue = tensorflow::Hash64Combine(hashValue, tensorflow::hash<double>()(beta));
+    hashValue = tensorflow::Hash64Combine(hashValue, tensorflow::hash<double>()(gamma));
+
+    return hashValue;
+  }
+
+  // class to implement a cache of compiled fusion plans 
+  class CachedFusionPlans {
+
+  public:
+
+    // check if we already have a fusion_plan corresponding to the given hash value
+    // If we have a cache hit
+    //   return true (+ the cached fusion plan via pointer)
+    // Else
+    //   create a new fusion plan descriptor, 
+    //   associate it with the given hash value in the cache
+    //   return false (+ newly created fusion plan via pointer)
+    static bool FindOrAdd(uint64 hash, ROCMExecutor* parent, miopenFusionPlanDescriptor_t *fusion_plan,
+			  miopenFusionDirection_t fusion_direction, miopenTensorDescriptor_t input_descriptor) {
+
+      mutex_lock lock{cachedPlansMutex};
+
+      bool foundCachedPlan = false;
+      
+      auto it = cachedPlans.find(hash);
+      if (it != cachedPlans.end()) {
+	*fusion_plan = it->second;
+	foundCachedPlan = true;
+
+	// VLOG(-1) << " Using cached fusion plan";
+      } else {
+	miopenStatus_t status = wrap::miopenCreateFusionPlan(parent, fusion_plan, fusion_direction, input_descriptor);
+	if (status != miopenStatusSuccess) {
+	  LOG(FATAL) << "call to miopenCreateFusionPlan failed: " << ToString(status);
+	} else {
+	  cachedPlans[hash] = *fusion_plan;
+	  
+	  VLOG(-1) << " Created new fusion plan";
+	}
+      }
+      
+      return foundCachedPlan;
+    }
+
+    // need to figure out the right place to call this routine
+    static void Clear(ROCMExecutor* parent) { 
+
+      mutex_lock lock{cachedPlansMutex};
+
+      for (auto it : cachedPlans) {
+	miopenStatus_t status = wrap::miopenDestroyFusionPlan(parent, it.second);
+	if (status != miopenStatusSuccess) {
+	  LOG(FATAL) << "call to miopenDestroyFusionPlan failed: " << ToString(status);
+	}
+      }
+
+      cachedPlans.clear();
+      
+      VLOG(-1) << " Cleared cached fusion plans";
+    }
+    
+  private:
+    static mutex cachedPlansMutex;
+    static std::map<uint64, miopenFusionPlanDescriptor_t> cachedPlans;
+  };
+
+  mutex CachedFusionPlans::cachedPlansMutex;
+  std::map<uint64, miopenFusionPlanDescriptor_t> CachedFusionPlans::cachedPlans;
+  
+}
+  
 namespace {
 
 miopenHandle_t ToHandle(void* opaque_handle) {
@@ -273,9 +399,13 @@ miopenConvBwdWeightsAlgorithm_t ToConvBackwardFilterAlgo(
 }  // namespace
 
 MIOpenSupport::MIOpenSupport(ROCMExecutor* parent)
-    : parent_(parent), dnn_handle_(nullptr) {}
+    : parent_(parent), dnn_handle_(nullptr) {
+  CachedFusionPlans::Clear(parent);
+
+}
 
 MIOpenSupport::~MIOpenSupport() {
+  CachedFusionPlans::Clear(parent_);
   auto status = wrap::miopenDestroy(parent_, ToHandle(dnn_handle_));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "could not destroy miopen handle: " << ToString(status);
@@ -286,6 +416,7 @@ port::Status MIOpenSupport::Init() {
   auto status = wrap::miopenCreateWithStream(
       parent_, reinterpret_cast<miopenHandle_t*>(&dnn_handle_), (hipStream_t)(0));
   if (status == miopenStatusSuccess) {
+    CachedFusionPlans::Clear(parent_);
     return port::Status::OK();
   }
 
@@ -697,88 +828,84 @@ class ScopedFusionPlanBase {
     , fusion_plan_(nullptr)
     , fusion_args_(nullptr) {
     
-    miopenStatus_t status = wrap::miopenCreateFusionPlan(parent_, &fusion_plan_, fuse_direction, input_descriptor);
+    miopenStatus_t status = wrap::miopenCreateOperatorArgs(parent_, &fusion_args_);
     if (status != miopenStatusSuccess) {
-      LOG(FATAL) << "call to miopenCreateFusionPlan failed: "
-		 << ToString(status);
-    }
-    
-    status = wrap::miopenCreateOperatorArgs(parent_, &fusion_args_);
-    if (status != miopenStatusSuccess) {
-      LOG(FATAL) << "call to miopenCreateOperatorArgs failed: "
-		 << ToString(status);
+      LOG(FATAL) << "call to miopenCreateOperatorArgs failed: " << ToString(status);
     }
   }
   
   virtual ~ScopedFusionPlanBase() {
 
-    miopenStatus_t status = wrap::miopenDestroyFusionPlan(parent_, fusion_plan_);
+    miopenStatus_t status = wrap::miopenDestroyOperatorArgs(parent_, fusion_args_);
     if (status != miopenStatusSuccess) {
-      LOG(FATAL) << "call to miopenDestroyFusionPlan failed: "
-		 << ToString(status);
-    }
-
-    status = wrap::miopenDestroyOperatorArgs(parent_, fusion_args_);
-    if (status != miopenStatusSuccess) {
-      LOG(FATAL) << "call to miopenDestroyFusionPlan failed: "
-		 << ToString(status);
+      LOG(FATAL) << "call to miopenDestroyoperatorArgs failed: " << ToString(status);
     }
   }
 
-  miopenStatus_t compile() {
-    // once we have this code functionally working 
-    // we need to implement a lookup mechanism here to avoid recompilation where applicable
-    return wrap::miopenCompileFusionPlan(parent_, miopen_handle_, fusion_plan_);
-  }
-
-  miopenStatus_t execute(miopenTensorDescriptor_t input_descriptor, const void* input_data,
+  miopenStatus_t Execute(miopenTensorDescriptor_t input_descriptor, const void* input_data,
 			 miopenTensorDescriptor_t output_descriptor, void* output_data) {
 
-    return wrap::miopenExecuteFusionPlan(parent_, miopen_handle_, fusion_plan_,
-					 input_descriptor, input_data,
-					 output_descriptor, output_data, fusion_args_);
+    miopenStatus_t status = wrap::miopenExecuteFusionPlan(parent_, miopen_handle_, fusion_plan_,
+							  input_descriptor, input_data,
+							  output_descriptor, output_data, fusion_args_);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenExecuteFusionPlan failed: " << ToString(status);
+    }
+
+    return status;
   }
   
  protected:
 
-  miopenStatus_t set_convolution_args(miopenFusionOpDescriptor_t conv_op,
-				      const float* alpha, const float* beta, const void* data) {
-    miopenStatus_t status =
-      wrap::miopenSetOpArgsConvForward(parent_, fusion_args_, conv_op, alpha, beta, data);
+  miopenStatus_t SetConvolutionArgs(const int op_idx, const float* alpha, const float* beta, const void* data) {
+
+    miopenFusionOpDescriptor_t conv_op;
+    miopenStatus_t status = wrap::miopenFusionPlanGetOp(parent_, fusion_plan_, op_idx, &conv_op);
     if (status != miopenStatusSuccess) {
-      LOG(FATAL) << "call to miopenSetOpArgsConvForward failed: "
-		 << ToString(status);
+      LOG(FATAL) << "call to miopenFusionPlanGetOp failed: " << ToString(status);
+    }
+
+    status = wrap::miopenSetOpArgsConvForward(parent_, fusion_args_, conv_op, alpha, beta, data);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenSetOpArgsConvForward failed: " << ToString(status);
     }
     return status;
   }
   
-  miopenStatus_t set_bias_args(miopenFusionOpDescriptor_t bias_op,
-			       const float* alpha, const float* beta, const void* data) {
-    miopenStatus_t status =
-      wrap::miopenSetOpArgsBiasForward(parent_, fusion_args_, bias_op, alpha, beta, data);
+  miopenStatus_t SetBiasArgs(const int op_idx, const float* alpha, const float* beta, const void* data) {
+
+    miopenFusionOpDescriptor_t bias_op;
+    miopenStatus_t status = wrap::miopenFusionPlanGetOp(parent_, fusion_plan_, op_idx, &bias_op);
     if (status != miopenStatusSuccess) {
-      LOG(FATAL) << "call to miopenSetOpArgsBiasForward failed: "
-		 << ToString(status);
+      LOG(FATAL) << "call to miopenFusionPlanGetOp failed: " << ToString(status);
+    }
+
+    status = wrap::miopenSetOpArgsBiasForward(parent_, fusion_args_, bias_op, alpha, beta, data);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenSetOpArgsBiasForward failed: " << ToString(status);
     }
     return status;
   }
   
-  miopenStatus_t set_activation_args(miopenFusionOpDescriptor_t actv_op,
-				     float* alpha, float* beta,
+  miopenStatus_t SetActivationArgs(const int op_idx, float* alpha, float* beta,
 				     double activ_alpha, double activ_beta, double activ_gamma) {
-    miopenStatus_t status =
-      wrap::miopenSetOpArgsActivForward(parent_, fusion_args_, actv_op,
-					alpha, beta, activ_alpha, activ_beta, activ_gamma);
+
+    miopenFusionOpDescriptor_t actv_op;
+    miopenStatus_t status = wrap::miopenFusionPlanGetOp(parent_, fusion_plan_, op_idx, &actv_op);
     if (status != miopenStatusSuccess) {
-      LOG(FATAL) << "call to miopenSetOpArgsActivForward failed: "
-		 << ToString(status);
+      LOG(FATAL) << "call to miopenFusionPlanGetOp failed: " << ToString(status);
+    }
+
+    status = wrap::miopenSetOpArgsActivForward(parent_, fusion_args_, actv_op, alpha, beta, activ_alpha, activ_beta, activ_gamma);
+    if (status != miopenStatusSuccess) {
+      LOG(FATAL) << "call to miopenSetOpArgsActivForward failed: " << ToString(status);
     }
     return status;
   }
   
-  ROCMExecutor* parent_;         // Parent executor. Not owned.
-  miopenHandle_t miopen_handle_;  // Reference pointer. Not owned
-  miopenFusionPlanDescriptor_t fusion_plan_;  // Owned.
+  ROCMExecutor* parent_;         
+  miopenHandle_t miopen_handle_; 
+  miopenFusionPlanDescriptor_t fusion_plan_; 
   miopenOperatorArgs_t fusion_args_; // Owned.
   
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedFusionPlanBase);
@@ -792,57 +919,63 @@ class ScopedFusionPlanConvBiasActv : public ScopedFusionPlanBase {
   ScopedFusionPlanConvBiasActv(ROCMExecutor* parent,
 			       miopenHandle_t miopen_handle,
 			       miopenTensorDescriptor_t input_descriptor,
-			       miopenConvolutionDescriptor_t conv_descriptor,
 			       miopenTensorDescriptor_t filter_descriptor,
+			       miopenConvolutionDescriptor_t conv_descriptor,
 			       miopenTensorDescriptor_t bias_descriptor,
 			       miopenActivationDescriptor_t activation_descriptor
 			       )
     : ScopedFusionPlanBase(parent, miopen_handle, miopenVerticalFusion, input_descriptor)
-    , conv_op_(nullptr)
-    , bias_op_(nullptr)
-    , actv_op_(nullptr)
   {
-    miopenStatus_t status =
-      wrap::miopenCreateOpConvForward(parent_, fusion_plan_, &conv_op_, conv_descriptor, filter_descriptor);
-    if (status != miopenStatusSuccess) {
-      LOG(FATAL) << "call to miopenCreateOpConvForward failed: "
-		 << ToString(status);
-    }
-
-    status = wrap::miopenCreateOpBiasForward(parent_, fusion_plan_, &bias_op_, bias_descriptor); 
-    if (status != miopenStatusSuccess) {
-      LOG(FATAL) << "call to miopenCreateOpBiasForward failed: "
-		 << ToString(status);
-    }
-
-    miopenActivationMode_t activation_mode;
-    double alpha, beta, gamma;
-    status = wrap::miopenGetActivationDescriptor(parent_, activation_descriptor, &activation_mode, &alpha, &beta, &gamma);
-    if (status != miopenStatusSuccess) {
-      LOG(FATAL) << "call to miopenGetActivationDescriptor failed: "
-		 << ToString(status);
-    }
+    uint64 hash = GetFusionOpHashValue(input_descriptor, filter_descriptor, conv_descriptor, bias_descriptor, activation_descriptor);
     
-    status = wrap::miopenCreateOpActivationForward(parent_, fusion_plan_, &actv_op_, activation_mode); 
-    if (status != miopenStatusSuccess) {
-      LOG(FATAL) << "call to miopenCreateOpActivationForward failed: "
-		 << ToString(status);
+    bool is_compiled = CachedFusionPlans::FindOrAdd(hash, parent, &fusion_plan_, miopenVerticalFusion, input_descriptor);
+    if (!is_compiled) {
+      
+      miopenFusionOpDescriptor_t conv_op;
+      miopenStatus_t status = wrap::miopenCreateOpConvForward(parent_, fusion_plan_, &conv_op, conv_descriptor, filter_descriptor);
+      if (status != miopenStatusSuccess) {
+	LOG(FATAL) << "call to miopenCreateOpConvForward failed: " << ToString(status);
+      }
+      
+      miopenFusionOpDescriptor_t bias_op;
+      status = wrap::miopenCreateOpBiasForward(parent_, fusion_plan_, &bias_op, bias_descriptor); 
+      if (status != miopenStatusSuccess) {
+	LOG(FATAL) << "call to miopenCreateOpBiasForward failed: " << ToString(status);
+      }
+      
+      miopenActivationMode_t activation_mode;
+      double alpha, beta, gamma;
+      status = wrap::miopenGetActivationDescriptor(parent_, activation_descriptor, &activation_mode, &alpha, &beta, &gamma);
+      if (status != miopenStatusSuccess) {
+	LOG(FATAL) << "call to miopenGetActivationDescriptor failed: " << ToString(status);
+      }
+      
+      miopenFusionOpDescriptor_t actv_op;
+      status = wrap::miopenCreateOpActivationForward(parent_, fusion_plan_, &actv_op, activation_mode); 
+      if (status != miopenStatusSuccess) {
+	LOG(FATAL) << "call to miopenCreateOpActivationForward failed: " << ToString(status);
+      }
+      
+      status = wrap::miopenCompileFusionPlan(parent_, miopen_handle_, fusion_plan_);
+      if (status != miopenStatusSuccess) {
+	LOG(FATAL) << "call to miopenCompileFusionPlan (CBA) failed: " << ToString(status);
+      }
     }
   }
 
-  miopenStatus_t set_convolution_args(const void* filter_data) {
+  miopenStatus_t SetConvolutionArgs(const void* filter_data) {
     float alpha = 1.0;
     float beta = 0.0;
-    return ScopedFusionPlanBase::set_convolution_args(conv_op_, &alpha, &beta, filter_data);
+    return ScopedFusionPlanBase::SetConvolutionArgs(k_conv_op_idx, &alpha, &beta, filter_data);
   }
   
-  miopenStatus_t set_bias_args(const void* bias_data) {
+  miopenStatus_t SetBiasArgs(const void* bias_data) {
     float alpha = 1.0;
     float beta = 0.0;
-    return ScopedFusionPlanBase::set_bias_args(bias_op_, &alpha, &beta, bias_data);
+    return ScopedFusionPlanBase::SetBiasArgs(k_bias_op_idx, &alpha, &beta, bias_data);
   }
   
-  miopenStatus_t set_activation_args(miopenActivationDescriptor_t activation_descriptor) {
+  miopenStatus_t SetActivationArgs(miopenActivationDescriptor_t activation_descriptor) {
     miopenActivationMode_t activ_mode;
     double activ_alpha, activ_beta, activ_gamma;
     miopenStatus_t status = wrap::miopenGetActivationDescriptor(parent_, activation_descriptor,
@@ -855,18 +988,29 @@ class ScopedFusionPlanConvBiasActv : public ScopedFusionPlanBase {
     float alpha = 1.0;
     float beta = 0.0;
 
-    return ScopedFusionPlanBase::set_activation_args(actv_op_, &alpha, &beta, activ_alpha, activ_beta, activ_gamma);
+    return ScopedFusionPlanBase::SetActivationArgs(k_actv_op_idx, &alpha, &beta, activ_alpha, activ_beta, activ_gamma);
   }
-  
-  ~ScopedFusionPlanConvBiasActv() {
-    // dont need to call destroy for either the conv_op_, bias_op_, or actv_op_.
-    // they are owned by the fusion plan once they are added to the fusion plan
+
+  uint64 GetFusionOpHashValue(miopenTensorDescriptor_t input_descriptor,
+			      miopenTensorDescriptor_t filter_descriptor,
+			      miopenConvolutionDescriptor_t conv_descriptor,
+			      miopenTensorDescriptor_t bias_descriptor,
+			      miopenActivationDescriptor_t activation_descriptor) {
+    
+    uint64 hashValue = tensorflow::Hash64("ConvolutionBiasActivation");
+    hashValue = tensorflow::Hash64Combine(hashValue, GetHashValue(input_descriptor));
+    hashValue = tensorflow::Hash64Combine(hashValue, GetHashValue(filter_descriptor));
+    hashValue = tensorflow::Hash64Combine(hashValue, GetHashValue(conv_descriptor));
+    hashValue = tensorflow::Hash64Combine(hashValue, GetHashValue(bias_descriptor));
+    hashValue = tensorflow::Hash64Combine(hashValue, GetHashValue(activation_descriptor));
+    return hashValue;
   }
   
  private:
-  miopenFusionOpDescriptor_t conv_op_;
-  miopenFusionOpDescriptor_t bias_op_;
-  miopenFusionOpDescriptor_t actv_op_;
+
+  const int k_conv_op_idx = 0;
+  const int k_bias_op_idx = 1;
+  const int k_actv_op_idx = 2;
   
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedFusionPlanConvBiasActv);
 };
@@ -2385,97 +2529,8 @@ bool MIOpenSupport::DoFusedConvolveImpl(
     const dnn::AlgorithmConfig& algorithm_config,
     dnn::ProfileResult* output_profile_result) {
 
-  ScopedTensorDescriptor conv_input_nd{parent_, conv_input_descriptor,
-      static_cast<miopenDataType_t>(miopen_type)};
-
-  ScopedTensorDescriptor bias_nd{parent_, bias_descriptor,
-      static_cast<miopenDataType_t>(miopen_type)};
-
-  ScopedTensorDescriptor output_nd{parent_, output_descriptor,
-      static_cast<miopenDataType_t>(miopen_type)};
-
-  ScopedConvolutionDescriptor conv{parent_, convolution_descriptor,
-      static_cast<miopenDataType_t>(miopen_type)};
-
-  ScopedFilterDescriptor filter{parent_, filter_descriptor, conv_input_descriptor,
-      static_cast<miopenDataType_t>(miopen_type)};
-
-  ScopedActivationDescriptor activation_desc{parent_, activation_mode};
   
-  ScopedFusionPlanConvBiasActv fusion_plan{parent_, ToHandle(dnn_handle_),
-      conv_input_nd.handle(), conv.handle(), filter.handle(),
-      bias_nd.handle(), activation_desc.handle()};
-  
-  const bool is_profiling = output_profile_result != nullptr;
-
-  VLOG(2) << "\nconv_input_scale = " << conv_input_scale
-          << "\nconv_input_nd.handle() = " << conv_input_nd.handle()
-          << "\nconv_input_data.opaque() = " << conv_input_data.opaque()
-          << "\nfilter.handle() = " << filter.handle()
-          << "\nfilter_data.opaque() = " << filter_data.opaque()
-          << "\nconv.handle() = " << conv.handle()
-    // << "\nalgo = " << algo_desc.algo_id()
-    // << "\nscratch.opaque() = " << scratch.opaque()
-    // << "\nscratch.size() = " << scratch.size()
-          << "\nside_input_scale = " << side_input_scale
-          << "\noutput_nd.handle() = " << output_nd.handle()
-    // << "\nside_input_data_ptr = " << side_input_data_ptr
-          << "\nbias_nd.handle() = " << bias_nd.handle()
-          << "\nbiases.opaque() = " << biases.opaque()
-          << "\nactivation_desc.handle() = " << activation_desc.handle()
-          << "\noutput_nd.handle() = " << output_nd.handle()
-          << "\noutput_data->opaque() = " << output_data->opaque();
-  
-  std::unique_ptr<ROCMTimer> timer;
-  if (is_profiling) {
-    timer.reset(new ROCMTimer(parent_));
-    timer->Init();
-    // The start and stop of the timer should be as close to the MIOpen call as
-    // possible. It is still possible for other threads to issue workload on
-    // to this stream. So it could take multiple profiling measurements.
-    timer->Start(AsROCMStream(stream));
-  }
-  
-  miopenStatus_t status = fusion_plan.compile();
-  if (status != miopenStatusSuccess) {
-    LOG(FATAL) << "call to miopenCompileFusionPlan (CBA) failed: "
-	       << ToString(status);
-    return false;
-  }
-
-  fusion_plan.set_convolution_args(filter_data.opaque());
-  
-  fusion_plan.set_bias_args(biases.opaque());
-
-  fusion_plan.set_activation_args(activation_desc.handle());
-  
-  status = fusion_plan.execute(conv_input_nd.handle(), conv_input_data.opaque(),
-			       output_nd.handle(), output_data->opaque());
-  if (status != miopenStatusSuccess) {
-    LOG(FATAL) << "call to miopenExecuteFusionPlan (CBA) failed: "
-	       << ToString(status);
-    return false;
-  }
-  
-  if (is_profiling) {
-    timer->Stop(AsROCMStream(stream));
-    if (status == miopenStatusSuccess) {
-      // output_profile_result->set_algorithm(algo_desc);
-      output_profile_result->set_elapsed_time_in_ms(timer->GetElapsedMilliseconds());
-    }
-    timer->Destroy();
-  }
-  
-  if (status != miopenStatusSuccess) {
-    // Silently return when we are profiling.
-    if (!is_profiling) {
-      LOG(FATAL) << "failed to enqueue fused-convolution on stream: "
-		 << ToString(status);
-      return false;
-    }
-  }
-  
-  return true;
+  return false;
 }
 
 bool MIOpenSupport::DoFusedConvolve(
@@ -4008,7 +4063,7 @@ bool MIOpenSupport::DoFusedConvolutionBiasActivationImpl(
   ScopedActivationDescriptor activation_desc{parent_, activation_mode};
   
   ScopedFusionPlanConvBiasActv fusion_plan{parent_, ToHandle(dnn_handle_),
-      conv_input_nd.handle(), conv.handle(), filter.handle(),
+      conv_input_nd.handle(), filter.handle(), conv.handle(),
       bias_nd.handle(), activation_desc.handle()};
   
   const bool is_profiling = output_profile_result != nullptr;
@@ -4023,27 +4078,24 @@ bool MIOpenSupport::DoFusedConvolutionBiasActivationImpl(
     timer->Start(AsROCMStream(stream));
   }
   
-  miopenStatus_t status = fusion_plan.compile();
-  if (status != miopenStatusSuccess) {
-    LOG(FATAL) << "call to miopenCompileFusionPlan (CBA) failed: "
-	       << ToString(status);
-    return false;
-  }
+  miopenStatus_t status = miopenStatusSuccess;
 
-  fusion_plan.set_convolution_args(filter_data.opaque());
-  
-  fusion_plan.set_bias_args(bias_data.opaque());
-
-  fusion_plan.set_activation_args(activation_desc.handle());
-  
-  status = fusion_plan.execute(conv_input_nd.handle(), conv_input_data.opaque(),
-			       output_nd.handle(), output_data->opaque());
-  if (status != miopenStatusSuccess) {
-    LOG(FATAL) << "call to miopenExecuteFusionPlan (CBA) failed: "
-	       << ToString(status);
-    return false;
+  if (status == miopenStatusSuccess) {
+    fusion_plan.SetConvolutionArgs(filter_data.opaque());
   }
   
+  if (status == miopenStatusSuccess) {
+    status = fusion_plan.SetBiasArgs(bias_data.opaque());
+  }
+
+  if (status == miopenStatusSuccess) {
+    status = fusion_plan.SetActivationArgs(activation_desc.handle());
+  }
+  
+  if (status == miopenStatusSuccess) {
+    status = fusion_plan.Execute(conv_input_nd.handle(), conv_input_data.opaque(), output_nd.handle(), output_data->opaque());
+  }
+
   if (is_profiling) {
     timer->Stop(AsROCMStream(stream));
     if (status == miopenStatusSuccess) {
@@ -4064,6 +4116,7 @@ bool MIOpenSupport::DoFusedConvolutionBiasActivationImpl(
   
   return true;
 }
+
 
 bool MIOpenSupport::DoFusedConvolutionBiasActivation(
       Stream* stream,
