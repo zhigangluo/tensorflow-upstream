@@ -39,12 +39,12 @@ import numpy as np
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import linalg_ops_impl
 from tensorflow.python.ops import gen_linalg_ops
+from tensorflow.python.ops import linalg_ops_impl
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import random_ops
-from tensorflow.python.util.deprecation import (
-    deprecated, deprecated_arg_values)
+from tensorflow.python.util.deprecation import deprecated
+from tensorflow.python.util.deprecation import  deprecated_arg_values
 from tensorflow.python.util.tf_export import tf_export
 
 
@@ -226,9 +226,7 @@ class Constant(Initializer):
     return {"value": self.value, "dtype": self.dtype.name}
 
 
-@tf_export("keras.initializers.RandomUniform", "initializers.random_uniform",
-           "random_uniform_initializer", "keras.initializers.uniform",
-           "keras.initializers.random_uniform")
+@tf_export("initializers.random_uniform", "random_uniform_initializer")
 class RandomUniform(Initializer):
   """Initializer that generates tensors with a uniform distribution.
 
@@ -264,9 +262,7 @@ class RandomUniform(Initializer):
     }
 
 
-@tf_export("keras.initializers.RandomNormal", "initializers.random_normal",
-           "random_normal_initializer", "keras.initializers.normal",
-           "keras.initializers.random_normal")
+@tf_export("initializers.random_normal", "random_normal_initializer")
 class RandomNormal(Initializer):
   """Initializer that generates tensors with a normal distribution.
 
@@ -302,9 +298,7 @@ class RandomNormal(Initializer):
     }
 
 
-@tf_export("keras.initializers.TruncatedNormal",
-           "initializers.truncated_normal", "truncated_normal_initializer",
-           "keras.initializers.truncated_normal")
+@tf_export("initializers.truncated_normal", "truncated_normal_initializer")
 class TruncatedNormal(Initializer):
   """Initializer that generates a truncated normal distribution.
 

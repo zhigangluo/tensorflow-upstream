@@ -240,6 +240,11 @@ TfLiteStatus InterpreterBuilder::BuildLocalIndexToRegistrationMapping() {
 namespace {
 template <class T>
 std::vector<int> FlatBufferIntArrayToVector(T* flat_array) {
+  // Initialize shape of tensors with null shape. Empty vectors are converted
+  // to nullptr for models that are constructed via flatbuffers::Pack.
+  if (flat_array == nullptr) {
+    return {};
+  }
   std::vector<int> ret(flat_array->Length());
   for (int i = 0; i < flat_array->Length(); i++) {
     ret[i] = flat_array->Get(i);
@@ -624,7 +629,8 @@ TfLiteStatus ParseOpData(const Operator* op, BuiltinOperator op_type,
     case BuiltinOperator_REDUCE_MAX:
     case BuiltinOperator_REDUCE_MIN:
     case BuiltinOperator_REDUCE_PROD:
-    case BuiltinOperator_SUM: {
+    case BuiltinOperator_SUM:
+    case BuiltinOperator_REDUCE_ANY: {
       auto* params = MallocPOD<TfLiteReducerParams>();
       if (auto* schema_params = op->builtin_options_as_ReducerOptions()) {
         params->keep_dims = schema_params->keep_dims();
@@ -800,7 +806,6 @@ TfLiteStatus ParseOpData(const Operator* op, BuiltinOperator op_type,
     case BuiltinOperator_LOGICAL_AND:
     case BuiltinOperator_LOGICAL_NOT:
     case BuiltinOperator_FLOOR_DIV:
-    case BuiltinOperator_REDUCE_ANY:
       break;
   }
   return kTfLiteOk;
