@@ -870,7 +870,7 @@ def tf_cuda_cc_test(
         args = [],
         kernels = [],
         linkopts = []):
-    tf_gpu_test(
+    tf_gpu_cc_test(
         name,
         srcs = srcs,
         deps = deps,
