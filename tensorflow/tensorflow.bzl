@@ -8,7 +8,7 @@ load(
     "if_static",
     "tf_additional_grpc_deps_py",
     "tf_additional_xla_deps_py",
-    "tf_cuda_tests_tags",
+    "tf_gpu_tests_tags",
     "tf_sycl_tests_tags",
 )
 load(
@@ -804,7 +804,7 @@ register_extension_info(
     label_regex_for_dep = "{extension_name}",
 )
 
-def tf_cuda_cc_test(
+def tf_gpu_cc_test(
         name,
         srcs = [],
         deps = [],
@@ -843,10 +843,42 @@ def tf_cuda_cc_test(
             "@local_config_cuda//cuda:using_clang": 1,
             "//conditions:default": 0,
         }),
-        tags = tags + tf_cuda_tests_tags(),
+        tags = tags + tf_gpu_tests_tags(),
         data = data,
         size = size,
         extra_copts = extra_copts,
+        linkopts = linkopts,
+        args = args,
+        kernels = kernels,
+    )
+
+register_extension_info(
+    extension_name = "tf_gpu_cc_test",
+    label_regex_for_dep = "{extension_name}",
+)
+
+# terminology changes: saving tf_cuda_* for compatibility
+def tf_cuda_cc_test(
+        name,
+        srcs = [],
+        deps = [],
+        tags = [],
+        data = [],
+        size = "medium",
+        extra_copts = [],
+        linkstatic = 0,
+        args = [],
+        kernels = [],
+        linkopts = []):
+    tf_gpu_test(
+        name,
+        srcs = srcs,
+        deps = deps,
+        tags = tags,
+        data = data,
+        size = size,
+        extra_copts = extra_copts,
+        linkstatic = linkstatic,
         linkopts = linkopts,
         args = args,
         kernels = kernels,
@@ -857,7 +889,7 @@ register_extension_info(
     label_regex_for_dep = "{extension_name}",
 )
 
-def tf_cuda_only_cc_test(
+def tf_gpu_only_cc_test(
         name,
         srcs = [],
         deps = [],
@@ -891,7 +923,37 @@ def tf_cuda_only_cc_test(
             clean_dep("//tensorflow:darwin"): 1,
             "//conditions:default": 0,
         }),
-        tags = tags + tf_cuda_tests_tags(),
+        tags = tags + tf_gpu_tests_tags(),
+    )
+
+register_extension_info(
+    extension_name = "tf_gpu_only_cc_test",
+    label_regex_for_dep = "{extension_name}_gpu",
+)
+
+# terminology changes: saving tf_cuda_* for compatibility
+def tf_cuda_only_cc_test(
+        name,
+        srcs = [],
+        deps = [],
+        tags = [],
+        data = [],
+        size = "medium",
+        linkstatic = 0,
+        args = [],
+        kernels = [],
+        linkopts = []):
+    tf_gpu_only_cc_test(
+        name,
+        srcs = srcs,
+        deps = deps,
+        tags = tags,
+        data = data,
+        size = size,
+        linkstatic = linkstatic,
+        args = args,
+        kernels = kernels,
+        linkopts = linkopts,
     )
 
 register_extension_info(
@@ -974,7 +1036,7 @@ def tf_cc_tests_gpu(
         args = None):
     tf_cc_tests(srcs, deps, linkstatic, tags = tags, size = size, kernels = kernels, args = args)
 
-def tf_cuda_cc_tests(
+def tf_gpu_cc_tests(
         srcs,
         deps,
         name = "",
@@ -985,7 +1047,7 @@ def tf_cuda_cc_tests(
         kernels = [],
         linkopts = []):
     for src in srcs:
-        tf_cuda_cc_test(
+        tf_gpu_cc_test(
             name = src_to_test_name(src),
             srcs = [src],
             deps = deps,
@@ -996,6 +1058,29 @@ def tf_cuda_cc_tests(
             kernels = kernels,
             linkopts = linkopts,
         )
+
+# terminology changes: saving tf_cuda_* for compatibility
+def tf_cuda_cc_tests(
+        srcs,
+        deps,
+        name = "",
+        tags = [],
+        size = "medium",
+        linkstatic = 0,
+        args = None,
+        kernels = [],
+        linkopts = []):
+    tf_gpu_cc_tests(
+        srcs,
+        deps,
+        name = name,
+        tags = tags,
+        size = size,
+        linkstatic = linkstatic,
+        args = args,
+        kernels = kernels,
+        linkopts = linkopts,
+    )
 
 def tf_java_test(
         name,
@@ -1073,7 +1158,7 @@ register_extension_info(
     label_regex_for_dep = "{extension_name}",
 )
 
-def tf_cuda_library(deps = None, cuda_deps = None, copts = tf_copts(), **kwargs):
+def tf_gpu_library(deps = None, cuda_deps = None, copts = tf_copts(), **kwargs):
     """Generate a cc_library with a conditional set of CUDA dependencies.
 
     When the library is built with --config=cuda:
@@ -1112,6 +1197,20 @@ def tf_cuda_library(deps = None, cuda_deps = None, copts = tf_copts(), **kwargs)
     )
 
 register_extension_info(
+    extension_name = "tf_gpu_library",
+    label_regex_for_dep = "{extension_name}",
+)
+
+# terminology changes: saving tf_cuda_* for compatibility
+def tf_cuda_library(deps = None, cuda_deps = None, copts = tf_copts(), **kwargs):
+    tf_gpu_library(
+        deps = deps,
+        cuda_deps = cuda_deps,
+        copts = copts,
+        kwargs,
+    )
+
+register_extension_info(
     extension_name = "tf_cuda_library",
     label_regex_for_dep = "{extension_name}",
 )
@@ -1129,7 +1228,7 @@ def tf_kernel_library(
         **kwargs):
     """A rule to build a TensorFlow OpKernel.
 
-    May either specify srcs/hdrs or prefix.  Similar to tf_cuda_library,
+    May either specify srcs/hdrs or prefix.  Similar to tf_gpu_library,
     but with alwayslink=1 by default.  If prefix is specified:
       * prefix*.cc (except *.cu.cc) is added to srcs
       * prefix*.h (except *.cu.h) is added to hdrs
@@ -1195,7 +1294,7 @@ def tf_kernel_library(
         "req_dep=%s" % clean_dep("//tensorflow/core:gpu_lib"),
         "req_dep=@local_config_cuda//cuda:cuda_headers",
     ]
-    tf_cuda_library(
+    tf_gpu_library(
         name = name,
         srcs = srcs,
         hdrs = hdrs,
@@ -1798,7 +1897,7 @@ def cuda_py_test(
         flaky = 0,
         xla_enabled = False,
         grpc_enabled = False):
-    test_tags = tags + tf_cuda_tests_tags()
+    test_tags = tags + tf_gpu_tests_tags()
     tf_py_test(
         name = name,
         size = size,
@@ -1898,7 +1997,7 @@ def cuda_py_tests(
         prefix = "",
         xla_enabled = False,
         grpc_enabled = False):
-    test_tags = tags + tf_cuda_tests_tags()
+    test_tags = tags + tf_gpu_tests_tags()
     py_tests(
         name = name,
         size = size,
