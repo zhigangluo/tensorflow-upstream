@@ -1207,7 +1207,7 @@ def tf_cuda_library(deps = None, cuda_deps = None, copts = tf_copts(), **kwargs)
         deps = deps,
         cuda_deps = cuda_deps,
         copts = copts,
-        kwargs,
+        **kwargs,
     )
 
 register_extension_info(
