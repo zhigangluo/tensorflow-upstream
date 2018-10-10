@@ -2656,6 +2656,7 @@ GRAPH_HDRS = [
     "graph/types.h",
     "graph/validate.h",
     "graph/while_context.h",
+    "graph/gpu_fusion_pass.h",
 ]
 
 tf_gpu_library(
@@ -2838,6 +2839,7 @@ tf_gpu_library(
         "graph/mkl_layout_pass.cc",
         "graph/mkl_tfconversion_pass.cc",
         "graph/quantize_training.cc",
+        "graph/gpu_fusion_pass.cc",
         "public/session.h",
         "public/session_options.h",
         "public/version.h",
