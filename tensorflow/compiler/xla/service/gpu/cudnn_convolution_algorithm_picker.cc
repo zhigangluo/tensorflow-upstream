@@ -317,9 +317,9 @@ CudnnConvolutionAlgorithmPicker::PickBestAlgorithm(
   se::dnn::ProfileResult profile_result;
   VLOG(3) << "Auto-tuning for " << instr->ToString();
 
-  params.algorithm = AlgorithmConfig();
-  bool launch_ok = RunCudnnConvolution(params, &scratch_allocator, &stream,
-                                       &profile_result)
+  bool launch_ok = RunCudnnConvolution(instr, absl::MakeSpan(operand_buffers),
+                                       result_buffer, &scratch_allocator,
+                                       &stream, &profile_result)
                        .ok();
 
   if (launch_ok && profile_result.is_valid()) {
@@ -379,9 +379,9 @@ StatusOr<bool> CudnnConvolutionAlgorithmPicker::RunOnInstruction(
 
   TF_ASSIGN_OR_RETURN(CudnnConvBackendConfig backend_config,
                       instr->backend_config<CudnnConvBackendConfig>());
-  backend_config.set_algorithm(algorithm);
-  backend_config.set_tensor_ops_enabled(tensor_ops_enabled);
-  backend_config.set_scratch_size(scratch_bytes);
+  backend_config.set_algorithm(best_algo.algorithm);
+  backend_config.set_tensor_ops_enabled(best_algo.tensor_ops_enabled);
+  backend_config.set_scratch_size(best_algo.scratch_bytes);
 
   HloInstruction* new_call = computation->AddInstruction(
       instr->CloneWithNewOperands(new_call_shape, instr->operands()));
