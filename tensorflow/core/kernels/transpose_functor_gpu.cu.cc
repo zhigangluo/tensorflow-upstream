@@ -243,22 +243,26 @@ template struct Transpose<GPUDevice, string, false>;
 template <>
 Status DoTranspose(const GPUDevice& device, const Tensor& in,
                    const gtl::ArraySlice<int32> perm, Tensor* out) {
-  return internal::DoTransposeImpl(device, in, perm, /*conjugate=*/false, out);
+  //return internal::DoTransposeImpl(device, in, perm, /*conjugate=*/false, out);
+  return Status::OK();
 }
 template <>
 Status DoConjugateTranspose(const GPUDevice& device, const Tensor& in,
                             const gtl::ArraySlice<int32> perm, Tensor* out) {
-  return internal::DoTransposeImpl(device, in, perm, /*conjugate=*/true, out);
+  //return internal::DoTransposeImpl(device, in, perm, /*conjugate=*/true, out);
+  return Status::OK();
 }
 template <>
 Status DoMatrixTranspose(const GPUDevice& device, const Tensor& in,
                          Tensor* out) {
-  return internal::DoMatrixTransposeImpl(device, in, /*conjugate=*/false, out);
+  //return internal::DoMatrixTransposeImpl(device, in, /*conjugate=*/false, out);
+  return Status::OK();
 }
 template <>
 Status DoConjugateMatrixTranspose(const GPUDevice& device, const Tensor& in,
                                   Tensor* out) {
-  return internal::DoMatrixTransposeImpl(device, in, /*conjugate=*/true, out);
+  //return internal::DoMatrixTransposeImpl(device, in, /*conjugate=*/true, out);
+  return Status::OK();
 }
 
 }  // namespace tensorflow
