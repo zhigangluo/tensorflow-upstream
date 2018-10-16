@@ -32,7 +32,7 @@ struct Relu {
   // activations: same shape as "features".
   void operator()(const Device& d, typename TTypes<T>::ConstTensor features,
                   typename TTypes<T>::Tensor activations) {
-    activations.device(d) = features.cwiseMax(static_cast<T>(0));
+    //activations.device(d) = features.cwiseMax(static_cast<T>(0));
   }
 };
 
@@ -51,8 +51,8 @@ struct ReluGrad {
     // NOTE: When the activation is exactly zero, we do not propagate the
     // associated gradient value. This allows the output of the Relu to be used,
     // as well as its input.
-    backprops.device(d) =
-        gradients * (features > static_cast<T>(0)).template cast<T>();
+    //backprops.device(d) =
+    //    gradients * (features > static_cast<T>(0)).template cast<T>();
   }
 };
 
