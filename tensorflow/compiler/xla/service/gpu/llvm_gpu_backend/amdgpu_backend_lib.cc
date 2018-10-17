@@ -56,6 +56,7 @@ limitations under the License.
 #include "llvm/Transforms/IPO/AlwaysInliner.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/IPO/Internalize.h"
+//#include "lld/common/Driver.h"
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/core/lib/core/stringpiece.h"
 #include "tensorflow/core/lib/io/path.h"
@@ -222,6 +223,9 @@ std::vector<uint8> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target
   std::string isabin_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".o");
   std::string isabin_path = tensorflow::io::JoinPath(tempdir_name, isabin_filename);
 
+  std::string isaasm_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".s");
+  std::string isaasm_path = tensorflow::io::JoinPath(tempdir_name, isaasm_filename);
+
   std::string hsaco_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".hsaco");
   std::string hsaco_path = tensorflow::io::JoinPath(tempdir_name, hsaco_filename);
 
@@ -250,65 +254,25 @@ std::vector<uint8> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target
   ir_fs->flush();
 
   //// emit GCN ISA binary
-  //std::string gcnisa_binary;  // need a std::string instead of a ::string.
-  //{
-  //  llvm::raw_string_ostream stream(gcnisa_binary);
-  //  llvm::buffer_ostream pstream(stream);
-  //  // The extension is stripped by IrDumpingPassManager, so we need to
-  //  // get creative to add a suffix.
-  //  string module_id(llvm_ir::AsString(module->getModuleIdentifier()));
-  //  IrDumpingPassManager codegen_passes(
-  //      ReplaceFilenameExtension(tensorflow::io::Basename(module_id),
-  //                               "-amdgpu.dummy"),
-  //      "", false);
-  //  codegen_passes.add(new llvm::TargetLibraryInfoWrapperPass(
-  //      llvm::Triple(module->getTargetTriple())));
+    // The extension is stripped by IrDumpingPassManager, so we need to
+    // get creative to add a suffix.
+    string module_id(llvm_ir::AsString(module->getModuleIdentifier()));
+    IrDumpingPassManager codegen_passes(
+        ReplaceFilenameExtension(tensorflow::io::Basename(module_id),
+                                 "-amdgpu.dummy"),
+        "", false);
+    codegen_passes.add(new llvm::TargetLibraryInfoWrapperPass(
+        llvm::Triple(module->getTargetTriple())));
+    llvm::SmallVector<char, 0> stream;
+    llvm::raw_svector_ostream pstream(stream);
+    std::unique_ptr<llvm::raw_fd_ostream> isabin_fs(new llvm::raw_fd_ostream(isabin_path, ec, llvm::sys::fs::F_Text));
+    target_machine->addPassesToEmitFile(codegen_passes, *isabin_fs, nullptr,
+                                        llvm::TargetMachine::CGFT_ObjectFile);
 
-  //  target_machine->addPassesToEmitFile(codegen_passes, pstream, nullptr,
-  //                                      llvm::TargetMachine::CGFT_ObjectFile);
-  //  LOG(INFO) << "LLVM IR -> GCN ISA...\n";
-  //  codegen_passes.run(*module);
-  //}
+    codegen_passes.run(*module);
+    isabin_fs->flush();
 
-  // execute llc to convert LLVM IR into GCN ISA
-  auto llc_program = llvm::sys::findProgramByName("llc");
-  if (!llc_program) {
-    LOG(FATAL) << "unable to find llc in PATH: "
-               << llc_program.getError().message();
-  }
-  std::vector<llvm::StringRef> llc_args {
-    llvm_ir::AsStringRef("llc"),
-    llvm_ir::AsStringRef("-mtriple"),
-    llvm_ir::AsStringRef("amdgcn--amdhsa-amdgiz"),
-    llvm_ir::AsStringRef(absl::StrCat("-mcpu=gfx", amdgpu_version)),
-    llvm_ir::AsStringRef("-filetype=obj"),
-    llvm_ir::AsStringRef("ir_path"),
-    llvm_ir::AsStringRef("-o"),
-    llvm_ir::AsStringRef("isabin_path"),
-  };
-  if (inject_ir) {
-    llc_args[5] = llvm_ir::AsStringRef(inject_ir_path.c_str());
-  } else {
-    llc_args[5] = llvm_ir::AsStringRef(ir_path.c_str());
-  }
-  llc_args[7] = llvm_ir::AsStringRef(isabin_path.c_str());
 
-  std::string error_message;
-  int llc_result = llvm::sys::ExecuteAndWait(*llc_program,
-                                             llvm_ir::AsArrayRef(llc_args),
-                                             llvm::None, {}, 0, 0,
-                                             &error_message);
-
-  if (llc_result) {
-    LOG(FATAL) << "llc execute fail: " << error_message;
-  }
-
-  //// dump GCN ISA binary
-  //std::unique_ptr<llvm::raw_fd_ostream> isabin_fs(new llvm::raw_fd_ostream(isabin_path, ec, llvm::sys::fs::F_None));
-  //*isabin_fs << gcnisa_binary;
-  //isabin_fs->flush();
-
-  // execute ld.lld to convert GCN ISA binary into HSACO
   auto lld_program = llvm::sys::findProgramByName("ld.lld");
   if (!lld_program) {
     LOG(FATAL) << "unable to find ld.lld in PATH: "
@@ -322,7 +286,7 @@ std::vector<uint8> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target
     llvm_ir::AsStringRef("isabin_path"),
     llvm_ir::AsStringRef("-o"),
     llvm_ir::AsStringRef("hsaco_path"),
-  };
+ };
   if (inject_isa) {
     lld_args[4] = llvm_ir::AsStringRef(inject_isabin_path.c_str());
   } else {
@@ -330,7 +294,7 @@ std::vector<uint8> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target
   }
   lld_args[6] = llvm_ir::AsStringRef(hsaco_path.c_str());
 
-  //std::string error_message;
+  std::string error_message;
   int lld_result = llvm::sys::ExecuteAndWait(*lld_program,
                                              llvm_ir::AsArrayRef(lld_args),
                                              llvm::None, {}, 0, 0,
@@ -347,7 +311,6 @@ std::vector<uint8> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target
   std::vector<uint8> hsaco(hsaco_file_size);
   hsaco_file.seekg(0, std::ios::beg);
   hsaco_file.read(reinterpret_cast<char*>(&hsaco[0]), hsaco_file_size);
-
   return std::move(hsaco);
 }
 
@@ -436,7 +399,7 @@ StatusOr<std::vector<uint8>> CompileModuleToHsaco(llvm::Module* module,
   llvm::Triple target_triple = llvm::Triple(module->getTargetTriple());
   if (target_triple.getArch() == llvm::Triple::UnknownArch) {
     LOG(WARNING) << "target triple not found in the module";
-    target_triple = llvm::Triple("amdgcn--amdhsa-amdgiz");
+    target_triple = llvm::Triple("amdgcn-amd-amdhsa");
   }
 
   // Figure out the exact name of the processor as known to the AMDGPU backend
