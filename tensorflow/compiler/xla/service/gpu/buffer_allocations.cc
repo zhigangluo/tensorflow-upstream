@@ -174,7 +174,6 @@ void BufferAllocations::SetBuffer(BufferAllocation::Index buffer_index,
 }
 
 bool ShouldEmitLiteralInLlvmIr(const Literal& literal) {
-
   // LLVM can sometimes do interesting optimizations using scalar constants.
   return ShapeUtil::IsScalar(literal.shape());
 }
