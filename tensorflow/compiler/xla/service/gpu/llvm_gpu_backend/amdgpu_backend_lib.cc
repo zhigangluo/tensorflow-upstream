@@ -56,7 +56,6 @@ limitations under the License.
 #include "llvm/Transforms/IPO/AlwaysInliner.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/IPO/Internalize.h"
-//#include "lld/common/Driver.h"
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/core/lib/core/stringpiece.h"
 #include "tensorflow/core/lib/io/path.h"
@@ -223,9 +222,6 @@ std::vector<uint8> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target
   std::string isabin_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".o");
   std::string isabin_path = tensorflow::io::JoinPath(tempdir_name, isabin_filename);
 
-  std::string isaasm_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".s");
-  std::string isaasm_path = tensorflow::io::JoinPath(tempdir_name, isaasm_filename);
-
   std::string hsaco_filename = tensorflow::strings::StrCat(module->getModuleIdentifier(), ".hsaco");
   std::string hsaco_path = tensorflow::io::JoinPath(tempdir_name, hsaco_filename);
 
@@ -254,23 +250,22 @@ std::vector<uint8> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target
   ir_fs->flush();
 
   //// emit GCN ISA binary
-    // The extension is stripped by IrDumpingPassManager, so we need to
-    // get creative to add a suffix.
-    string module_id(llvm_ir::AsString(module->getModuleIdentifier()));
-    IrDumpingPassManager codegen_passes(
+  // The extension is stripped by IrDumpingPassManager, so we need to
+  // get creative to add a suffix.
+  string module_id(llvm_ir::AsString(module->getModuleIdentifier()));
+  IrDumpingPassManager codegen_passes(
         ReplaceFilenameExtension(tensorflow::io::Basename(module_id),
                                  "-amdgpu.dummy"),
-        "", false);
-    codegen_passes.add(new llvm::TargetLibraryInfoWrapperPass(
-        llvm::Triple(module->getTargetTriple())));
-    llvm::SmallVector<char, 0> stream;
-    llvm::raw_svector_ostream pstream(stream);
-    std::unique_ptr<llvm::raw_fd_ostream> isabin_fs(new llvm::raw_fd_ostream(isabin_path, ec, llvm::sys::fs::F_Text));
-    target_machine->addPassesToEmitFile(codegen_passes, *isabin_fs, nullptr,
-                                        llvm::TargetMachine::CGFT_ObjectFile);
-
-    codegen_passes.run(*module);
-    isabin_fs->flush();
+                                 "", false);
+  codegen_passes.add(new llvm::TargetLibraryInfoWrapperPass(
+                     llvm::Triple(module->getTargetTriple())));
+  llvm::SmallVector<char, 0> stream;
+  llvm::raw_svector_ostream pstream(stream);
+  std::unique_ptr<llvm::raw_fd_ostream> isabin_fs(new llvm::raw_fd_ostream(isabin_path, ec, llvm::sys::fs::F_Text));
+  target_machine->addPassesToEmitFile(codegen_passes, *isabin_fs, nullptr,
+                                      llvm::TargetMachine::CGFT_ObjectFile);
+  codegen_passes.run(*module);
+  isabin_fs->flush();
 
 
   auto lld_program = llvm::sys::findProgramByName("ld.lld");

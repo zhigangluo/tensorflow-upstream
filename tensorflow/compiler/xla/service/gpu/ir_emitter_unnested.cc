@@ -990,10 +990,8 @@ Status IrEmitterUnnested::EmitColumnReduction(
 
     llvm::BasicBlock& entry_bb = b_.GetInsertBlock()->getParent()->getEntryBlock();
     auto entry_ip = entry_bb.begin();
-
     for (int i = 0; i != num_reduces; ++i) {
       for (int x_offset = 0; x_offset < kTileWidth; ++x_offset) {
-
         auto old_insert_ip = b_.GetInsertPoint();
         auto old_insert_bb = b_.GetInsertBlock();
         b_.SetInsertPoint(&entry_bb, entry_bb.begin());
@@ -1004,7 +1002,6 @@ Status IrEmitterUnnested::EmitColumnReduction(
         b_.SetInsertPoint(old_insert_bb, old_insert_ip);
         TF_ASSIGN_OR_RETURN(llvm::Value* const init_ir_value,
                             init_value_gens[i](IrArray::Index(index_ty)));
-        b_.SetInsertPoint(old_insert_bb, old_insert_ip);
         Store(init_ir_value, partial_reduction_result_address);
         partial_reduction_result_addresses.push_back(
             partial_reduction_result_address);
@@ -1334,24 +1331,19 @@ Status IrEmitterUnnested::EmitRowReduction(
 
     llvm::BasicBlock& entry_bb = b_.GetInsertBlock()->getParent()->getEntryBlock();
     auto entry_ip = entry_bb.begin();
-
     for (int i = 0; i != num_reduces; ++i) {
       auto old_insert_ip = b_.GetInsertPoint();
       auto old_insert_bb = b_.GetInsertBlock();
       b_.SetInsertPoint(&entry_bb, entry_bb.begin());
-
       llvm::Value* partial_reduction_result_address =
           Alloca(element_ir_type, /*ArraySize=*/nullptr,
                  "partial_reduction_result." + llvm::Twine(i));
-      
       b_.SetInsertPoint(old_insert_bb, old_insert_ip);
-
       TF_ASSIGN_OR_RETURN(llvm::Value* const init_ir_value,
                           init_value_gens[i](IrArray::Index(index_ty)));
       Store(init_ir_value, partial_reduction_result_address);
       partial_reduction_result_addresses.push_back(
           partial_reduction_result_address);
-    
     }
     llvm::Value* z_tile = tile_index[0];
     llvm::Value* y = tile_index[1];
