@@ -254,19 +254,19 @@ std::vector<uint8> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target
   // get creative to add a suffix.
   string module_id(llvm_ir::AsString(module->getModuleIdentifier()));
   IrDumpingPassManager codegen_passes(
-        ReplaceFilenameExtension(tensorflow::io::Basename(module_id),
-                                 "-amdgpu.dummy"),
-                                 "", false);
+      ReplaceFilenameExtension(tensorflow::io::Basename(module_id),
+                               "-amdgpu.dummy"),
+                               "", false);
   codegen_passes.add(new llvm::TargetLibraryInfoWrapperPass(
-                     llvm::Triple(module->getTargetTriple())));
+      llvm::Triple(module->getTargetTriple())));
   llvm::SmallVector<char, 0> stream;
   llvm::raw_svector_ostream pstream(stream);
-  std::unique_ptr<llvm::raw_fd_ostream> isabin_fs(new llvm::raw_fd_ostream(isabin_path, ec, llvm::sys::fs::F_Text));
+  std::unique_ptr<llvm::raw_fd_ostream> isabin_fs(
+      new llvm::raw_fd_ostream(isabin_path, ec, llvm::sys::fs::F_Text));
   target_machine->addPassesToEmitFile(codegen_passes, *isabin_fs, nullptr,
                                       llvm::TargetMachine::CGFT_ObjectFile);
   codegen_passes.run(*module);
   isabin_fs->flush();
-
 
   auto lld_program = llvm::sys::findProgramByName("ld.lld");
   if (!lld_program) {
@@ -281,7 +281,7 @@ std::vector<uint8> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target
     llvm_ir::AsStringRef("isabin_path"),
     llvm_ir::AsStringRef("-o"),
     llvm_ir::AsStringRef("hsaco_path"),
- };
+  };
   if (inject_isa) {
     lld_args[4] = llvm_ir::AsStringRef(inject_isabin_path.c_str());
   } else {
