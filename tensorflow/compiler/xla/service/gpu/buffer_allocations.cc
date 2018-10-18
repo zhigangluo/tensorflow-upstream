@@ -175,12 +175,8 @@ void BufferAllocations::SetBuffer(BufferAllocation::Index buffer_index,
 
 bool ShouldEmitLiteralInLlvmIr(const Literal& literal) {
 
-//#ifdef GOOGLE_CUDA
   // LLVM can sometimes do interesting optimizations using scalar constants.
   return ShapeUtil::IsScalar(literal.shape());
-//#elif TENSORFLOW_USE_ROCM
-//  return true;
-//#endif 
 }
 
 }  // namespace gpu
