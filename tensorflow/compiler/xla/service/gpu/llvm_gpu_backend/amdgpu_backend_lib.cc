@@ -263,6 +263,7 @@ std::vector<uint8> EmitModuleToHsaco(Module* module, llvm::TargetMachine* target
   llvm::raw_svector_ostream pstream(stream);
   std::unique_ptr<llvm::raw_fd_ostream> isabin_fs(
       new llvm::raw_fd_ostream(isabin_path, ec, llvm::sys::fs::F_Text));
+  module->setDataLayout(target_machine->createDataLayout());
   target_machine->addPassesToEmitFile(codegen_passes, *isabin_fs, nullptr,
                                       llvm::TargetMachine::CGFT_ObjectFile);
   codegen_passes.run(*module);
