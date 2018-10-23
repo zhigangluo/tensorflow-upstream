@@ -197,7 +197,7 @@ class ROCmFusionKernelConvolutionBiasActivation : public OpKernel {
 
         // convert the input tensor to OIHW format for the GPU
         functor::TransformFilter<GPUDevice, T, int, 4>()(
-            ctx->eigen_device<GPUDevice>(), FORMAT_OIHW,
+            ctx->eigen_device<GPUDevice>(), 
             To32Bit(const_cast<const Tensor&>(fusion_filter).tensor<T, 4>()),
             To32Bit(transformed_filter.tensor<T, 4>()));
 
