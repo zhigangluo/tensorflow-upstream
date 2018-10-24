@@ -222,11 +222,11 @@ bool ROCMExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
     module = in_memory_modules_[hsaco];
 
     if (module == nullptr) {
-      if (!ROCMDriver::LoadHsaco(device_ordinal_, hsaco, &module)) {
+      if (!LoadModuleFromHsaco(hsaco, &module)) {
         LOG(ERROR) << "failed to load HSACO\n";
         return false;
       }
-      in_memory_modules_[hsaco] = module;
+
     }
   } else {
     LOG(WARNING) << "no method of loading ROCM kernel provided";
@@ -355,6 +355,7 @@ bool ROCMExecutor::LoadModuleFromHsaco(const char *hsaco, hipModule_t *module) {
       return false;
     }
     module_refcount = 1;
+    in_memory_modules_[hsaco] = *module;
     VLOG(3) << "Loaded HSACO " << static_cast<const void *>(hsaco)
             << " as module " << *module;
   } else {
@@ -721,7 +722,7 @@ bool ROCMExecutor::DeviceMemoryUsage(int64 *free, int64 *total) const {
 
 bool ROCMExecutor::GetSymbol(const string& symbol_name, ModuleHandle module_handle, void **mem,
                              size_t *bytes) {
-  {  // give limited scope to mutex_lock
+/*  {  // give limited scope to mutex_lock
     mutex_lock lock{disk_modules_mu_};
     for (auto &it : disk_modules_) {
       if (ROCMDriver::GetModuleSymbol(device_ordinal_, it.second, symbol_name.c_str(),
@@ -742,7 +743,7 @@ bool ROCMExecutor::GetSymbol(const string& symbol_name, ModuleHandle module_hand
       }
     }
   }
-
+*/
   {  // give limited scope to mutex_lock
     mutex_lock lock{in_memory_modules_mu_};
     if (static_cast<bool>(module_handle)) {
