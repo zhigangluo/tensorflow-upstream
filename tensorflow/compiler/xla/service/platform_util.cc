@@ -52,7 +52,11 @@ string CanonicalPlatformName(const string& name) {
   }
   // "gpu" and "cuda" mean the same thing.
   if (platform_str == "gpu") {
+#ifdef GOOGLE_CUDA
     platform_str = "cuda";
+#elif TENSORFLOW_USE_ROCM
+    platform_str = "rocm";
+#endif 
   }
   return platform_str;
 }
