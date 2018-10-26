@@ -2891,9 +2891,9 @@ std::tuple<llvm::Value*, llvm::Value*> CalculateYXCoordinateWithinTile(
   llvm::Intrinsic::ID tid_intrinsic = llvm::Intrinsic::nvvm_read_ptx_sreg_tid_x;
 #elif TENSORFLOW_USE_ROCM
   llvm::Intrinsic::ID tid_intrinsic = llvm::Intrinsic::r600_read_tidig_x;
-#endif 
-  llvm::Value* thread_id = llvm_ir::EmitCallToIntrinsic(
-      tid_intrinsic, {}, {}, builder);
+#endif
+  llvm::Value* thread_id =
+      llvm_ir::EmitCallToIntrinsic(tid_intrinsic, {}, {}, builder);
   llvm_ir::AddRangeMetadata(0, threads_per_tile,
                             llvm::cast<llvm::Instruction>(thread_id));
   thread_id = builder->CreateIntCast(thread_id, tile_size->getType(),
@@ -2908,12 +2908,13 @@ std::tuple<llvm::Value*, llvm::Value*> CalculateYXCoordinateWithinTile(
 llvm::Value* GetBlockIdx(llvm::IRBuilder<>* builder, llvm::Type* index_ty,
                          int64 num_blocks) {
 #ifdef GOOGLE_CUDA
-  llvm::Intrinsic::ID groupid_intrinsic = llvm::Intrinsic::nvvm_read_ptx_sreg_ctaid_x;
+  llvm::Intrinsic::ID groupid_intrinsic =
+      llvm::Intrinsic::nvvm_read_ptx_sreg_ctaid_x;
 #elif TENSORFLOW_USE_ROCM
   llvm::Intrinsic::ID groupid_intrinsic = llvm::Intrinsic::r600_read_tgid_x;
-#endif 
-  llvm::Value* block_id = llvm_ir::EmitCallToIntrinsic(
-      groupid_intrinsic, {}, {}, builder);
+#endif
+  llvm::Value* block_id =
+      llvm_ir::EmitCallToIntrinsic(groupid_intrinsic, {}, {}, builder);
   llvm_ir::AddRangeMetadata(0, num_blocks,
                             llvm::cast<llvm::Instruction>(block_id));
   return builder->CreateIntCast(block_id, index_ty, /*isSigned=*/true,
@@ -3161,13 +3162,11 @@ LaunchDimensions IrEmitterUnnested::EmitHlo021Tile(
   // output before the other thread copies it from input to tile.
   // This is `__syncthreads` in CUDA.
 #ifdef GOOGLE_CUDA
-  llvm::Intrinsic::ID barrier_intrinsic_id = llvm::Intrinsic::nvvm_barrier0;;
-  llvm_ir::EmitCallToIntrinsic(barrier_intrinsic_id, {}, {}, &b_);
+  llvm::Intrinsic::ID barrier_intrinsic_id = llvm::Intrinsic::nvvm_barrier0;
 #elif TENSORFLOW_USE_ROCM
   llvm::Intrinsic::ID barrier_intrinsic_id = llvm::Intrinsic::amdgcn_s_barrier;
+#endif
   llvm_ir::EmitCallToIntrinsic(barrier_intrinsic_id, {}, {}, &b_);
-#endif 
-
 
   llvm_ir::TiledParameterInfo tiled_param_info(param_shmem_buffers, y, x);
 
