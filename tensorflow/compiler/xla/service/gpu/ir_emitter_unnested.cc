@@ -2890,7 +2890,7 @@ std::tuple<llvm::Value*, llvm::Value*> CalculateYXCoordinateWithinTile(
 #ifdef GOOGLE_CUDA
   llvm::Intrinsic::ID tid_intrinsic = llvm::Intrinsic::nvvm_read_ptx_sreg_tid_x;
 #elif TENSORFLOW_USE_ROCM
-  llvm::Intrinsic::ID tid_intrinsic = llvm::Intrinsic::r600_read_tidig_x;
+  llvm::Intrinsic::ID tid_intrinsic = llvm::Intrinsic::amdgcn_workitem_id_x;
 #endif
   llvm::Value* thread_id =
       llvm_ir::EmitCallToIntrinsic(tid_intrinsic, {}, {}, builder);
@@ -2911,7 +2911,7 @@ llvm::Value* GetBlockIdx(llvm::IRBuilder<>* builder, llvm::Type* index_ty,
   llvm::Intrinsic::ID groupid_intrinsic =
       llvm::Intrinsic::nvvm_read_ptx_sreg_ctaid_x;
 #elif TENSORFLOW_USE_ROCM
-  llvm::Intrinsic::ID groupid_intrinsic = llvm::Intrinsic::r600_read_tgid_x;
+  llvm::Intrinsic::ID groupid_intrinsic = llvm::Intrinsic::amdgcn_workgroup_id_x;
 #endif
   llvm::Value* block_id =
       llvm_ir::EmitCallToIntrinsic(groupid_intrinsic, {}, {}, builder);
