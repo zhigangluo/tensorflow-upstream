@@ -1741,9 +1741,6 @@ bool MIOpenSupport::DoConvolveImpl(
 
     algo_sz = get_algorithm();
 
-    // MIOpen requires workspace:
-    assert (scratch != nullptr) ;
-
   } else {
     // An algorithm has been specified.
     dnn::AlgorithmDesc algo = algorithm_config.algorithm();
