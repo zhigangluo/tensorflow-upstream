@@ -13,9 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#include "tensorflow/core/framework/dataset.h"
 #include "tensorflow/core/framework/partial_tensor_shape.h"
 #include "tensorflow/core/framework/tensor.h"
-#include "tensorflow/core/kernels/data/dataset.h"
 #include "tensorflow/core/lib/random/random.h"
 #include "tensorflow/core/platform/cpu_info.h"
 
@@ -77,37 +77,39 @@ class ModelDatasetOp : public UnaryDatasetOpKernel {
           : DatasetIterator<Dataset>(params),
             model_(std::make_shared<model::Model>()) {}
 
+      ~Iterator() override {
+        // Signal the optimize thread to terminate it. We will then join that
+        // thread when we delete `this->optimize_thread_`.
+        mutex_lock l(mu_);
+        cancelled_ = true;
+        cond_var_.notify_all();
+      }
+
       Status Initialize(IteratorContext* ctx) override {
-        IteratorContext ctx_with_model(CreateParams(ctx));
-        return dataset()->input_->MakeIterator(&ctx_with_model, prefix(),
-                                               &input_impl_);
+        IteratorContext::Params params(ctx);
+        params.model = model_;
+        return dataset()->input_->MakeIterator(
+            IteratorContext(std::move(params)), prefix(), &input_impl_);
       }
 
       Status GetNextInternal(IteratorContext* ctx,
                              std::vector<Tensor>* out_tensors,
                              bool* end_of_sequence) override {
         mutex_lock l(mu_);
-        int64 now = ctx->env()->NowMicros() / EnvTime::kMillisToMicros;
-        if (last_optimization_ms_ + optimization_period_ms_ < now) {
-          model_->Optimize(port::NumSchedulableCPUs());
-          // Exponentially increase the period of running the optimization until
-          // a threshold is reached.
-          if (optimization_period_ms_ < kOptimizationPeriodThresholdMs) {
-            if (optimization_period_ms_ << 1 < kOptimizationPeriodThresholdMs) {
-              optimization_period_ms_ <<= 1;
-            } else {
-              optimization_period_ms_ = kOptimizationPeriodThresholdMs;
-            }
-          }
-          last_optimization_ms_ =
-              ctx->env()->NowMicros() / EnvTime::kMillisToMicros;
-        }
-        IteratorContext ctx_with_model(CreateParams(ctx));
-        return input_impl_->GetNext(&ctx_with_model, out_tensors,
-                                    end_of_sequence);
+        TF_RETURN_IF_ERROR(EnsureOptimizeThreadStarted(ctx));
+        IteratorContext::Params params(ctx);
+        params.model = model_;
+        return input_impl_->GetNext(IteratorContext(std::move(params)),
+                                    out_tensors, end_of_sequence);
       }
 
      protected:
+      std::shared_ptr<model::Node> CreateNode(
+          IteratorContext* ctx, model::Node::Args args) const override {
+        return model::MakeKnownRatioNode(std::move(args),
+                                         /*ratio=*/1);
+      }
+
       Status SaveInternal(IteratorStateWriter* writer) override {
         mutex_lock l(mu_);
         TF_RETURN_IF_ERROR(SaveInput(writer, input_impl_));
@@ -121,17 +123,54 @@ class ModelDatasetOp : public UnaryDatasetOpKernel {
         return Status::OK();
       }
 
-      IteratorContext::Params CreateParams(IteratorContext* ctx) {
-        IteratorContext::Params params = ctx->params();
-        params.model = model_;
-        return params;
+     private:
+      Status EnsureOptimizeThreadStarted(IteratorContext* ctx)
+          EXCLUSIVE_LOCKS_REQUIRED(mu_) {
+        if (!optimize_thread_) {
+          std::shared_ptr<IteratorContext> new_ctx(new IteratorContext(*ctx));
+          optimize_thread_.reset(ctx->env()->StartThread(
+              {}, "tf_data_model",
+              [this, new_ctx]() { OptimizeThread(new_ctx); }));
+        }
+        return Status::OK();
       }
 
-     private:
+      void OptimizeThread(const std::shared_ptr<IteratorContext>& ctx) {
+        int64 last_optimization_ms = 0;
+        int64 optimization_period_ms = 10;
+        while (true) {
+          {
+            mutex_lock l(mu_);
+            while (!cancelled_ &&
+                   last_optimization_ms + optimization_period_ms >=
+                       ctx->env()->NowMicros() / EnvTime::kMillisToMicros) {
+              cond_var_.wait_for(
+                  l, std::chrono::milliseconds(
+                         last_optimization_ms + optimization_period_ms -
+                         ctx->env()->NowMicros() / EnvTime::kMillisToMicros));
+            }
+            if (cancelled_) return;
+          }
+          model_->Optimize(port::NumSchedulableCPUs());
+          // Exponentially increase the period of running the optimization
+          // until a threshold is reached.
+          if (optimization_period_ms < kOptimizationPeriodThresholdMs) {
+            if (optimization_period_ms << 1 < kOptimizationPeriodThresholdMs) {
+              optimization_period_ms <<= 1;
+            } else {
+              optimization_period_ms = kOptimizationPeriodThresholdMs;
+            }
+          }
+          last_optimization_ms =
+              ctx->env()->NowMicros() / EnvTime::kMillisToMicros;
+        }
+      }
+
       mutex mu_;
+      condition_variable cond_var_;
       std::shared_ptr<model::Model> model_;
-      int64 last_optimization_ms_ GUARDED_BY(mu_) = 0;
-      int64 optimization_period_ms_ GUARDED_BY(mu_) = 10;
+      std::unique_ptr<Thread> optimize_thread_ GUARDED_BY(mu_);
+      bool cancelled_ GUARDED_BY(mu_) = false;
       std::unique_ptr<IteratorBase> input_impl_ GUARDED_BY(mu_);
     };
 

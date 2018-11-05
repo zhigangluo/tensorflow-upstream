@@ -37,6 +37,7 @@ from tensorflow.python.ops import gen_array_ops
 from tensorflow.python.ops import gen_math_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import resource_variable_ops
+from tensorflow.python.ops.unconnected_gradients import UnconnectedGradients
 from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.util import nest
 from tensorflow.python.util import tf_contextlib
@@ -564,7 +565,10 @@ def _aggregate_grads(gradients):
 def _num_elements(grad):
   """The number of elements in the `grad` tensor."""
   if isinstance(grad, ops.Tensor):
-    return functools.reduce(operator.mul, grad._shape_tuple(), 1)  # pylint: disable=protected-access
+    shape_tuple = grad._shape_tuple()  # pylint: disable=protected-access
+    if shape_tuple is None or None in shape_tuple:
+      return 0
+    return functools.reduce(operator.mul, shape_tuple, 1)
   if isinstance(grad, ops.IndexedSlices):
     return functools.reduce(operator.mul, grad.values._shape_tuple(), 1)  # pylint: disable=protected-access
   raise ValueError("`grad` not a Tensor or IndexedSlices.")
@@ -591,7 +595,11 @@ def _zeros(shape, dtype):
   cache_key = shape, dtype, device
   cached = ctx.zeros_cache().get(cache_key)
   if cached is None:
-    cached = _fast_fill(0, shape, dtype)
+    if dtypes.as_dtype(dtype).is_bool:
+      value = False
+    else:
+      value = 0
+    cached = _fast_fill(value, shape, dtype)
     ctx.zeros_cache().put(cache_key, cached)
   return cached
 
@@ -600,22 +608,28 @@ def _ones(shape, dtype):
   if not context.context().executing_eagerly():
     return array_ops.ones(shape, dtype)
 
+  if dtypes.as_dtype(dtype).is_bool:
+    value = True
+  else:
+    value = 1
+
   if shape == ():  # pylint: disable=g-explicit-bool-comparison
-    return constant_op.constant(1, dtype=dtype)
-  return _fast_fill(1, shape, dtype)
+    return constant_op.constant(value, dtype=dtype)
+  return _fast_fill(value, shape, dtype)
 
 
 _default_vspace = imperative_grad.VSpace(
     num_elements_fn=_num_elements,
     aggregate_fn=_aggregate_grads,
-    zeros=_zeros,
-    ones=_ones)
+    zeros_fn=_zeros,
+    ones_fn=_ones,
+    graph_shape_fn=gen_array_ops.shape)
 pywrap_tensorflow.TFE_Py_RegisterVSpace(_default_vspace)
 
 
 def _handle_or_self(x):
   """If x is ResourceVariable, return its handle, else x."""
-  if isinstance(x, resource_variable_ops.ResourceVariable):
+  if resource_variable_ops.is_resource_variable(x):
     x = x.handle
   return x
 
@@ -725,7 +739,9 @@ class GradientTape(object):
     self._persistent = persistent
     self._watch_accessed_variables = watch_accessed_variables
     self._recording = False
-    context.context().start_step()
+    self._created_eagerly = context.executing_eagerly()
+    if self._created_eagerly:
+      context.context().start_step()
 
   def __enter__(self):
     """Enters a context inside which operations are recorded on this tape."""
@@ -755,7 +771,11 @@ class GradientTape(object):
     self._recording = False
 
   def __del__(self):
-    context.context().end_step()
+    if self._created_eagerly:
+      try:
+        context.context().end_step()
+      except AttributeError:
+        pass
 
   def watch(self, tensor):
     """Ensures that `tensor` is being traced by this tape.
@@ -843,7 +863,11 @@ class GradientTape(object):
     """Returns variables watched by this tape in order of construction."""
     return self._tape.watched_variables()
 
-  def gradient(self, target, sources, output_gradients=None):
+  def gradient(self,
+               target,
+               sources,
+               output_gradients=None,
+               unconnected_gradients=UnconnectedGradients.NONE):
     """Computes the gradient using operations recorded in context of this tape.
 
     Args:
@@ -852,6 +876,10 @@ class GradientTape(object):
         will be differentiated against elements in `sources`.
       output_gradients: a list of gradients, one for each element of
         target. Defaults to None.
+      unconnected_gradients: a value which can either hold 'none' or 'zero' and
+        alters the value which will be returned if the target and sources are
+        unconnected. The possible values and effects are detailed in
+        'UnconnectedGradients' and it defaults to 'none'.
 
     Returns:
       a list or nested structure of Tensors (or IndexedSlices, or None),
@@ -861,6 +889,8 @@ class GradientTape(object):
     Raises:
       RuntimeError: if called inside the context of the tape, or if called more
        than once on a non-persistent tape.
+      ValueError: if the target is a variable or if unconnected gradients is
+       called with an unknown value.
     """
     if self._tape is None:
       raise RuntimeError("GradientTape.gradient can only be called once on "
@@ -880,6 +910,12 @@ class GradientTape(object):
                             "gradient in order to compute higher order "
                             "derrivatives.", 1)
 
+    flat_targets = nest.flatten(target)
+    for t in flat_targets:
+      if resource_variable_ops.is_resource_variable(t):
+        raise ValueError("GradientTape.gradient is not supported for variable "
+                         "targets.")
+
     flat_sources = nest.flatten(sources)
     flat_sources = [_handle_or_self(x) for x in flat_sources]
 
@@ -889,9 +925,10 @@ class GradientTape(object):
 
     flat_grad = imperative_grad.imperative_grad(
         self._tape,
-        nest.flatten(target),
+        flat_targets,
         flat_sources,
-        output_gradients=output_gradients)
+        output_gradients=output_gradients,
+        unconnected_gradients=unconnected_gradients)
 
     if not self._persistent:
       self._tape = None

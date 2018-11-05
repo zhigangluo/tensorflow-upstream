@@ -92,34 +92,35 @@ class XlaDevice : public LocalDevice {
   static Status GetMetadata(OpKernelConstruction* ctx,
                             const Metadata** metadata);
 
-  // Factory function. 'platform_name' is the name of the XLA platform.
-  // 'device_name' is the name of the Tensorflow device to create.
-  // 'jit_device_name' is the name of the corresponding JIT device.
-  // 'transfer_as_literal' is true if device<->host transfers must be done using
-  // XLA's TransferLiteral{To,From}Device interface. If false, we can use
-  // ThenMemcpy instead.
-  // If 'use_multiple_streams' is true, we create separate streams for
-  // host-to-device and device-to-host communication.
-  // If padded_shape_fn is empty, a default implementation that returns
-  // the on-host shape is used.
-  static Status Create(
-      const string& platform_name, const string& device_name,
-      int device_ordinal, const string& jit_device_name,
-      const SessionOptions& options, const string& name_prefix,
-      const XlaOpRegistry::DeviceRegistration& registration,
-      bool transfer_as_literal, bool use_multiple_streams,
-      const XlaCompiler::ShapeRepresentationFn& shape_representation_fn,
-      const PaddedShapeFn& padded_shape_fn, std::unique_ptr<XlaDevice>* device);
+  struct Options {
+    // The StreamExecutor platform. Not owned. Must be non-null.
+    se::Platform* platform = nullptr;
+
+    // The device name's prefix (e.g., "/task:7")
+    string device_name_prefix;
+
+    // The name of the XLA device (e.g., "XLA_CPU")
+    string device_name;
+
+    // The number of the device.
+    int device_ordinal = -1;
+
+    // The name of the compilation device (e.g., "XLA_CPU_JIT");
+    string compilation_device_name;
+
+    // If 'use_multiple_streams' is true, we create separate streams for
+    // compute, host-to-device, and device-to-host communication.
+    bool use_multiple_streams = false;
+
+    XlaCompiler::ShapeRepresentationFn shape_representation_fn;
+
+    // If padded_shape_fn is empty, a default implementation that returns
+    // the logical on-device shape without padding is used.
+    PaddedShapeFn padded_shape_fn;
+  };
 
   // Creates a new XLA Device.
-  // If padded_shape_fn is empty, a default implementation that returns
-  // the logical on-device shape without padding is used.
-  XlaDevice(const SessionOptions& options, const DeviceAttributes& attrs,
-            int device_ordinal, const DeviceType& jit_device_name,
-            se::Platform* platform, bool transfer_as_literal,
-            bool use_multiple_streams,
-            const XlaCompiler::ShapeRepresentationFn& shape_representation_fn,
-            const PaddedShapeFn& padded_shape_fn);
+  XlaDevice(const SessionOptions& session_options, const Options& options);
   ~XlaDevice() override;
 
   Allocator* GetAllocator(AllocatorAttributes attr) override
@@ -151,6 +152,12 @@ class XlaDevice : public LocalDevice {
   // information for GPU and TPU devices.
   Status UseGpuDeviceInfo() LOCKS_EXCLUDED(mu_);
 
+  // Instructs this XlaDevice to return 'sync_on_completion' for
+  // RequiresSyncOnCompletion().
+  void SetRequiresSyncOnCompletion(bool sync_on_completion) LOCKS_EXCLUDED(mu_);
+
+  bool RequiresSyncOnCompletion() const override LOCKS_EXCLUDED(mu_);
+
  private:
   xla::LocalClient* client() const;
   Allocator* GetAllocatorLocked(AllocatorAttributes attr)
@@ -165,7 +172,7 @@ class XlaDevice : public LocalDevice {
   static Status GetMetadataFromDevice(DeviceBase* device,
                                       const XlaDevice::Metadata** metadata);
 
-  mutex mu_;
+  mutable mutex mu_;
   // The metadata of this XlaDevice.
   const Metadata xla_metadata_;
   // Which hardware device in the client's platform this XlaDevice controls.
@@ -176,6 +183,7 @@ class XlaDevice : public LocalDevice {
   se::Platform* const platform_;  // Not owned.
   // Memory allocator associated with this device.
   Allocator* xla_allocator_ GUARDED_BY(mu_) = nullptr;  // Not owned.
+
   // Stream associated with this device. Operations enqueued on this
   // stream are executed on the device. Operations include data
   // copying back and forth between CPU and the device, and
@@ -191,9 +199,11 @@ class XlaDevice : public LocalDevice {
   // If use_multiple_streams_, device to host transfers are performed using this
   // stream.
   std::shared_ptr<se::Stream> device_to_host_stream_ GUARDED_BY(mu_);
-  // Must we use XLA's transfer manager for correct host<->device transfers? if
-  // false, we can use ThenMemcpy() instead.
-  const bool transfer_as_literal_;
+  // If use_multiple_streams_, transfers between different devices are performed
+  // using these streams.
+  std::vector<std::shared_ptr<se::Stream>> device_to_device_streams_
+      GUARDED_BY(mu_);
+
   const XlaCompiler::ShapeRepresentationFn shape_representation_fn_;
 
   // The device context accessed by all users of the XlaDevice, set by calls to
@@ -207,6 +217,10 @@ class XlaDevice : public LocalDevice {
 
   // Thread pool used for running closures
   std::unique_ptr<thread::ThreadPool> thread_pool_;
+
+  // True if the device requires XlaDevice::Sync to be called on completion
+  // regardless of status.
+  bool sync_on_completion_ GUARDED_BY(mu_) = false;
 };
 
 // Builds OpKernel registrations on 'device' for the JIT operators

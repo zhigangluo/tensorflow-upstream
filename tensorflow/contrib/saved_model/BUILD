@@ -82,7 +82,12 @@ py_library(
     name = "keras_saved_model",
     srcs = ["python/saved_model/keras_saved_model.py"],
     srcs_version = "PY2AND3",
-    tags = ["no_windows"],
+    tags = [
+        "no_windows",
+        # TODO(b/119022845): Re-enable this test in TAP.
+        "manual",
+        "notap",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         "//tensorflow/python:array_ops",
@@ -92,10 +97,7 @@ py_library(
         "//tensorflow/python:platform",
         "//tensorflow/python:saver",
         "//tensorflow/python:util",
-        "//tensorflow/python/estimator",
-        "//tensorflow/python/estimator:export",
-        "//tensorflow/python/estimator:keras",
-        "//tensorflow/python/estimator:model_fn",
+        "//tensorflow/python/estimator:estimator_py",
         "//tensorflow/python/keras:engine",
         "//tensorflow/python/saved_model",
     ],
@@ -111,6 +113,7 @@ py_test(
         ":keras_saved_model",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:training",
+        "//tensorflow/python/estimator:estimator_py",
         "//tensorflow/python/keras",
         "//third_party/py/numpy",
         "@absl_py//absl/testing:parameterized",

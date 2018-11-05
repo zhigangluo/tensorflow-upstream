@@ -272,69 +272,54 @@ class StatsAggregator;
 class IteratorContext {
  public:
   struct Params {
-    // Interface to operating system functionality.
-    Env* env;
+    explicit Params(IteratorContext* ctx)
+        : allocator_getter(ctx->allocator_getter()),
+          env(ctx->env()),
+          function_library(ctx->function_library()),
+          lib(ctx->lib()),
+          model(ctx->model()),
+          runner(*(ctx->runner())),
+          stats_aggregator(ctx->stats_aggregator()) {}
 
-    // Function call support.
-    std::function<void(std::function<void()>)> runner = nullptr;
-
-    // A function that returns the current `StatsAggregator` instance to be
-    // used when recording statistics about the iterator.
-    //
-    // NOTE(mrry): This is somewhat awkward, because (i) the `StatsAggregator`
-    // is a property of the `IteratorResource` (which this class does not know
-    // about), and (ii) it can change after the `IteratorContext` has been
-    // created. Better suggestions are welcome!
-    std::function<std::shared_ptr<StatsAggregator>()> stats_aggregator_getter =
-        nullptr;
-
-    // The FunctionLibraryRuntime object to be used to make function calls.
-    FunctionLibraryRuntime* lib = nullptr;
-    std::shared_ptr<const FunctionLibraryDefinition> function_library = nullptr;
+    explicit Params(OpKernelContext* ctx)
+        : env(ctx->env()),
+          lib(ctx->function_library()),
+          runner(*(ctx->runner())) {
+      // NOTE: need reinterpret_cast because function.h forward-declares Device.
+      DeviceBase* device =
+          reinterpret_cast<DeviceBase*>(ctx->function_library()->device());
+      allocator_getter = [device](AllocatorAttributes attrs) {
+        return device->GetAllocator(attrs);
+      };
+    }
 
     // The Allocator to be used to allocate the output of an iterator.
     std::function<Allocator*(AllocatorAttributes)> allocator_getter = nullptr;
 
+    // Interface to operating system functionality.
+    Env* env = nullptr;
+
+    // The FunctionLibraryDefinition used to look up user-defined functions.
+    std::shared_ptr<const FunctionLibraryDefinition> function_library = nullptr;
+
+    // The FunctionLibraryRuntime object to be used to make function calls.
+    FunctionLibraryRuntime* lib = nullptr;
+
     // If non-null, identifies the object used for performance modeling.
     std::shared_ptr<model::Model> model = nullptr;
+
+    // Function call support.
+    std::function<void(std::function<void()>)> runner = nullptr;
+
+    // The `StatsAggregator` object to record statistics about the iterator.
+    std::shared_ptr<StatsAggregator> stats_aggregator = nullptr;
   };
 
+  explicit IteratorContext(IteratorContext* ctx) : params_(Params{ctx}) {}
+
+  explicit IteratorContext(OpKernelContext* ctx) : params_(Params{ctx}) {}
+
   explicit IteratorContext(Params params) : params_(std::move(params)) {}
-
-  explicit IteratorContext(OpKernelContext* ctx) {
-    params_.env = ctx->env();
-    params_.runner = *(ctx->runner());
-    params_.lib = ctx->function_library();
-    // NOTE: must use reinterpret_cast because function.h forward-declares
-    // Device.
-    DeviceBase* device =
-        reinterpret_cast<DeviceBase*>(ctx->function_library()->device());
-    params_.allocator_getter = [device](AllocatorAttributes attrs) {
-      return device->GetAllocator(attrs);
-    };
-  }
-
-  Env* env() const { return params_.env; }
-
-  std::function<void(std::function<void()>)>* runner() {
-    return &params_.runner;
-  }
-
-  std::shared_ptr<StatsAggregator> stats_aggregator() {
-    if (params_.stats_aggregator_getter) {
-      return params_.stats_aggregator_getter();
-    } else {
-      return nullptr;
-    }
-  }
-
-  std::shared_ptr<const FunctionLibraryDefinition> function_library() {
-    return params_.function_library;
-  }
-
-  FunctionLibraryRuntime* lib() { return params_.lib; }
-
-  void set_lib(FunctionLibraryRuntime* lib) { params_.lib = lib; }
 
   Allocator* allocator(AllocatorAttributes attrs) {
     return params_.allocator_getter(attrs);
@@ -344,11 +329,23 @@ class IteratorContext {
     return params_.allocator_getter;
   }
 
-  std::function<std::shared_ptr<StatsAggregator>()> stats_aggregator_getter() {
-    return params_.stats_aggregator_getter;
+  Env* env() const { return params_.env; }
+
+  std::shared_ptr<const FunctionLibraryDefinition> function_library() {
+    return params_.function_library;
   }
 
+  FunctionLibraryRuntime* lib() { return params_.lib; }
+
   std::shared_ptr<model::Model> model() { return params_.model; }
+
+  std::function<void(std::function<void()>)>* runner() {
+    return &params_.runner;
+  }
+
+  std::shared_ptr<StatsAggregator> stats_aggregator() {
+    return params_.stats_aggregator;
+  }
 
   Params params() { return params_; }
 
@@ -360,20 +357,20 @@ class IteratorContext {
 class SerializationContext {
  public:
   struct Params {
-    bool allow_stateful_functions = false;
     const FunctionLibraryDefinition* flib_def = nullptr;           // Not owned.
     std::vector<std::pair<string, Tensor>>* input_list = nullptr;  // Not owned.
+    bool optimization_only = false;
   };
 
   explicit SerializationContext(Params params) : params_(std::move(params)) {}
-
-  bool allow_stateful_functions() { return params_.allow_stateful_functions; }
 
   const FunctionLibraryDefinition& flib_def() { return *params_.flib_def; }
 
   std::vector<std::pair<string, Tensor>>* input_list() {
     return params_.input_list;
   }
+
+  bool optimization_only() { return params_.optimization_only; }
 
  private:
   Params params_;
@@ -443,6 +440,10 @@ class IteratorBase {
   }
 
  protected:
+  // Returns a node that models this iterator.
+  virtual std::shared_ptr<model::Node> CreateNode(
+      IteratorContext* ctx, model::Node::Args args) const = 0;
+
   // This is needed so that sub-classes of IteratorBase can call
   // `SaveInternal` on their input iterators.
   Status SaveInput(IteratorStateWriter* writer,
@@ -525,36 +526,23 @@ class DatasetBase : public core::RefCounted {
   //
   // The prefix identifies the sequence of iterators leading up to the newly
   // created iterator.
-  Status MakeIterator(IteratorContext* ctx, const string& prefix,
+  Status MakeIterator(IteratorContext* ctx, const string& output_prefix,
                       std::unique_ptr<IteratorBase>* iterator) const {
-    *iterator = MakeIteratorInternal(prefix);
-    if (ctx->model()) {
-      // The prefix might contain an index. We need to strip it to make it
-      // possible for the model to successfully identify the output node.
-      string sanitized_prefix = prefix;
-      if (str_util::EndsWith(prefix, "]")) {
-        sanitized_prefix = prefix.substr(0, prefix.rfind('['));
-      }
-      std::shared_ptr<model::Node> node =
-          ctx->model()->AddNode((*iterator)->prefix(), sanitized_prefix);
-      std::vector<string> tokens =
-          str_util::Split((*iterator)->prefix(), ':', str_util::SkipEmpty());
-      node->set_name(tokens[tokens.size() - 1]);
-      std::shared_ptr<model::Model> model = ctx->model();
+    *iterator = MakeIteratorInternal(output_prefix);
+    std::shared_ptr<model::Model> model = ctx->model();
+    if (model) {
       const string& prefix = (*iterator)->prefix();
-      (*iterator)->AddCleanupFunction([model, node, prefix]() {
-        if (node->output()) {
-          node->output()->remove_input(node);
-        }
-        model->RemoveNode(prefix);
-      });
+      model->AddNode(MakeNodeFactory(ctx, iterator->get()), prefix,
+                     output_prefix);
+      (*iterator)->AddCleanupFunction(
+          [model, prefix]() { model->RemoveNode(prefix); });
     }
     return (*iterator)->Initialize(ctx);
   }
 
-  Status MakeIterator(IteratorContext&& ctx, const string& prefix,
+  Status MakeIterator(IteratorContext&& ctx, const string& output_prefix,
                       std::unique_ptr<IteratorBase>* iterator) const {
-    return MakeIterator(&ctx, prefix, iterator);
+    return MakeIterator(&ctx, output_prefix, iterator);
   }
 
   // Returns a vector of DataType values, representing the respective
@@ -581,9 +569,7 @@ class DatasetBase : public core::RefCounted {
    public:
     DatasetGraphDefBuilder(GraphDefBuilder* b) : GraphDefBuilderWrapper(b) {}
     Status AddInputDataset(SerializationContext* ctx,
-                           const DatasetBase* dataset, Node** output) {
-      return dataset->AsGraphDefInternal(ctx, this, output);
-    }
+                           const DatasetBase* dataset, Node** output);
   };
 
   // TODO(jsimsa): Consolidate overloading into a single method.
@@ -595,6 +581,14 @@ class DatasetBase : public core::RefCounted {
       const string& prefix) const = 0;
 
  private:
+  // Returns a factory for nodes that represent the given iterator.
+  static model::Node::Factory MakeNodeFactory(IteratorContext* ctx,
+                                              IteratorBase* iterator) {
+    return [ctx, iterator](model::Node::Args args) {
+      return iterator->CreateNode(ctx, std::move(args));
+    };
+  }
+
   const string name_;
 };
 
@@ -629,23 +623,10 @@ class DatasetBaseIterator : public IteratorBase {
   Status GetNext(IteratorContext* ctx, std::vector<Tensor>* out_tensors,
                  bool* end_of_sequence) final {
     tracing::ScopedActivity activity(params_.prefix);
-    Status s;
-    if (ctx->model()) {
-      std::shared_ptr<model::Node> node =
-          ctx->model()->LookupNode(params_.prefix);
-      if (node->output()) {
-        node->output()->stop_work();
-      }
-      node->start_work();
-      s = GetNextInternal(ctx, out_tensors, end_of_sequence);
-      node->stop_work();
-      node->add_element();
-      if (node->output()) {
-        node->output()->start_work();
-      }
-    } else {
-      s = GetNextInternal(ctx, out_tensors, end_of_sequence);
-    }
+    RecordStart(ctx, true /* stop_output */);
+    Status s = GetNextInternal(ctx, out_tensors, end_of_sequence);
+    if (s.ok() && !*end_of_sequence) RecordElement(ctx);
+    RecordStop(ctx, true /* start_output */);
     if (TF_PREDICT_FALSE(errors::IsOutOfRange(s) && !*end_of_sequence)) {
       s = errors::Internal(
           "Iterator \"", params_.prefix,
@@ -672,57 +653,34 @@ class DatasetBaseIterator : public IteratorBase {
     return strings::StrCat(params_.prefix, ":", name);
   }
 
-  // When performance modeling is enabled, this method adds a constant parameter
-  // to the model node corresponding to this iterator.
-  void AddConstantParameter(IteratorContext* ctx, const string& name,
-                            int64 value) {
-    if (ctx->model()) {
-      std::shared_ptr<model::Node> node = ctx->model()->LookupNode(prefix());
-      if (node) {
-        node->add_constant_param(name, value);
-      }
-    }
+  // By default we model iterators using an unknown node, which acts as
+  // pass-through with respect to performance modeling.
+  std::shared_ptr<model::Node> CreateNode(
+      IteratorContext* ctx, model::Node::Args args) const override {
+    return model::MakeUnknownNode(std::move(args));
   }
 
-  // When performance modeling is enabled, this method adds a tunable parameter
-  // to the model node corresponding to this iterator.
-  //
-  // The `set_fn` function should set the tunable parameter to the value of
-  // its input argument. The function should be thread-safe; in particular, the
-  // state it updates should be protected by a lock as the function can be
-  // invoked asynchronously. It is guaranteed that this function will not be
-  // invoked after the iterator is deleted because the model node that owns
-  // the function is deleted when the iterator is deleted.
-  void AddTunableParameter(IteratorContext* ctx, const string& name,
-                           int64 value, int64 min, int64 max,
-                           std::function<void(int64)>&& set_fn) {
+  // When performance modeling is enabled, this method records the fact that
+  // this iterator has produced an element.
+  void RecordElement(IteratorContext* ctx) {
     if (ctx->model()) {
-      std::shared_ptr<model::Node> node = ctx->model()->LookupNode(prefix());
-      if (node) {
-        node->add_tunable_param(name, value, min, max, std::move(set_fn));
-      }
+      ctx->model()->RecordElement(prefix());
     }
   }
 
   // When performance modeling is enabled, this method records the fact that
   // a thread of this iterator has started work.
-  void StartWork(IteratorContext* ctx) {
+  void RecordStart(IteratorContext* ctx, bool stop_output = false) {
     if (ctx->model()) {
-      std::shared_ptr<model::Node> node = ctx->model()->LookupNode(prefix());
-      if (node) {
-        node->start_work();
-      }
+      ctx->model()->RecordStart(prefix(), stop_output);
     }
   }
 
   // When performance modeling is enabled, this method records the fact that
   // a thread of this iterator has stopped work.
-  void StopWork(IteratorContext* ctx) {
+  void RecordStop(IteratorContext* ctx, bool start_output = false) {
     if (ctx->model()) {
-      std::shared_ptr<model::Node> node = ctx->model()->LookupNode(prefix());
-      if (node) {
-        node->stop_work();
-      }
+      ctx->model()->RecordStop(prefix(), start_output);
     }
   }
 
