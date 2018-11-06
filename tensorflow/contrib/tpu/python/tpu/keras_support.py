@@ -107,8 +107,8 @@ def _maybe_initialize_tpu(session):
     if (test_rewrite_op is None or
         test_rewrite_op[0].graph != ops.get_default_graph()):
 
-    def test_op():
-      return constant_op.constant(1) + constant_op.constant(1)
+      def test_op():
+        return constant_op.constant(1) + constant_op.constant(1)
 
       test_rewrite_op = tpu.rewrite(test_op)
       _TEST_REWRITE_OP = test_rewrite_op
