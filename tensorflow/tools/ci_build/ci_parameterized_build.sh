@@ -146,6 +146,8 @@ BAZEL_TEST_FLAGS=""\
 "--test_summary=detailed --build_tests_only --keep_going "\
 "--test_timeout=${TF_BUILD_TEST_TIMEOUT} "\
 "--test_env=TF_GPU_COUNT=${TF_GPU_COUNT}"
+"--test_env=TF_TESTS_PER_GPU=${TF_TESTS_PER_GPU} "\
+"--test_env=TF_PER_DEVICE_MEMORY_LIMIT_MB=${TF_PER_DEVICE_MEMORY_LIMIT_MB}"
 
 # Only set these environment variables if they're specified, to avoid causing
 # problems like b/118404869, where an envvar set to the empty string has

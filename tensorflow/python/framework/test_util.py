@@ -209,8 +209,12 @@ def IsGoogleCudaEnabled():
   return pywrap_tensorflow.IsGoogleCudaEnabled()
 
 
-def CudaSupportsHalfMatMulAndConv():
-  return pywrap_tensorflow.CudaSupportsHalfMatMulAndConv()
+def IsBuiltWithROCm():
+  return pywrap_tensorflow.IsBuiltWithROCm()
+
+
+def GpuSupportsHalfMatMulAndConv():
+  return pywrap_tensorflow.GpuSupportsHalfMatMulAndConv()
 
 
 def IsMklEnabled():
@@ -883,6 +887,21 @@ def is_gpu_available(cuda_only=False, min_cuda_compute_capability=None):
     cuda_only: limit the search to CUDA gpus.
     min_cuda_compute_capability: a (major,minor) pair that indicates the minimum
       CUDA compute capability required, or None if no requirement.
+
+  Note that the keyword arg name "cuda_only" is misleading (since routine will 
+  return true when a GPU device is available irrespective of whether TF was 
+  built with CUDA support or ROCm support. However no changes there because
+
+  ++ Changing the name "cuda_only" to something more generic would break 
+     backward compatibility
+
+  ++ Adding an equivalent "rocm_only" would require the implementation check 
+     the build type. This in turn would require doing the same for CUDA and thus
+     potentially break backward compatibility
+
+  ++ Adding a new "cuda_or_rocm_only" would not break backward compatibility, but
+     would require most (if not all) callers to update the call to use 
+     "cuda_or_rocm_only" instead of "cuda_only"
 
   Returns:
     True iff a gpu device of the requested kind is available.
@@ -1999,9 +2018,11 @@ class TensorFlowTestCase(googletest.TestCase):
       # Don't perform optimizations for tests so we don't inadvertently run
       # gpu ops on cpu
       config.graph_options.optimizer_options.opt_level = -1
+      # Disable Grappler constant folding since some tests & benchmarks
+      # use constant input and become meaningless after constant folding.
+      # DO NOT DISABLE GRAPPLER OPTIMIZERS WITHOUT CONSULTING WITH THE
+      # GRAPPLER TEAM.
       config.graph_options.rewrite_options.constant_folding = (
-          rewriter_config_pb2.RewriterConfig.OFF)
-      config.graph_options.rewrite_options.arithmetic_optimization = (
           rewriter_config_pb2.RewriterConfig.OFF)
       config.graph_options.rewrite_options.pin_to_host_optimization = (
           rewriter_config_pb2.RewriterConfig.OFF)

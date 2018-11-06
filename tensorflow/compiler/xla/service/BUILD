@@ -253,8 +253,8 @@ cc_library(
         "//tensorflow/compiler/xla:xla_data_proto",
         "//tensorflow/core:lib",
         "@com_google_absl//absl/algorithm:container",
-        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",
@@ -300,6 +300,7 @@ cc_library(
         "hlo_opcode.cc",
         "hlo_schedule.cc",
         "hlo_sharding.cc",
+        "hlo_sharding_metadata.cc",
     ],
     hdrs = [
         "dfs_hlo_visitor.h",
@@ -313,6 +314,7 @@ cc_library(
         "hlo_opcode.h",
         "hlo_schedule.h",
         "hlo_sharding.h",
+        "hlo_sharding_metadata.h",
     ],
     deps = [
         ":hlo_casting_utils",
@@ -756,6 +758,7 @@ cc_library(
         "//tensorflow/compiler/xla/service/gpu:gpu_transfer_manager",
         "//tensorflow/core:stream_executor_no_cuda",
         "//tensorflow/core/platform/default/build_config:stream_executor_cuda",
+        "//tensorflow/core/platform/default/build_config:stream_executor_rocm",
     ],
 )
 
@@ -1322,10 +1325,19 @@ cc_library(
 )
 
 cc_library(
+    name = "fusion_queue",
+    hdrs = ["fusion_queue.h"],
+    deps = [
+        ":hlo",
+    ],
+)
+
+cc_library(
     name = "instruction_fusion",
     srcs = ["instruction_fusion.cc"],
     hdrs = ["instruction_fusion.h"],
     deps = [
+        ":fusion_queue",
         ":hlo",
         ":hlo_pass",
         "//tensorflow/compiler/xla:util",
@@ -1826,42 +1838,6 @@ tf_cc_test(
         "//tensorflow/compiler/xla/tests:hlo_verified_test_base",
         "//tensorflow/compiler/xla/tests:xla_internal_test_main",
         "//tensorflow/core:lib",
-        "@com_google_absl//absl/memory",
-    ],
-)
-
-cc_library(
-    name = "inliner",
-    srcs = ["inliner.cc"],
-    hdrs = ["inliner.h"],
-    deps = [
-        ":hlo",
-        ":hlo_pass",
-        ":hlo_query",
-        "//tensorflow/compiler/xla:status_macros",
-        "//tensorflow/compiler/xla:types",
-        "//tensorflow/core:lib",
-        "@com_google_absl//absl/types:span",
-    ],
-)
-
-tf_cc_test(
-    name = "inliner_test",
-    srcs = ["inliner_test.cc"],
-    deps = [
-        ":cpu_plugin",
-        ":hlo",
-        ":hlo_matchers",
-        ":inliner",
-        "//tensorflow/compiler/xla:literal",
-        "//tensorflow/compiler/xla:shape_util",
-        "//tensorflow/compiler/xla:test",
-        "//tensorflow/compiler/xla:util",
-        "//tensorflow/compiler/xla:xla_data_proto",
-        "//tensorflow/compiler/xla/tests:hlo_test_base",
-        "//tensorflow/compiler/xla/tests:hlo_verified_test_base",
-        "//tensorflow/compiler/xla/tests:literal_test_util",
-        "//tensorflow/compiler/xla/tests:xla_internal_test_main",
         "@com_google_absl//absl/memory",
     ],
 )
@@ -2475,6 +2451,7 @@ tf_cc_test(
         ":hlo",
         ":hlo_parser",
         ":hlo_verifier",
+        ":layout_assignment",
         "//tensorflow/compiler/xla:shape_util",
         "//tensorflow/compiler/xla:test",
         "//tensorflow/compiler/xla:types",
@@ -2760,22 +2737,6 @@ cc_library(
 )
 
 cc_library(
-    name = "hlo_sharding_metadata",
-    srcs = ["hlo_sharding_metadata.cc"],
-    hdrs = [
-        "hlo_sharding_metadata.h",
-    ],
-    deps = [
-        ":hlo",
-        "//tensorflow/compiler/xla:shape_tree",
-        "//tensorflow/compiler/xla:shape_util",
-        "//tensorflow/core:lib",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/types:span",
-    ],
-)
-
-cc_library(
     name = "hlo_domain_verifier",
     srcs = ["hlo_domain_verifier.cc"],
     hdrs = ["hlo_domain_verifier.h"],
@@ -2825,7 +2786,6 @@ tf_cc_test(
         ":hlo_domain_isolator",
         ":hlo_domain_remover",
         ":hlo_parser",
-        ":hlo_sharding_metadata",
         "//tensorflow/compiler/xla:test",
         "//tensorflow/compiler/xla/legacy_flags:debug_options_flags",
         "//tensorflow/compiler/xla/tests:hlo_test_base",
@@ -3441,7 +3401,6 @@ cc_library(
     deps = [
         ":hlo",
         ":hlo_lexer",
-        ":hlo_sharding_metadata",
         "//tensorflow/compiler/xla:literal",
         "//tensorflow/compiler/xla:literal_util",
         "//tensorflow/compiler/xla:shape_util",
@@ -3497,6 +3456,39 @@ cc_library(
     name = "hlo_casting_utils",
     hdrs = ["hlo_casting_utils.h"],
     deps = ["//tensorflow/core:lib"],
+)
+
+cc_library(
+    name = "map_inliner",
+    srcs = ["map_inliner.cc"],
+    hdrs = ["map_inliner.h"],
+    deps = [
+        ":hlo",
+        ":hlo_pass",
+        ":hlo_query",
+        "//tensorflow/compiler/xla:status_macros",
+        "//tensorflow/compiler/xla:types",
+        "//tensorflow/core:lib",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+tf_cc_test(
+    name = "map_inliner_test",
+    srcs = ["map_inliner_test.cc"],
+    deps = [
+        ":hlo",
+        ":hlo_matchers",
+        ":map_inliner",
+        "//tensorflow/compiler/xla:literal",
+        "//tensorflow/compiler/xla:shape_util",
+        "//tensorflow/compiler/xla:test",
+        "//tensorflow/compiler/xla:xla_data_proto",
+        "//tensorflow/compiler/xla/tests:hlo_verified_test_base",
+        "//tensorflow/compiler/xla/tests:literal_test_util",
+        "//tensorflow/compiler/xla/tests:xla_internal_test_main",  # fixdeps: keep
+        "@com_google_absl//absl/memory",
+    ],
 )
 
 tf_cc_test(

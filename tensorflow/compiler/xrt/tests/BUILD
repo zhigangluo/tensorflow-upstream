@@ -7,10 +7,10 @@ package(
     ],
 )
 
-load("//tensorflow:tensorflow.bzl", "tf_cuda_cc_test", "tf_cc_test")
+load("//tensorflow:tensorflow.bzl", "tf_gpu_cc_test", "tf_cc_test")
 load(
     "//tensorflow/core:platform/default/build_config_root.bzl",
-    "tf_cuda_tests_tags",
+    "tf_gpu_tests_tags",
 )
 
 cc_library(
@@ -56,12 +56,12 @@ tf_cc_test(
     ],
 )
 
-tf_cuda_cc_test(
+tf_gpu_cc_test(
     name = "raw_api_test_gpu",
     size = "medium",
     srcs = [],
     args = ["--xla_test_device=XLA_GPU"],
-    tags = tf_cuda_tests_tags(),
+    tags = tf_gpu_tests_tags(),
     deps = [
         ":raw_api_test_lib",
         "//tensorflow/compiler/jit:xla_gpu_device",

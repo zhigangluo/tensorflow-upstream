@@ -1,7 +1,7 @@
 licenses(["notice"])  # Apache 2.0
 
 load("//tensorflow:tensorflow.bzl", "py_test", "tf_cc_binary")
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
+load("//tensorflow:tensorflow.bzl", "gpu_py_test")
 load(
     "//tensorflow/tools/test:performance.bzl",
     "tf_py_logged_benchmark",
@@ -93,7 +93,7 @@ py_library(
     visibility = ["//tensorflow:internal"],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "tensor_test",
     srcs = ["tensor_test.py"],
     additional_deps = [
@@ -104,7 +104,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "backprop_test",
     srcs = ["backprop_test.py"],
     additional_deps = [
@@ -123,7 +123,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "core_test",
     srcs = ["core_test.py"],
     additional_deps = [
@@ -140,7 +140,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "function_test",
     srcs = ["function_test.py"],
     additional_deps = [
@@ -212,7 +212,7 @@ py_library(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "graph_only_ops_test",
     srcs = ["graph_only_ops_test.py"],
     additional_deps = [
@@ -251,6 +251,7 @@ py_library(
         "//tensorflow/python:gradients_impl",
         "//tensorflow/python:graph_to_function_def",
         "//tensorflow/python:util",
+        "//tensorflow/python/autograph",
         "//tensorflow/python/eager:context",
         "//tensorflow/python/eager:core",
         "//tensorflow/python/eager:execute",
@@ -283,7 +284,7 @@ py_library(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "benchmarks_test",
     srcs = ["benchmarks_test.py"],
     additional_deps = [
@@ -322,7 +323,7 @@ py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "ops_test",
     srcs = ["ops_test.py"],
     additional_deps = [
@@ -368,7 +369,7 @@ py_library(
     srcs_version = "PY2AND3",
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "memory_test",
     size = "medium",
     srcs = ["memory_test.py"],

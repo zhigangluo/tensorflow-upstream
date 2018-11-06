@@ -14,7 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 // Registers the XLA_GPU device, which is an XlaDevice instantiation that runs
-// operators using XLA via the XLA "CUDA" (GPU) backend.
+// operators using XLA via the XLA "CUDA" or "ROCM" (GPU) backend.
 
 #include "tensorflow/compiler/jit/kernels/xla_ops.h"
 #include "tensorflow/compiler/jit/xla_device.h"
@@ -46,7 +46,9 @@ Status XlaGpuDeviceFactory::CreateDevices(const SessionOptions& options,
 
   std::unique_ptr<XlaDevice> device;
   Status status =
-      XlaDevice::Create("CUDA", DEVICE_XLA_GPU, 0, DEVICE_GPU_XLA_JIT, options,
+      // XXX FIXME devise a way to cope with multiple platforms
+      //XlaDevice::Create("CUDA", DEVICE_XLA_GPU, 0, DEVICE_GPU_XLA_JIT, options,
+      XlaDevice::Create("ROCM", DEVICE_XLA_GPU, 0, DEVICE_GPU_XLA_JIT, options,
                         name_prefix, registration,
                         /*transfer_as_literal=*/false,
                         /*use_multiple_streams=*/false,

@@ -25,8 +25,10 @@ load("//tensorflow:tensorflow.bzl", "tf_kernel_library")
 load("//tensorflow:tensorflow.bzl", "tf_cc_test")
 load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
 load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda_is_configured")
-load("//tensorflow:tensorflow.bzl", "tf_cuda_cc_test")
+load("//tensorflow:tensorflow.bzl", "tf_gpu_cc_test")
 load("//tensorflow:tensorflow.bzl", "tf_custom_op_py_library")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm_is_configured")
 
 # Target that bundles up the XLA CPU and GPU JIT devices.
 cc_library(
@@ -40,6 +42,9 @@ cc_library(
         ":xla_cpu_jit",
         "//tensorflow/compiler/plugin",
     ] + if_cuda_is_configured([
+        ":xla_gpu_device",
+        ":xla_gpu_jit",
+    ]) + if_rocm_is_configured([
         ":xla_gpu_device",
         ":xla_gpu_jit",
     ]),
@@ -61,12 +66,17 @@ cc_library(
 cc_library(
     name = "xla_gpu_jit",
     visibility = ["//visibility:public"],
-    deps = if_cuda([
+    deps = if_cuda_is_configured(if_cuda([
         ":jit_compilation_passes",
         "//tensorflow/compiler/jit/kernels:xla_ops",
         "//tensorflow/compiler/tf2xla/kernels:xla_ops",
         "//tensorflow/compiler/xla/service:gpu_plugin",
-    ]),
+    ])) + if_rocm_is_configured(if_rocm([
+        ":jit_compilation_passes",
+        "//tensorflow/compiler/jit/kernels:xla_ops",
+        "//tensorflow/compiler/tf2xla/kernels:xla_ops",
+        "//tensorflow/compiler/xla/service:gpu_plugin",
+    ])),
     alwayslink = 1,
 )
 
@@ -596,7 +606,7 @@ cc_library(
     ],
 )
 
-tf_cuda_cc_test(
+tf_gpu_cc_test(
     name = "xla_fusion_optimizer_test",
     srcs = ["xla_fusion_optimizer_test.cc"],
     deps = [

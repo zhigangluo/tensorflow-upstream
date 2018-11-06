@@ -18,14 +18,14 @@ package(
     default_visibility = [":internal"],
 )
 
-load("//tensorflow:tensorflow.bzl", "tf_cuda_cc_test")
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
+load("//tensorflow:tensorflow.bzl", "tf_gpu_cc_test")
+load("//tensorflow:tensorflow.bzl", "gpu_py_test")
 load("//tensorflow/compiler/aot:tfcompile.bzl", "tf_library")
 load("//tensorflow/compiler/tests:build_defs.bzl", "tf_xla_py_test")
 load("//tensorflow/compiler/tests:build_defs.bzl", "generate_backend_suites")
 load(
     "//tensorflow/core:platform/default/build_config_root.bzl",
-    "tf_cuda_tests_tags",
+    "tf_gpu_tests_tags",
 )
 
 generate_backend_suites()
@@ -895,6 +895,22 @@ tf_xla_py_test(
 )
 
 tf_xla_py_test(
+    name = "tensor_list_ops_test",
+    size = "small",
+    srcs = ["tensor_list_ops_test.py"],
+    # TensorList ops are not implemented in the on-demand compilation model yet.
+    disabled_backends = "cpu_ondemand",
+    deps = [
+        ":xla_test",
+        "//tensorflow/python:array_ops",
+        "//tensorflow/python:framework",
+        "//tensorflow/python:list_ops",
+        "//tensorflow/python:platform_test",
+        "//tensorflow/python/eager:function",
+    ],
+)
+
+tf_xla_py_test(
     name = "ternary_ops_test",
     size = "small",
     srcs = ["ternary_ops_test.py"],
@@ -1029,6 +1045,19 @@ tf_xla_py_test(
 )
 
 tf_xla_py_test(
+    name = "permute_test",
+    size = "small",
+    srcs = ["permute_test.py"],
+    deps = [
+        "//tensorflow/compiler/tests:xla_test",
+        "//tensorflow/python:array_ops",
+        "//tensorflow/python:client_testlib",
+        "//tensorflow/python:dtypes",
+        "//tensorflow/python:nn_ops",
+    ],
+)
+
+tf_xla_py_test(
     name = "xla_device_test",
     size = "small",
     srcs = ["xla_device_test.py"],
@@ -1041,7 +1070,7 @@ tf_xla_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "xla_device_gpu_test",
     size = "small",
     srcs = ["xla_device_gpu_test.py"],
@@ -1055,7 +1084,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "jit_test",
     size = "medium",
     srcs = ["jit_test.py"],
@@ -1073,7 +1102,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "dense_layer_test",
     size = "small",
     srcs = ["dense_layer_test.py"],
@@ -1110,14 +1139,14 @@ cc_library(
     ],
 )
 
-tf_cuda_cc_test(
+tf_gpu_cc_test(
     name = "randomized_tests",
     size = "large",
     # This test is randomized, so only run it if explicitly requested.
     tags = [
         "manual",
         "notap",
-    ] + tf_cuda_tests_tags(),
+    ] + tf_gpu_tests_tags(),
     deps = [":randomized_tests_library"],
 )
 
@@ -1135,7 +1164,7 @@ py_library(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "lstm_test",
     srcs = ["lstm_test.py"],
     additional_deps = [

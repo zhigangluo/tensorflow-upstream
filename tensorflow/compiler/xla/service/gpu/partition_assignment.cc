@@ -62,13 +62,8 @@ LaunchDimensions CalculateLaunchDimensions(
   //
   //   <num threads per block> * <max blocks per core> = <max threads per core>
 
-  auto threads_per_core = device_desc.threads_per_core_limit();
-  auto blocks_per_core = device_desc.blocks_per_core_limit();
-  int64 threads_per_block;
-  if (threads_per_core != 0 && blocks_per_core != 0) {
-    threads_per_block = device_desc.threads_per_core_limit() /
-                        device_desc.blocks_per_core_limit();
-  } else {
+  int64 threads_per_block = device_desc.threads_per_block_limit();
+  if (threads_per_block == 0) {
     static std::atomic<int64> log_count{0};
     if (log_count.fetch_add(1) < 8) {
       LOG(WARNING) << "Attempting to calculate launch dimensions for GPU "
@@ -79,7 +74,7 @@ LaunchDimensions CalculateLaunchDimensions(
     threads_per_block = device_desc.threads_per_warp();
     if (threads_per_block == 0) {
       // Fall back to *something* if we can't even get num threads per warp.
-      threads_per_block = 32;
+      threads_per_block = 64;
     }
   }
 

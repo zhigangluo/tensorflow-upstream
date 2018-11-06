@@ -6,9 +6,9 @@ package(
 
 licenses(["notice"])  # Apache 2.0
 
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
+load("//tensorflow:tensorflow.bzl", "gpu_py_test")
 
-cuda_py_test(
+gpu_py_test(
     name = "linear_operator_test",
     size = "small",
     srcs = ["linear_operator_test.py"],
@@ -24,7 +24,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "linear_operator_addition_test",
     size = "small",
     srcs = ["linear_operator_addition_test.py"],
@@ -40,7 +40,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "linear_operator_block_diag_test",
     size = "medium",
     srcs = ["linear_operator_block_diag_test.py"],
@@ -62,7 +62,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "linear_operator_composition_test",
     size = "medium",
     srcs = ["linear_operator_composition_test.py"],
@@ -84,7 +84,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "linear_operator_circulant_test",
     size = "medium",
     srcs = ["linear_operator_circulant_test.py"],
@@ -107,7 +107,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "linear_operator_diag_test",
     size = "medium",
     srcs = ["linear_operator_diag_test.py"],
@@ -129,7 +129,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "linear_operator_identity_test",
     size = "medium",
     srcs = ["linear_operator_identity_test.py"],
@@ -150,7 +150,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "linear_operator_full_matrix_test",
     size = "medium",
     srcs = ["linear_operator_full_matrix_test.py"],
@@ -170,7 +170,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "linear_operator_kronecker_test",
     size = "medium",
     srcs = ["linear_operator_kronecker_test.py"],
@@ -192,7 +192,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "linear_operator_lower_triangular_test",
     size = "medium",
     srcs = ["linear_operator_lower_triangular_test.py"],
@@ -211,7 +211,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "linear_operator_low_rank_update_test",
     size = "large",
     srcs = ["linear_operator_low_rank_update_test.py"],
@@ -231,7 +231,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "linear_operator_util_test",
     size = "medium",
     srcs = ["linear_operator_util_test.py"],
@@ -251,7 +251,7 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
+gpu_py_test(
     name = "linear_operator_zeros_test",
     size = "medium",
     srcs = ["linear_operator_zeros_test.py"],

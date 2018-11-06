@@ -489,13 +489,15 @@ class RandomGammaOp : public OpKernel {
       Name("RandomGamma").Device(DEVICE_CPU).TypeConstraint<TYPE>("T"),        \
       RandomGammaOp<TYPE>)
 
-#define REGISTER_INT(IntType)                                   \
-  REGISTER_KERNEL_BUILDER(Name("RandomUniformInt")              \
-                              .Device(DEVICE_CPU)               \
-                              .HostMemory("shape")              \
-                              .HostMemory("minval")             \
-                              .HostMemory("maxval")             \
-                              .TypeConstraint<IntType>("Tout"), \
+#define REGISTER_INT(IntType)                                                 \
+  template struct functor::FillPhiloxRandom<                                  \
+      CPUDevice, random::UniformDistribution<random::PhiloxRandom, IntType>>; \
+  REGISTER_KERNEL_BUILDER(Name("RandomUniformInt")                            \
+                              .Device(DEVICE_CPU)                             \
+                              .HostMemory("shape")                            \
+                              .HostMemory("minval")                           \
+                              .HostMemory("maxval")                           \
+                              .TypeConstraint<IntType>("Tout"),               \
                           RandomUniformIntOp<CPUDevice, IntType>);
 
 TF_CALL_half(REGISTER);
@@ -508,7 +510,7 @@ TF_CALL_int64(REGISTER_INT);
 #undef REGISTER
 #undef REGISTER_INT
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #define REGISTER(TYPE)                                                         \
   REGISTER_KERNEL_BUILDER(                                                     \
@@ -538,14 +540,16 @@ TF_CALL_int64(REGISTER_INT);
           random::TruncatedNormalDistribution<                                 \
               random::SingleSampleAdapter<random::PhiloxRandom>, TYPE>>);
 
-#define REGISTER_INT(IntType)                                   \
-  REGISTER_KERNEL_BUILDER(Name("RandomUniformInt")              \
-                              .Device(DEVICE_GPU)               \
-                              .HostMemory("shape")              \
-                              .HostMemory("minval")             \
-                              .HostMemory("maxval")             \
-                              .TypeConstraint<int32>("T")       \
-                              .TypeConstraint<IntType>("Tout"), \
+#define REGISTER_INT(IntType)                                                 \
+  template struct functor::FillPhiloxRandom<                                  \
+      GPUDevice, random::UniformDistribution<random::PhiloxRandom, IntType>>; \
+  REGISTER_KERNEL_BUILDER(Name("RandomUniformInt")                            \
+                              .Device(DEVICE_GPU)                             \
+                              .HostMemory("shape")                            \
+                              .HostMemory("minval")                           \
+                              .HostMemory("maxval")                           \
+                              .TypeConstraint<int32>("T")                     \
+                              .TypeConstraint<IntType>("Tout"),               \
                           RandomUniformIntOp<GPUDevice, IntType>);
 
 TF_CALL_half(REGISTER);
@@ -557,7 +561,7 @@ TF_CALL_int64(REGISTER_INT);
 #undef REGISTER
 #undef REGISTER_INT
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #ifdef TENSORFLOW_USE_SYCL
 

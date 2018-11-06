@@ -203,6 +203,8 @@ bool IsGDRAvailable() {
   return false;
 #elif defined(PLATFORM_WINDOWS)
   return false;
+#elif TENSORFLOW_USE_ROCM
+  return true;
 #else
   std::ifstream ifs("/proc/modules");
   string line;
@@ -262,7 +264,7 @@ void RdmaMgr::InitAllocators() {
       flag, [this]() { RdmaMemoryMgr::Singleton().pd_ = rdma_adapter_->pd_; });
 }
 
-/*static*/ void RdmaMgr::RegMemVisitors() {
+void RdmaMgr::RegMemVisitors() {
   SubAllocator::Visitor alloc_visitor = [](void* ptr, int numa_node,
                                            size_t num_bytes) {
     RdmaMemoryMgr::Singleton().InsertMemoryRegion(
@@ -276,7 +278,7 @@ void RdmaMgr::InitAllocators() {
   ProcessState::singleton()->AddCPUAllocVisitor(alloc_visitor);
   ProcessState::singleton()->AddCPUFreeVisitor(free_visitor);
 
-#if GOOGLE_CUDA
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
   if (IsGDRAvailable()) {
     // Note we don't free allocated GPU memory so there is no free visitor
     int32_t bus_id = TryToReadNumaNode(rdma_adapter_->context_->device) + 1;
@@ -288,12 +290,12 @@ void RdmaMgr::InitAllocators() {
     };
     GPUProcessState::singleton()->AddGPUAllocVisitor(bus_id,
                                                      cuda_alloc_visitor);
-    GPUProcessState::singleton()->AddCUDAHostAllocVisitor(bus_id,
+    GPUProcessState::singleton()->AddGPUHostAllocVisitor(bus_id,
                                                           alloc_visitor);
-    GPUProcessState::singleton()->AddCUDAHostFreeVisitor(bus_id, free_visitor);
+    GPUProcessState::singleton()->AddGPUHostFreeVisitor(bus_id, free_visitor);
     LOG(INFO) << "Instrumenting GPU allocator with bus_id " << bus_id;
   }
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 }
 
 }  // end namespace tensorflow

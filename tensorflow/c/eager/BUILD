@@ -3,14 +3,14 @@ licenses(["notice"])  # Apache 2.0
 
 load(
     "//tensorflow:tensorflow.bzl",
-    "tf_cuda_cc_test",
+    "tf_gpu_cc_test",
     "tf_cc_test",
     "tf_copts",
     "tfe_xla_copts",
-    "tf_cuda_library",
+    "tf_gpu_library",
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "c_api",
     srcs = [
         "c_api.cc",
@@ -65,7 +65,7 @@ tf_cuda_library(
     ],
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "c_api_internal",
     hdrs = ["c_api_internal.h"],
     visibility = [
@@ -103,7 +103,7 @@ tf_cuda_library(
     ],
 )
 
-tf_cuda_library(
+tf_gpu_library(
     name = "c_api_test_util",
     testonly = 1,
     srcs = ["c_api_test_util.cc"],
@@ -122,7 +122,7 @@ tf_cuda_library(
     ],
 )
 
-tf_cuda_cc_test(
+tf_gpu_cc_test(
     name = "c_api_test",
     size = "small",
     srcs = [

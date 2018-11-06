@@ -139,23 +139,7 @@ void UpdateLaunchDimensions(const LaunchDimensions& launch_dims, Thunk* thunk,
   KernelThunk* kernel_thunk = static_cast<KernelThunk*>(thunk);
   kernel_thunk->SetLaunchDimensions(launch_dims);
 
-  // Add __launch_bounds__ to metadata. This limits registers per thread to
-  // avoid out-of-resources launching errors.
-  llvm::NamedMDNode* nvvm_annotations_node =
-      llvm_module->getOrInsertNamedMetadata("nvvm.annotations");
-  llvm::Function* ir_kernel =
-      llvm_module->getFunction(kernel_thunk->kernel_name().c_str());
-  llvm::LLVMContext& llvm_context = llvm_module->getContext();
-  llvm::ConstantInt* threads_per_block_ir_value = llvm::ConstantInt::get(
-      llvm::IntegerType::get(llvm_context, /*NumBits=*/32),
-      launch_dims.threads_per_block());
-  // Our launch bounds are exact, so we can specify them as reqntidx rather than
-  // maxntidx.
-  nvvm_annotations_node->addOperand(llvm::MDNode::get(
-      llvm_context,
-      {llvm::ConstantAsMetadata::get(ir_kernel),
-       llvm::MDString::get(llvm_context, "reqntidx"),
-       llvm::ConstantAsMetadata::get(threads_per_block_ir_value)}));
+  // XXX FIXME add proper AMDGPU function attributes or metadata
 }
 
 }  // namespace
@@ -193,6 +177,8 @@ llvm::Function* IrEmitterUnnested::BuildKernelPrototype(
       llvm::Function::Create(kernel_type, llvm::GlobalValue::ExternalLinkage,
                              kernel_name.c_str(), module);
 
+  kernel->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
+
   // Add dereferenceable and alignment information to each of the kernel's
   // parameters.
   auto arg_it = kernel->arg_begin();
@@ -226,15 +212,6 @@ llvm::Function* IrEmitterUnnested::BuildKernelPrototype(
 
   // TODO(b/65380986): Investigate if adding fast math flags for generated
   // kernels makes sense.
-
-  // Add the declaration of this kernel to llvm.nvvm.annotations so that NVPTX
-  // treats it as a CUDA kernel.
-  llvm::NamedMDNode* nvvm_annotations_node =
-      module->getOrInsertNamedMetadata("nvvm.annotations");
-  nvvm_annotations_node->addOperand(llvm::MDNode::get(
-      context, {llvm::ConstantAsMetadata::get(kernel),
-                llvm::MDString::get(context, "kernel"),
-                llvm::ConstantAsMetadata::get(b_.getInt32(1))}));
 
   // Update the insert point to the entry basic block.
   llvm::BasicBlock* entry_bb =
@@ -812,12 +789,21 @@ Status IrEmitterUnnested::EmitReductionToScalar(
     llvm::Type* element_ir_type =
         llvm_ir::PrimitiveTypeToIrType(input_shape.element_type(), module_);
     std::vector<llvm::Value*> partial_reduction_result_addresses;
+
+    llvm::BasicBlock& entry_bb = b_.GetInsertBlock()->getParent()->getEntryBlock();
+    auto entry_ip = entry_bb.begin();
+
     for (int i = 0; i != num_reduces; ++i) {
+      auto old_insert_ip = b_.GetInsertPoint();
+      auto old_insert_bb = b_.GetInsertBlock();
+      b_.SetInsertPoint(&entry_bb, entry_ip);
+
       llvm::Value* partial_reduction_result_address =
           Alloca(element_ir_type, /*ArraySize=*/nullptr,
                  "partial_reduction_result." + llvm::Twine(i));
       TF_ASSIGN_OR_RETURN(llvm::Value* const init_ir_value,
                           init_value_gens[i](IrArray::Index(index_ty)));
+      b_.SetInsertPoint(old_insert_bb, old_insert_ip);
       Store(init_ir_value, partial_reduction_result_address);
       partial_reduction_result_addresses.push_back(
           partial_reduction_result_address);
@@ -905,7 +891,7 @@ Status IrEmitterUnnested::EmitReductionToScalar(
             << "Requires block size a multiple of the warp size, otherwise we "
                "will read undefined elements.";
         Store(EmitFullWarpShuffleDown(partial_reduction_result,
-                                      b_.getInt32(shuffle_distance), &b_),
+                                    b_.getInt32(shuffle_distance), &b_, module_),
               BitCast(result_from_other_lane, shuffle_ir_type->getPointerTo()));
         TF_RETURN_IF_ERROR(EmitCallToNestedComputation(
             *reducers[i],
@@ -1039,14 +1025,23 @@ Status IrEmitterUnnested::EmitColumnReduction(
     llvm::Type* element_ir_type =
         llvm_ir::PrimitiveTypeToIrType(input_shape.element_type(), module_);
     std::vector<llvm::Value*> partial_reduction_result_addresses;
+
+    llvm::BasicBlock& entry_bb = b_.GetInsertBlock()->getParent()->getEntryBlock();
+    auto entry_ip = entry_bb.begin();
+
     for (int i = 0; i != num_reduces; ++i) {
       for (int x_offset = 0; x_offset < kTileWidth; ++x_offset) {
+        auto old_insert_ip = b_.GetInsertPoint();
+        auto old_insert_bb = b_.GetInsertBlock();
+        b_.SetInsertPoint(&entry_bb, entry_ip);
+
         llvm::Value* partial_reduction_result_address =
             Alloca(element_ir_type, /*ArraySize=*/nullptr,
                    "partial_reduction_result." +
                        llvm::Twine(i * kTileWidth + x_offset));
         TF_ASSIGN_OR_RETURN(llvm::Value* const init_ir_value,
                             init_value_gens[i](IrArray::Index(index_ty)));
+        b_.SetInsertPoint(old_insert_bb, old_insert_ip);
         Store(init_ir_value, partial_reduction_result_address);
         partial_reduction_result_addresses.push_back(
             partial_reduction_result_address);
@@ -1373,12 +1368,21 @@ Status IrEmitterUnnested::EmitRowReduction(
     llvm::Type* element_ir_type = llvm_ir::PrimitiveTypeToIrType(
         input_shape.element_type(), ir_emitter_context_->llvm_module());
     std::vector<llvm::Value*> partial_reduction_result_addresses;
+
+    llvm::BasicBlock& entry_bb = b_.GetInsertBlock()->getParent()->getEntryBlock();
+    auto entry_ip = entry_bb.begin();
+
     for (int i = 0; i != num_reduces; ++i) {
+      auto old_insert_ip = b_.GetInsertPoint();
+      auto old_insert_bb = b_.GetInsertBlock();
+      b_.SetInsertPoint(&entry_bb, entry_ip);
+
       llvm::Value* partial_reduction_result_address =
           Alloca(element_ir_type, /*ArraySize=*/nullptr,
                  "partial_reduction_result." + llvm::Twine(i));
       TF_ASSIGN_OR_RETURN(llvm::Value* const init_ir_value,
                           init_value_gens[i](IrArray::Index(index_ty)));
+      b_.SetInsertPoint(old_insert_bb, old_insert_ip);
       Store(init_ir_value, partial_reduction_result_address);
       partial_reduction_result_addresses.push_back(
           partial_reduction_result_address);
@@ -1520,7 +1524,7 @@ Status IrEmitterUnnested::EmitRowReduction(
     llvm::Type* shuffle_ir_type = element_ir_type->isStructTy()
                                       ? b_.getIntNTy(bit_width)
                                       : element_ir_type;
-    for (int shuffle_distance = 16; shuffle_distance >= 1;
+    for (int shuffle_distance = (kWarpSize / 2); shuffle_distance >= 1;
          shuffle_distance /= 2) {
       llvm::Value* result_from_other_lane =
           Alloca(element_ir_type, nullptr, "result_from_other_lane");
@@ -1533,7 +1537,7 @@ Status IrEmitterUnnested::EmitRowReduction(
             << "Requires block size a multiple of the warp size, otherwise we "
                "will read undefined elements.";
         Store(EmitFullWarpShuffleDown(partial_reduction_result,
-                                      b_.getInt32(shuffle_distance), &b_),
+                                    b_.getInt32(shuffle_distance), &b_, module_),
               BitCast(result_from_other_lane, shuffle_ir_type->getPointerTo()));
         TF_RETURN_IF_ERROR(EmitCallToNestedComputation(
             *reducers[i],
@@ -3238,13 +3242,13 @@ LaunchDimensions IrEmitterUnnested::EmitHlo021Tile(
                                  param->shape().element_type(), module_),
                              kTileSize + 1),
         kTileSize);
-    const int kNVPTXSharedMemoryAddrSpace = 3;
     auto* tile_base_ptr = new llvm::GlobalVariable(
         *b_.GetInsertBlock()->getParent()->getParent(), tile_type,
         /*isConstant=*/false, llvm::GlobalValue::PrivateLinkage,
         llvm::UndefValue::get(tile_type),
         llvm_ir::AsStringRef(IrName(hlo, StrCat("tile", id))), nullptr,
-        llvm::GlobalValue::NotThreadLocal, kNVPTXSharedMemoryAddrSpace);
+        llvm::GlobalValue::NotThreadLocal,
+        llvm_ir::kAMDGPUSharedMemoryAddrSpace);
     param_shmem_buffers[id] = tile_base_ptr;
     VLOG(3) << "Added shmem buffer for parameter " << id << ": "
             << llvm_ir::DumpToString(*tile_base_ptr);
@@ -3552,7 +3556,10 @@ Status IrEmitterUnnested::EmitConstantGlobals() {
         llvm::GlobalValue::ExternalLinkage,
         /*Initializer=*/initializer,
         llvm_ir::AsStringRef(
-            llvm_ir::ConstantBufferAllocationToGlobalName(allocation)));
+            llvm_ir::ConstantBufferAllocationToGlobalName(allocation)),
+        /*TLMode=*/llvm::GlobalValue::NotThreadLocal,
+        /*AddressSpace=*/llvm_ir::kAMDGPUGlobalMemoryAddrSpace,
+        /*isExternallyInitialized=*/false);
     global_for_const->setAlignment(kConstantBufferAlignBytes);
     ir_emitter_context_->llvm_module()->getGlobalList().push_back(
         global_for_const);

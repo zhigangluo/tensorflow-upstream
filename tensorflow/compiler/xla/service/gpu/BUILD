@@ -25,6 +25,10 @@ filegroup(
 )
 
 load("//tensorflow:tensorflow.bzl", "tf_cc_test")
+load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
+load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda_is_configured")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm_is_configured")
 
 xla_proto_library(
     name = "backend_configs",
@@ -68,7 +72,7 @@ cc_library(
 #    srcs = [
 #        "partition_assignment_test.cc",
 #    ],
-#    tags = tf_cuda_tests_tags(),
+#    tags = tf_gpu_tests_tags(),
 #    deps = [
 #        ":partition_assignment",
 #        "//tensorflow/core:stream_executor_no_cuda",
@@ -223,6 +227,7 @@ cc_library(
     srcs = ["elemental_ir_emitter.cc"],
     hdrs = ["elemental_ir_emitter.h"],
     deps = [
+        ":ir_emission_utils",
         "//tensorflow/compiler/xla:literal",
         "//tensorflow/compiler/xla:shape_util",
         "//tensorflow/compiler/xla:status_macros",
@@ -301,7 +306,8 @@ cc_library(
         "thunk_schedule.cc",
         "tuple_thunk.cc",
         "while_thunk.cc",
-    ],
+    ] + if_cuda_is_configured(if_cuda(["nvptx_executable.cc"])) +
+        if_rocm_is_configured(if_rocm(["amdgpu_executable.cc"])),
     hdrs = [
         "conditional_thunk.h",
         "convolution_thunk.h",
@@ -320,7 +326,8 @@ cc_library(
         "thunk_schedule.h",
         "tuple_thunk.h",
         "while_thunk.h",
-    ],
+    ] + if_cuda_is_configured(if_cuda(["nvptx_executable.h"])) +
+        if_rocm_is_configured(if_rocm(["amdgpu_executable.h"])),
     deps = [
         ":buffer_allocations",
         ":cudnn_convolution_runner",
@@ -357,6 +364,7 @@ cc_library(
         "//tensorflow/core/platform/default/build_config:cudnn_plugin",
         "//tensorflow/core/platform/default/build_config:cufft_plugin",
         "//tensorflow/core/platform/default/build_config:stream_executor_cuda",  # build_cleaner: keep
+        "//tensorflow/core/platform/default/build_config:stream_executor_rocm",
         "//tensorflow/stream_executor",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/memory",
@@ -404,6 +412,7 @@ cc_library(
         "//tensorflow/core:stream_executor_no_cuda",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
     ],
 )
@@ -655,8 +664,10 @@ cc_library(
 
 cc_library(
     name = "gpu_compiler",
-    srcs = ["nvptx_compiler.cc"],
-    hdrs = ["nvptx_compiler.h"],
+    srcs = if_cuda_is_configured(if_cuda(["nvptx_compiler.cc"])) +
+           if_rocm_is_configured(if_rocm(["amdgpu_compiler.cc"])),
+    hdrs = if_cuda_is_configured(if_cuda(["nvptx_compiler.h"])) +
+           if_rocm_is_configured(if_rocm(["amdgpu_compiler.h"])),
     deps = [
         ":cudnn_convolution_algorithm_picker",
         ":cudnn_convolution_rewriter",
@@ -713,10 +724,12 @@ cc_library(
         "//tensorflow/compiler/xla/service/gpu/llvm_gpu_backend",
         "//tensorflow/compiler/xla/service/llvm_ir:llvm_util",
         "//tensorflow/core:cuda_libdevice_path",
+        "//tensorflow/core:rocm_rocdl_path",
         "//tensorflow/core:lib",
         "//tensorflow/core:lib_internal",
         "//tensorflow/core:regexp_internal",
         "//tensorflow/core:stream_executor_no_cuda",
+        "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",
@@ -778,7 +791,6 @@ cc_library(
     srcs = ["gpu_layout_assignment.cc"],
     hdrs = ["gpu_layout_assignment.h"],
     deps = [
-        ":gpu_options",
         ":ir_emission_utils",
         ":stream_executor_util",
         "//tensorflow/compiler/xla:shape_util",
@@ -876,16 +888,6 @@ cc_library(
         "//tensorflow/compiler/xla:xla_data_proto",
         "//tensorflow/compiler/xla/service:hlo_pass",
         "//tensorflow/core:lib",
-    ],
-)
-
-cc_library(
-    name = "gpu_options",
-    srcs = ["gpu_options.cc"],
-    hdrs = ["gpu_options.h"],
-    deps = [
-        "//tensorflow/compiler/xla/service:hlo_module_config",
-        "//tensorflow/core:lib_internal",
     ],
 )
 
