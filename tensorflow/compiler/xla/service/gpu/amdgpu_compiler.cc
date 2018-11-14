@@ -53,6 +53,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/gpu/ir_emitter_context.h"
 #include "tensorflow/compiler/xla/service/gpu/ir_emitter_unnested.h"
 #include "tensorflow/compiler/xla/service/gpu/llvm_gpu_backend/amdgpu_backend_lib.h"
+#include "tensorflow/compiler/xla/service/gpu/llvm_gpu_backend/target_machine_features.h"
 #include "tensorflow/compiler/xla/service/gpu/multi_output_fusion.h"
 #include "tensorflow/compiler/xla/service/gpu/pad_insertion.h"
 #include "tensorflow/compiler/xla/service/gpu/partition_assignment.h"
@@ -353,6 +354,10 @@ StatusOr<std::unique_ptr<Executable>> AMDGPUCompiler::RunBackend(
   llvm_module.setTargetTriple(kTargetTriple);
   llvm_module.setDataLayout(kDataLayout);
 
+
+  // COnstruct targetmachine features based on triple - base class that provides features of 
+  // different  
+
   // Determine the HLO schedule, which is an ordering of HLO instructions.  This
   // is used by buffer assignment to enable buffer reuse, and the same ordering
   // must also be used to determine the thunk launch schedule.
@@ -383,7 +388,7 @@ StatusOr<std::unique_ptr<Executable>> AMDGPUCompiler::RunBackend(
     TF_RETURN_IF_ERROR(protobuf_util::DumpProtoToDirectory(
         proto, xla_dump_optimized_hlo_proto_to, module->name()));
   }
-
+  AMDGPUMachineFeatures target_machine;
   IrEmitterContext ir_emitter_context(module.get(), buffer_assignment.get(),
                                       &stream_exec->GetDeviceDescription(),
                                       &llvm_module);
