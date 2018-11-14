@@ -81,8 +81,8 @@ ENV PATH="$OPENCL_ROOT/bin:${PATH}"
 
 # clone rocTracer and HIP/HCC forkis supported roctracer
 RUN cd $HOME && git clone -b amd-master https://github.com/ROCmSoftwarePlatform/roctracer.git
-RUN cd $HOME && git clone -b roctracer-hip-frontend-180823 --recursive https://github.com/eshcherb/hcc.git
-RUN cd $HOME && git clone -b roctracer-hip-frontend-180826 https://github.com/eshcherb/HIP.git
+RUN cd $HOME && git clone -b roctracer-hip-frontend-181113 --recursive https://github.com/eshcherb/hcc.git
+RUN cd $HOME && git clone -b roctracer-hip-frontend-181113 https://github.com/eshcherb/HIP.git
 # build HCC
 RUN cd $HOME/hcc && mkdir build && cd build && cmake -DUSE_PROF_API=1 -DPROF_API_HEADER_PATH=$HOME/roctracer/inc/roctracer .. && sudo make package -j$(nproc) && sudo dpkg -i *.deb
 # build HIP
