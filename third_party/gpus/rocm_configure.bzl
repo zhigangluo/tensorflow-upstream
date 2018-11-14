@@ -486,6 +486,7 @@ def _create_dummy_repository(repository_ctx):
             "%{miopen_lib}": _lib_name("miopen", cpu_value),
             "%{rocfft_lib}": _lib_name("rocfft", cpu_value),
             "%{hiprand_lib}": _lib_name("hiprand", cpu_value),
+            "%{roctracer_lib}": _lib_name("roctracer", cpu_value),
             "%{rocm_include_genrules}": "",
             "%{rocm_headers}": "",
         },
