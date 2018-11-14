@@ -188,6 +188,10 @@ def _rocm_include_path(repository_ctx, rocm_config):
     inc_dirs.append("/opt/rocm/hcc/compiler/lib/clang/8.0.0/include/")
     inc_dirs.append("/opt/rocm/hcc/lib/clang/8.0.0/include")
 
+    # Add rocTracer include path
+    inc_dirs.append("/opt/rocm/roctracer/include")
+    inc_dirs.append("/opt/rocm/roctracer/include/ext")
+
     inc_entries = []
     for inc_dir in inc_dirs:
         inc_entries.append("  cxx_builtin_include_directory: \"%s\"" % inc_dir)
@@ -342,9 +346,11 @@ def _find_rocm_lib(
 
     path = repository_ctx.path("%s/lib/%s" % (basedir, file_name))
     if path.exists:
+        print("1: name '%s' path '%s'" % (file_name, str(path.realpath)))
         return struct(file_name = file_name, path = str(path.realpath))
     path = repository_ctx.path("%s/%s" % (basedir, file_name))
     if path.exists:
+        print("2: name '%s' path '%s'" % (file_name, str(path.realpath)))
         return struct(file_name = file_name, path = str(path.realpath))
 
     auto_configure_fail("Cannot find rocm library %s" % file_name)

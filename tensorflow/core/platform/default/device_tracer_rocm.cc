@@ -31,7 +31,8 @@ limitations under the License.
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/tracing.h"
 #include "hip/hip_runtime.h"
-#include "hip/roctracer.h"
+#include "roctracer/roctracer_hip.h"
+#include "roctracer/roctracer_hcc.h"
 #include "hsa.h"
 
 #define DT_LOG(s) do {} while (0)
@@ -86,7 +87,7 @@ class TraceAdapter {
 };
 
 class DeviceTracerIf : public DeviceTracer,
-                       public port::Tracing::Engine {};
+                       public tracing::TraceCollector {};
 
 class DeviceTracerBase : public DeviceTracerIf {
  public:
@@ -97,29 +98,39 @@ class DeviceTracerBase : public DeviceTracerIf {
   Status Start() override;
   Status Stop() override;
   Status Collect(StepStatsCollector *collector) override;
-  void AddApiRecord(uint32_t cid, const hip_cb_data_t* data);
-  void AddActivityRecord(const roctracer_async_record_t* record);
+  void AddApiRecord(uint32_t cid, const hip_api_data_t* data);
+  void AddActivityRecord(const roctracer_record_t* record);
 
-  // port::Tracing::Engine interface:
-  bool IsEnabled() const override {
-    // We only register the Engine while tracing is enabled.
-    return true;
-  }
-  Annotation *PushAnnotation(StringPiece name) override {
-    DT_LOG("PushAnnotation " << name);
-    struct Impl : public port::Tracing::Engine::Annotation {
+  // tracing::TraceCollector interface:
+  virtual std::unique_ptr<Handle> CreateAnnotationHandle(
+      StringPiece name_part1, StringPiece name_part2) const {
+    struct Impl : public tracing::TraceCollector::Handle {
       string annotation;
-      explicit Impl(StringPiece n) : annotation(n.ToString()) {
+      explicit Impl(string &&name_scope) : annotation(name_scope) {
+        VLOG(2) << "CreateAnnotationHandle " << annotation;
         // Remember the most recent ScopedAnnotation for each thread.
         tls_current_annotation.get() = annotation.c_str();
       }
       ~Impl() override { tls_current_annotation.get() = nullptr; }
     };
-    return new Impl(name);
+    return std::unique_ptr<Handle>(
+        new Impl{ConcatenateNames(name_part1, name_part2)});
   }
-  Tracer *StartTracing(StringPiece label, bool is_expensive) override {
-    // We don't do anything with 'TraceMe' regions yet.
+
+  virtual std::unique_ptr<Handle> CreateActivityHandle(StringPiece, StringPiece,
+                                                       bool) const {
+    // We don't do anything with 'Activities' yet.
     return nullptr;
+  }
+
+  bool IsEnabledForAnnotations() const override {
+    // We are always enabled for 'Annotations'.
+    return true;
+  }
+
+  bool IsEnabledForActivities(bool is_expensive) const override {
+    // We don't do anything with 'Activities' so we are never 'enabled'.
+    return false;
   }
 
   // Records the mapping between correlation ID and kernel name.
@@ -135,6 +146,7 @@ class DeviceTracerBase : public DeviceTracerIf {
     uint64 stream_id;
     uint64 correlation_id;
     uint8 activityDomain;
+    uint8 activityId;
     uint8 activityKind;
   };
   // Internal struct to record memcpy operations.
@@ -145,6 +157,7 @@ class DeviceTracerBase : public DeviceTracerIf {
     uint64 stream_id;
     uint64 correlation_id;
     uint8 activityDomain;
+    uint8 activityId;
     uint8 activityKind;
     uint64 bytes;
   };
@@ -224,7 +237,7 @@ Status DeviceTracerBase::Start() {
 
   while(adapter_->Start(this) != true) {}
   // Register as a TraceEngine to receive ScopedAnnotations.
-  port::Tracing::RegisterEngine(this);
+  tracing::SetTraceCollector(this);
   enabled_ = true;
 
   return Status::OK();
@@ -240,7 +253,7 @@ Status DeviceTracerBase::Stop() {
   end_timestamp_ns_ = GetTimestampNs();
   DT_LOG2("DeviceTracer::Stop(" << step_ << ") wt " << end_walltime_us_ << ", ts " << end_timestamp_ns_ << " " << this);
 
-  port::Tracing::RegisterEngine(nullptr);
+  tracing::SetTraceCollector(nullptr);
   adapter_->Stop();
   enabled_ = false;
 
@@ -270,7 +283,7 @@ Status DeviceTracerBase::Collect(StepStatsCollector *collector) {
   for (const auto &rec : kernel_records_) {
     const string stream_device =
       strings::StrCat(prefix, "/device:GPU:", rec.device_id, "/stream:");
-    const char* cmd_kind_string = roctracer_id_string(rec.activityDomain, rec.activityKind);
+    const char* cmd_kind_string = roctracer_id_string(rec.activityDomain, rec.activityId, rec.activityKind);
     auto it = correlations_->find(rec.correlation_id);
     const string name = (it != correlations_->cend()) ? it->second : (string("unknown:") + cmd_kind_string);
     NodeExecStats *ns = new NodeExecStats;
@@ -305,7 +318,7 @@ Status DeviceTracerBase::Collect(StepStatsCollector *collector) {
       strings::StrCat(prefix, "/device:GPU:", rec.device_id, "/stream:");
     const string memcpy_device =
       strings::StrCat(prefix, "/device:GPU:", rec.device_id, "/memcpy");
-    const char* cmd_kind_string = roctracer_id_string(rec.activityDomain, rec.activityKind);
+    const char* cmd_kind_string = roctracer_id_string(rec.activityDomain, rec.activityId, rec.activityKind);
     auto it = correlations_->find(rec.correlation_id);
     const string name = (it != correlations_->cend()) ? it->second : "unknown";
     NodeExecStats *ns = new NodeExecStats;
@@ -342,8 +355,8 @@ Status DeviceTracerBase::Collect(StepStatsCollector *collector) {
   return Status::OK();
 }
 
-void DeviceTracerBase::AddApiRecord(uint32_t cid, const hip_cb_data_t* data) {
-  const char* name = roctracer_id_string(ROCTRACER_DOMAIN_HIP_API, cid);
+void DeviceTracerBase::AddApiRecord(uint32_t cid, const hip_api_data_t* data) {
+  const char* name = roctracer_id_string(ACTIVITY_DOMAIN_HIP_API, cid, 0);
   (void)name;
 
   // API callbacks are invoked synchronously on the thread making the
@@ -395,42 +408,41 @@ void DeviceTracerBase::AddApiRecord(uint32_t cid, const hip_cb_data_t* data) {
   }
 }
 
-void DeviceTracerBase::AddActivityRecord(const roctracer_async_record_t* record) {
+void DeviceTracerBase::AddActivityRecord(const roctracer_record_t* record) {
   std::lock_guard<std::recursive_mutex> l(trace_mu_);
 
-  const char* name = roctracer_id_string(record->domain, record->activity_kind);
+  const char* name = roctracer_id_string(record->domain, record->activity_id, record->kind);
   (void)name;
 
-  switch (record->op_id) {
+  if (record->activity_id == hc::HSA_OP_ID_DISPATCH) {
     // Kernel activity
-    case 1:
-      if (kernel_records_.size() >= kMaxRecords) return;
-      kernel_records_.push_back(KernelRecord{
-        (int64)(record->begin_ns),
-        (int64)(record->end_ns),
-        record->device_id,
-        record->stream_id,
-        record->correlation_id,
-        (uint8)(record->domain),
-        (uint8)(record->activity_kind)
-      });
-      break;
+    if (kernel_records_.size() >= kMaxRecords) return;
+    kernel_records_.push_back(KernelRecord{
+      (int64)(record->begin_ns),
+      (int64)(record->end_ns),
+      record->device_id,
+      record->stream_id,
+      record->correlation_id,
+      (uint8)(record->domain),
+      (uint8)(record->activity_id),
+      (uint8)(record->kind)
+    });
+  } if (record->activity_id == hc::HSA_OP_ID_COPY) {
     // Memcpy activity
-    case 2:
-      if (memcpy_records_.size() >= kMaxRecords) return;
-      memcpy_records_.push_back(MemcpyRecord{
-        (int64)(record->begin_ns),
-        (int64)(record->end_ns),
-        record->device_id,
-        record->stream_id,
-        record->correlation_id,
-        (uint8)(record->domain),
-        (uint8)(record->activity_kind),
-        record->bytes
-      });
-      break;
-    default:
-      DT_LOG("Unhandled Activity Callback for " << name << ", op(" << record->op_id << ")");
+    if (memcpy_records_.size() >= kMaxRecords) return;
+    memcpy_records_.push_back(MemcpyRecord{
+      (int64)(record->begin_ns),
+      (int64)(record->end_ns),
+      record->device_id,
+      record->stream_id,
+      record->correlation_id,
+      (uint8)(record->domain),
+      (uint8)(record->activity_id),
+      (uint8)(record->kind),
+      record->bytes
+    });
+  } else {
+    DT_LOG("Unhandled Activity Callback for " << name << ", op(" << record->op_id << ")");
   }
 }
 
@@ -462,9 +474,9 @@ class DeviceTracerRocm : public TraceAdapter {
     device_ = device;
 
     // Enable HIP API callbacks
-    ROCTRACER_CALL(roctracer_enable_api_callback(ROCTRACER_DOMAIN_ANY, 0, hip_api_callback, this));
+    ROCTRACER_CALL(roctracer_enable_callback(ACTIVITY_DOMAIN_ANY, 0, hip_api_callback, this));
     // Enable HIP activity tracing
-    ROCTRACER_CALL(roctracer_enable_api_activity(ROCTRACER_DOMAIN_ANY, 0));
+    ROCTRACER_CALL(roctracer_enable_activity(ACTIVITY_DOMAIN_ANY, 0));
     DT_LOG("DeviceTracerRocm::Start DONE");
     return true;
   }
@@ -478,7 +490,7 @@ class DeviceTracerRocm : public TraceAdapter {
     DT_LOG("DeviceTracerRocm::Stop");
     device_ = NULL;
     // Flush buffered atcivity
-    ROCTRACER_CALL(roctracer_flush_api_activity());
+    ROCTRACER_CALL(roctracer_flush_activity());
     DT_LOG("DeviceTracerRocm::Stop DONE");
     return true;
   }
@@ -492,10 +504,10 @@ class DeviceTracerRocm : public TraceAdapter {
     void* arg)
   {
     std::lock_guard<std::recursive_mutex> l(DeviceTracerBase::trace_mu_);
-    const hip_cb_data_t* data = reinterpret_cast<const hip_cb_data_t*>(callback_data);
-    const char* name = roctracer_id_string(ROCTRACER_DOMAIN_HIP_API, cid);
+    const hip_api_data_t* data = reinterpret_cast<const hip_api_data_t*>(callback_data);
+    const char* name = roctracer_id_string(ACTIVITY_DOMAIN_HIP_API, cid, 0);
     DT_LOG2("API: " << name << "(" << data->correlation_id << ") phase(" << data->phase << ")");
-    if (data->phase == ROCTRACER_API_PHASE_ENTER) {
+    if (data->phase == ACTIVITY_API_PHASE_ENTER) {
       DeviceTracerRocm* tracer = reinterpret_cast<DeviceTracerRocm*>(arg);
       DeviceTracerBase* device = tracer->device_;
       DeviceTracerBase::AddCorrelationId(data->correlation_id, string(name));
@@ -511,10 +523,7 @@ class DeviceTracerRocm : public TraceAdapter {
       const roctracer_record_t* record = reinterpret_cast<const roctracer_record_t*>(begin);
       const roctracer_record_t* end_record = reinterpret_cast<const roctracer_record_t*>(end);
       while (record < end_record) {
-        if (record->op_id != 0) {
-          const roctracer_async_record_t* async_record = reinterpret_cast<const roctracer_async_record_t*>(record);
-          device->AddActivityRecord(async_record);
-        }
+        device->AddActivityRecord(record);
         ROCTRACER_CALL(roctracer_next_record(record, &record));
       }
     }
