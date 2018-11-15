@@ -674,7 +674,7 @@ def _create_local_rocm_repository(repository_ctx):
     ))
     genrules.append(_symlink_genrule_for_dir(
         repository_ctx,
-        rocm_toolkit_path + "/roctracer/include",
+        rocm_toolkit_path + "/roctracer",
         "rocm/include/roctracer",
         "roctracer-include",
     ))
