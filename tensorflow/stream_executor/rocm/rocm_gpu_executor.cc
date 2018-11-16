@@ -20,7 +20,7 @@ limitations under the License.
 #include "absl/strings/str_cat.h"
 #include "tensorflow/stream_executor/rocm/rocm_diagnostics.h"
 #include "tensorflow/stream_executor/rocm/rocm_driver.h"
-#include "tensorflow/stream_executor/rocm/rocm_event.h"
+#include "tensorflow/stream_executor/gpu/gpu_event.h"
 #include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 #include "tensorflow/stream_executor/rocm/rocm_stream.h"
 #include "tensorflow/stream_executor/rocm/rocm_timer.h"
@@ -59,9 +59,9 @@ limitations under the License.
 namespace stream_executor {
 namespace rocm {
 
-static ROCMEvent *AsROCMEvent(Event *event) {
+static gpu::GPUEvent *AsGPUEvent(Event *event) {
   DCHECK(event != nullptr);
-  return static_cast<ROCMEvent *>(event->implementation());
+  return static_cast<gpu::GPUEvent *>(event->implementation());
 }
 
 
@@ -524,21 +524,21 @@ bool ROCMExecutor::HostCallback(Stream *stream,
 }
 
 port::Status ROCMExecutor::AllocateEvent(Event *event) {
-  return AsROCMEvent(event)->Init();
+  return AsGPUEvent(event)->Init();
 }
 
 port::Status ROCMExecutor::DeallocateEvent(Event *event) {
-  return AsROCMEvent(event)->Destroy();
+  return AsGPUEvent(event)->Destroy();
 }
 
 port::Status ROCMExecutor::RecordEvent(Stream *stream, Event *event) {
-  return AsROCMEvent(event)->Record(AsROCMStream(stream));
+  return AsGPUEvent(event)->Record(AsROCMStream(stream));
 }
 
 port::Status ROCMExecutor::WaitForEvent(Stream *stream, Event *event) {
   if (ROCMDriver::WaitStreamOnEvent(device_ordinal_,
                                     AsROCMStream(stream)->rocm_stream(),
-                                    AsROCMEvent(event)->rocm_event())) {
+                                    AsGPUEvent(event)->gpu_event())) {
     return port::Status::OK();
   } else {
     return port::Status{
@@ -549,7 +549,7 @@ port::Status ROCMExecutor::WaitForEvent(Stream *stream, Event *event) {
 }
 
 Event::Status ROCMExecutor::PollForEventStatus(Event *event) {
-  return AsROCMEvent(event)->PollForStatus();
+  return AsGPUEvent(event)->PollForStatus();
 }
 
 bool ROCMExecutor::AllocateStream(Stream *stream) {
@@ -788,7 +788,7 @@ bool ROCMExecutor::SupportsRng() const { return true; }
 
 std::unique_ptr<internal::EventInterface>
 ROCMExecutor::CreateEventImplementation() {
-  return std::unique_ptr<internal::EventInterface>(new ROCMEvent(this));
+  return std::unique_ptr<internal::EventInterface>(new gpu::GPUEvent(this));
 }
 
 std::unique_ptr<internal::KernelInterface>

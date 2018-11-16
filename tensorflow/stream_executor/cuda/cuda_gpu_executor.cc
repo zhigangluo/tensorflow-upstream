@@ -28,7 +28,7 @@ limitations under the License.
 #include "absl/strings/string_view.h"
 #include "tensorflow/stream_executor/cuda/cuda_diagnostics.h"
 #include "tensorflow/stream_executor/cuda/cuda_driver.h"
-#include "tensorflow/stream_executor/cuda/cuda_event.h"
+#include "tensorflow/stream_executor/gpu/gpu_event.h"
 #include "tensorflow/stream_executor/cuda/cuda_platform_id.h"
 #include "tensorflow/stream_executor/cuda/cuda_stream.h"
 #include "tensorflow/stream_executor/cuda/cuda_timer.h"
@@ -79,9 +79,9 @@ namespace cuda {
 // variable with extern linkage and populate it from another translation unit.
 std::function<string(const string &)> g_cubinate;
 
-static CUDAEvent *AsCUDAEvent(Event *event) {
+static gpu::GPUEvent *AsGPUEvent(Event *event) {
   DCHECK(event != nullptr);
-  return static_cast<CUDAEvent *>(event->implementation());
+  return static_cast<gpu::GPUEvent *>(event->implementation());
 }
 
 
@@ -678,21 +678,21 @@ bool CUDAExecutor::HostCallback(Stream *stream,
 }
 
 port::Status CUDAExecutor::AllocateEvent(Event *event) {
-  return AsCUDAEvent(event)->Init();
+  return AsGPUEvent(event)->Init();
 }
 
 port::Status CUDAExecutor::DeallocateEvent(Event *event) {
-  return AsCUDAEvent(event)->Destroy();
+  return AsGPUEvent(event)->Destroy();
 }
 
 port::Status CUDAExecutor::RecordEvent(Stream *stream, Event *event) {
-  return AsCUDAEvent(event)->Record(AsCUDAStream(stream));
+  return AsGPUEvent(event)->Record(AsCUDAStream(stream));
 }
 
 port::Status CUDAExecutor::WaitForEvent(Stream *stream, Event *event) {
   if (CUDADriver::WaitStreamOnEvent(context_,
                                     AsCUDAStream(stream)->cuda_stream(),
-                                    AsCUDAEvent(event)->cuda_event())) {
+                                    AsGPUEvent(event)->gpu_event())) {
     return port::Status::OK();
   } else {
     return port::Status(
@@ -703,7 +703,7 @@ port::Status CUDAExecutor::WaitForEvent(Stream *stream, Event *event) {
 }
 
 Event::Status CUDAExecutor::PollForEventStatus(Event *event) {
-  return AsCUDAEvent(event)->PollForStatus();
+  return AsGPUEvent(event)->PollForStatus();
 }
 
 bool CUDAExecutor::AllocateStream(Stream *stream) {
@@ -922,7 +922,7 @@ bool CUDAExecutor::SupportsRng() const { return true; }
 
 std::unique_ptr<internal::EventInterface>
 CUDAExecutor::CreateEventImplementation() {
-  return std::unique_ptr<internal::EventInterface>(new CUDAEvent(this));
+  return std::unique_ptr<internal::EventInterface>(new gpu::GPUEvent(this));
 }
 
 std::unique_ptr<internal::KernelInterface>
