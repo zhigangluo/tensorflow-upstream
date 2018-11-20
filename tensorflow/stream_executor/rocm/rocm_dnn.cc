@@ -4871,17 +4871,15 @@ bool MIOpenSupport::DoFusedBatchNormActivationBackward(
 
 }  // namespace rocm
 
-namespace gpu = ::stream_executor;
-
 void initialize_miopen() {
-  gpu::port::Status status =
-      gpu::PluginRegistry::Instance()
-          ->RegisterFactory<gpu::PluginRegistry::DnnFactory>(
-              gpu::rocm::kROCmPlatformId, gpu::rocm::kMIOpenPlugin, "MIOpen",
-              [](gpu::internal::StreamExecutorInterface*
-                     parent) -> gpu::dnn::DnnSupport* {
-                gpu::rocm::ROCMExecutor* rocm_executor =
-                    dynamic_cast<gpu::rocm::ROCMExecutor*>(parent);
+  port::Status status =
+      PluginRegistry::Instance()
+          ->RegisterFactory<PluginRegistry::DnnFactory>(
+              rocm::kROCmPlatformId, rocm::kMIOpenPlugin, "MIOpen",
+              [](internal::StreamExecutorInterface*
+                     parent) -> dnn::DnnSupport* {
+                rocm::ROCMExecutor* rocm_executor =
+                    dynamic_cast<rocm::ROCMExecutor*>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
                       << "Attempting to initialize an instance of the MIOpen "
@@ -4889,8 +4887,8 @@ void initialize_miopen() {
                   return nullptr;
                 }
 
-                gpu::rocm::MIOpenSupport* dnn =
-                    new gpu::rocm::MIOpenSupport(rocm_executor);
+                rocm::MIOpenSupport* dnn =
+                    new rocm::MIOpenSupport(rocm_executor);
                 if (!dnn->Init().ok()) {
                   // Note: Init() will log a more specific error.
                   delete dnn;
@@ -4904,9 +4902,9 @@ void initialize_miopen() {
                << status.error_message();
   }
 
-  gpu::PluginRegistry::Instance()->SetDefaultFactory(gpu::rocm::kROCmPlatformId,
-                                                     gpu::PluginKind::kDnn,
-                                                     gpu::rocm::kMIOpenPlugin);
+  PluginRegistry::Instance()->SetDefaultFactory(rocm::kROCmPlatformId,
+                                                     PluginKind::kDnn,
+                                                     rocm::kMIOpenPlugin);
 }
 
 }  // namespace stream_executor

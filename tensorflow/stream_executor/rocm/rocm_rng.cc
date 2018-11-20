@@ -272,17 +272,17 @@ bool ROCMRng::SetSeed(Stream *stream, const uint8 *seed, uint64 seed_bytes) {
 }  // namespace rocm
 }  // namespace stream_executor
 
-namespace gpu = ::stream_executor;
+namespace se = ::stream_executor;
 
 REGISTER_MODULE_INITIALIZER(register_hiprand, {
-  gpu::port::Status status =
-      gpu::PluginRegistry::Instance()
-          ->RegisterFactory<gpu::PluginRegistry::RngFactory>(
-              gpu::rocm::kROCmPlatformId, gpu::rocm::kHipRandPlugin, "hipRAND",
-              [](gpu::internal::StreamExecutorInterface
-                     *parent) -> gpu::rng::RngSupport * {
-                gpu::rocm::ROCMExecutor *rocm_executor =
-                    dynamic_cast<gpu::rocm::ROCMExecutor *>(parent);
+  se::port::Status status =
+      se::PluginRegistry::Instance()
+          ->RegisterFactory<se::PluginRegistry::RngFactory>(
+              se::rocm::kROCmPlatformId, se::rocm::kHipRandPlugin, "hipRAND",
+              [](se::internal::StreamExecutorInterface
+                     *parent) -> se::rng::RngSupport * {
+                se::rocm::ROCMExecutor *rocm_executor =
+                    dynamic_cast<se::rocm::ROCMExecutor *>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
                       << "Attempting to initialize an instance of the hipRAND "
@@ -290,7 +290,7 @@ REGISTER_MODULE_INITIALIZER(register_hiprand, {
                   return nullptr;
                 }
 
-                gpu::rocm::ROCMRng *rng = new gpu::rocm::ROCMRng(rocm_executor);
+                se::rocm::ROCMRng *rng = new se::rocm::ROCMRng(rocm_executor);
                 if (!rng->Init()) {
                   // Note: Init() will log a more specific error.
                   delete rng;
@@ -304,7 +304,7 @@ REGISTER_MODULE_INITIALIZER(register_hiprand, {
                << status.error_message();
   }
 
-  gpu::PluginRegistry::Instance()->SetDefaultFactory(gpu::rocm::kROCmPlatformId,
-                                                     gpu::PluginKind::kRng,
-                                                     gpu::rocm::kHipRandPlugin);
+  se::PluginRegistry::Instance()->SetDefaultFactory(se::rocm::kROCmPlatformId,
+                                                     se::PluginKind::kRng,
+                                                     se::rocm::kHipRandPlugin);
 });

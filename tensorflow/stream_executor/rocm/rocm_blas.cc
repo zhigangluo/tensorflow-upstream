@@ -2303,17 +2303,15 @@ bool ROCMBlas::DoBlasGemmStridedBatched(
 }
 }  // namespace rocm
 
-namespace gpu = ::stream_executor;
-
 void initialize_rocblas() {
-  gpu::port::Status status =
-      gpu::PluginRegistry::Instance()
-          ->RegisterFactory<gpu::PluginRegistry::BlasFactory>(
-              gpu::rocm::kROCmPlatformId, gpu::rocm::kRocBlasPlugin, "rocBLAS",
-              [](gpu::internal::StreamExecutorInterface
-                     *parent) -> gpu::blas::BlasSupport * {
-                gpu::rocm::ROCMExecutor *rocm_executor =
-                    dynamic_cast<gpu::rocm::ROCMExecutor *>(parent);
+  port::Status status =
+      PluginRegistry::Instance()
+          ->RegisterFactory<PluginRegistry::BlasFactory>(
+              rocm::kROCmPlatformId, rocm::kRocBlasPlugin, "rocBLAS",
+              [](internal::StreamExecutorInterface
+                     *parent) -> blas::BlasSupport * {
+                rocm::ROCMExecutor *rocm_executor =
+                    dynamic_cast<rocm::ROCMExecutor *>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
                       << "Attempting to initialize an instance of the rocBLAS "
@@ -2321,8 +2319,8 @@ void initialize_rocblas() {
                   return nullptr;
                 }
 
-                gpu::rocm::ROCMBlas *blas =
-                    new gpu::rocm::ROCMBlas(rocm_executor);
+                rocm::ROCMBlas *blas =
+                    new rocm::ROCMBlas(rocm_executor);
                 if (!blas->Init()) {
                   // Note: Init() will log a more specific error.
                   delete blas;
@@ -2336,9 +2334,9 @@ void initialize_rocblas() {
                << status.error_message();
   }
 
-  gpu::PluginRegistry::Instance()->SetDefaultFactory(gpu::rocm::kROCmPlatformId,
-                                                     gpu::PluginKind::kBlas,
-                                                     gpu::rocm::kRocBlasPlugin);
+  PluginRegistry::Instance()->SetDefaultFactory(rocm::kROCmPlatformId,
+                                                     PluginKind::kBlas,
+                                                     rocm::kRocBlasPlugin);
 }
 
 }  // namespace stream_executor

@@ -558,17 +558,17 @@ PERFTOOLS_GPUTOOLS_ROCM_DEFINE_FFT(double, Z2Z, D2Z, Z2D)
 }  // namespace rocm
 }  // namespace stream_executor
 
-namespace gpu = ::stream_executor;
+namespace se = ::stream_executor;
 
 REGISTER_MODULE_INITIALIZER(register_hipfft, {
-  gpu::port::Status status =
-      gpu::PluginRegistry::Instance()
-          ->RegisterFactory<gpu::PluginRegistry::FftFactory>(
-              gpu::rocm::kROCmPlatformId, gpu::rocm::kRocFftPlugin, "rocFFT",
-              [](gpu::internal::StreamExecutorInterface
-                     *parent) -> gpu::fft::FftSupport * {
-                gpu::rocm::ROCMExecutor *rocm_executor =
-                    dynamic_cast<gpu::rocm::ROCMExecutor *>(parent);
+  se::port::Status status =
+      se::PluginRegistry::Instance()
+          ->RegisterFactory<se::PluginRegistry::FftFactory>(
+              se::rocm::kROCmPlatformId, se::rocm::kRocFftPlugin, "rocFFT",
+              [](se::internal::StreamExecutorInterface
+                     *parent) -> se::fft::FftSupport * {
+                se::rocm::ROCMExecutor *rocm_executor =
+                    dynamic_cast<se::rocm::ROCMExecutor *>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
                       << "Attempting to initialize an instance of the rocFFT "
@@ -576,14 +576,14 @@ REGISTER_MODULE_INITIALIZER(register_hipfft, {
                   return nullptr;
                 }
 
-                return new gpu::rocm::ROCMFft(rocm_executor);
+                return new se::rocm::ROCMFft(rocm_executor);
               });
   if (!status.ok()) {
     LOG(ERROR) << "Unable to register rocFFT factory: "
                << status.error_message();
   }
 
-  gpu::PluginRegistry::Instance()->SetDefaultFactory(gpu::rocm::kROCmPlatformId,
-                                                     gpu::PluginKind::kFft,
-                                                     gpu::rocm::kRocFftPlugin);
+  se::PluginRegistry::Instance()->SetDefaultFactory(se::rocm::kROCmPlatformId,
+                                                     se::PluginKind::kFft,
+                                                     se::rocm::kRocFftPlugin);
 });
