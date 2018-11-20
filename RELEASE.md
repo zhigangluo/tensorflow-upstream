@@ -6,6 +6,12 @@
 * TensorFlow binaries are built with XLA support linked in by default.
 * Ignite Dataset added to contrib/ignite that allows to work with Apache Ignite.
 
+## ROCm Features and Improvements
+* MIOpenv1.6 integration
+* Training in fp16 is fully supported
+* Performance improvements in TF CNN benchmarks
+* Layer fusion is supported, details in: [TensorFlow ROCm port high-level design document](https://github.com/ROCmSoftwarePlatform/tensorflow-upstream/blob/r1.12-rocm/rocm_docs/rocm-port-overview.md)
+
 ## Bug Fixes and Other Changes
 
 * tf.data:
