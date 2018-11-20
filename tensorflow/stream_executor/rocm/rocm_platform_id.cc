@@ -16,9 +16,9 @@ limitations under the License.
 #include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 PLATFORM_DEFINE_ID(kROCmPlatformId);
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor

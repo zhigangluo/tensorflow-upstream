@@ -29,7 +29,7 @@ namespace stream_executor {
 
 class StreamExecutor;
 
-namespace rocm {
+namespace gpu {
 
 class ROCMExecutor;
 class ScopedActivateContext;
@@ -54,7 +54,7 @@ class ScopedActivateExecutorContext {
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedActivateExecutorContext);
 };
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_ACTIVATION_H_

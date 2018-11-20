@@ -24,7 +24,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/rocm/rocm_gpu_executor.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 class ROCMExecutor;
 class ROCMStream;
@@ -76,7 +76,7 @@ class ROCMTimer : public internal::TimerInterface {
                          // executing in a stream.
 };
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_TIMER_H_

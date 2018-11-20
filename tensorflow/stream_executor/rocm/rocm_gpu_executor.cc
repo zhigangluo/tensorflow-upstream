@@ -57,7 +57,7 @@ limitations under the License.
 #endif
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 static ROCMEvent *AsROCMEvent(Event *event) {
   DCHECK(event != nullptr);
@@ -907,11 +907,11 @@ DeviceDescription *ROCMExecutor::PopulateDeviceDescription() const {
   return built.release();
 }
 
-}  // namespace rocm
+}  // namespace gpu
 
 void initialize_rocm_gpu_executor() {
   *internal::MakeROCMExecutorImplementation() = [](const PluginConfig &config) {
-    return new rocm::ROCMExecutor{config};
+    return new gpu::ROCMExecutor{config};
   };
 }
 

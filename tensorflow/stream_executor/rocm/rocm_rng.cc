@@ -55,7 +55,7 @@ std::ostream &operator<<(std::ostream &in, const hiprandStatus_t &status) {
 }
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kHipRandPlugin);
 
@@ -65,7 +65,7 @@ namespace wrap {
   struct WrapperShim__##__name {                                    \
     template <typename... Args>                                     \
     hiprandStatus_t operator()(ROCMExecutor *parent, Args... args) { \
-      rocm::ScopedActivateExecutorContext sac{parent};              \
+      gpu::ScopedActivateExecutorContext sac{parent};              \
       return ::__name(args...);                                     \
     }                                                               \
   } __name;
@@ -269,7 +269,7 @@ bool ROCMRng::SetSeed(Stream *stream, const uint8 *seed, uint64 seed_bytes) {
   return true;
 }
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 namespace se = ::stream_executor;
@@ -278,11 +278,11 @@ REGISTER_MODULE_INITIALIZER(register_hiprand, {
   se::port::Status status =
       se::PluginRegistry::Instance()
           ->RegisterFactory<se::PluginRegistry::RngFactory>(
-              se::rocm::kROCmPlatformId, se::rocm::kHipRandPlugin, "hipRAND",
+              se::gpu::kROCmPlatformId, se::gpu::kHipRandPlugin, "hipRAND",
               [](se::internal::StreamExecutorInterface
                      *parent) -> se::rng::RngSupport * {
-                se::rocm::ROCMExecutor *rocm_executor =
-                    dynamic_cast<se::rocm::ROCMExecutor *>(parent);
+                se::gpu::ROCMExecutor *rocm_executor =
+                    dynamic_cast<se::gpu::ROCMExecutor *>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
                       << "Attempting to initialize an instance of the hipRAND "
@@ -290,7 +290,7 @@ REGISTER_MODULE_INITIALIZER(register_hiprand, {
                   return nullptr;
                 }
 
-                se::rocm::ROCMRng *rng = new se::rocm::ROCMRng(rocm_executor);
+                se::gpu::ROCMRng *rng = new se::gpu::ROCMRng(rocm_executor);
                 if (!rng->Init()) {
                   // Note: Init() will log a more specific error.
                   delete rng;
@@ -304,7 +304,7 @@ REGISTER_MODULE_INITIALIZER(register_hiprand, {
                << status.error_message();
   }
 
-  se::PluginRegistry::Instance()->SetDefaultFactory(se::rocm::kROCmPlatformId,
+  se::PluginRegistry::Instance()->SetDefaultFactory(se::gpu::kROCmPlatformId,
                                                      se::PluginKind::kRng,
-                                                     se::rocm::kHipRandPlugin);
+                                                     se::gpu::kHipRandPlugin);
 });

@@ -55,7 +55,7 @@ std::ostream &operator<<(std::ostream &in, const curandStatus_t &status) {
 }
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kCuRandPlugin);
 
@@ -65,7 +65,7 @@ namespace wrap {
   struct WrapperShim__##__name {                                    \
     template <typename... Args>                                     \
     curandStatus_t operator()(CUDAExecutor *parent, Args... args) { \
-      cuda::ScopedActivateExecutorContext sac{parent};              \
+      gpu::ScopedActivateExecutorContext sac{parent};              \
       return ::__name(args...);                                     \
     }                                                               \
   } __name;
@@ -269,15 +269,15 @@ bool CUDARng::SetSeed(Stream *stream, const uint8 *seed, uint64 seed_bytes) {
   return true;
 }
 
-}  // namespace cuda
+}  // namespace gpu
 
 void initialize_curand() {
   port::Status status =
       PluginRegistry::Instance()->RegisterFactory<PluginRegistry::RngFactory>(
-          cuda::kCudaPlatformId, cuda::kCuRandPlugin, "cuRAND",
+          gpu::kCudaPlatformId, gpu::kCuRandPlugin, "cuRAND",
           [](internal::StreamExecutorInterface *parent) -> rng::RngSupport * {
-            cuda::CUDAExecutor *cuda_executor =
-                dynamic_cast<cuda::CUDAExecutor *>(parent);
+            gpu::CUDAExecutor *cuda_executor =
+                dynamic_cast<gpu::CUDAExecutor *>(parent);
             if (cuda_executor == nullptr) {
               LOG(ERROR)
                   << "Attempting to initialize an instance of the cuRAND "
@@ -285,7 +285,7 @@ void initialize_curand() {
               return nullptr;
             }
 
-            cuda::CUDARng *rng = new cuda::CUDARng(cuda_executor);
+            gpu::CUDARng *rng = new gpu::CUDARng(cuda_executor);
             if (!rng->Init()) {
               // Note: Init() will log a more specific error.
               delete rng;
@@ -300,7 +300,7 @@ void initialize_curand() {
   }
 
   PluginRegistry::Instance()->SetDefaultFactory(
-      cuda::kCudaPlatformId, PluginKind::kRng, cuda::kCuRandPlugin);
+      gpu::kCudaPlatformId, PluginKind::kRng, gpu::kCuRandPlugin);
 }
 
 }  // namespace stream_executor

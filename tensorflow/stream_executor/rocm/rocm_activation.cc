@@ -20,7 +20,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 int ExtractROCmDeviceOrdinal(ROCMExecutor *rocm_exec);
 ROCMExecutor *ExtractROCmExecutor(StreamExecutor *stream_exec);
@@ -38,5 +38,5 @@ ScopedActivateExecutorContext::~ScopedActivateExecutorContext() {
   delete static_cast<ScopedActivateContext *>(driver_scoped_activate_context_);
 }
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor

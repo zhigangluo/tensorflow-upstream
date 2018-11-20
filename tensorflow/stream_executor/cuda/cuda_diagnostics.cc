@@ -50,7 +50,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform/logging.h"
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 #ifdef __APPLE__
 static const CFStringRef kDriverKextIdentifier = CFSTR("com.nvidia.CUDA");
@@ -388,5 +388,5 @@ port::StatusOr<DriverVersion> Diagnostician::FindKernelDriverVersion() {
 }
 
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor

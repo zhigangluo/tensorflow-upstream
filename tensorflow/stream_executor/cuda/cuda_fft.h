@@ -30,7 +30,7 @@ namespace stream_executor {
 
 class Stream;
 
-namespace cuda {
+namespace gpu {
 
 class CUDAExecutor;
 
@@ -131,7 +131,7 @@ class CUDAFft : public fft::FftSupport {
   SE_DISALLOW_COPY_AND_ASSIGN(CUDAFft);
 };
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_FFT_H_

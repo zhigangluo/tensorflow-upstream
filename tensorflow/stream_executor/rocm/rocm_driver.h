@@ -28,7 +28,7 @@ limitations under the License.
 #include "rocm/include/hip/hip_runtime.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 // Identifies the memory space where an allocation resides. See
 // ROCMDriver::GetPointerMemorySpace().
@@ -387,7 +387,7 @@ class ScopedActivateContext {
   int to_restore_ = -1;
 };
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_DRIVER_H_

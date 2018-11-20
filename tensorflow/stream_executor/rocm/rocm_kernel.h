@@ -40,7 +40,7 @@ limitations under the License.
 #endif
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 // Wraps a hipFunction_t to implement the platform-independent KernelInterface.
 class ROCMKernel : public internal::KernelInterface {
@@ -121,7 +121,7 @@ inline ROCMKernel *AsROCMKernel(KernelBase *kernel) {
   return static_cast<ROCMKernel *>(kernel->implementation());
 }
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_KERNEL_H_

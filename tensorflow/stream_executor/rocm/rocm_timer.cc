@@ -21,7 +21,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/status.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 bool ROCMTimer::Init() {
   CHECK(start_event_ == nullptr && stop_event_ == nullptr);
@@ -80,5 +80,5 @@ bool ROCMTimer::Stop(ROCMStream *stream) {
       .ok();
 }
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor

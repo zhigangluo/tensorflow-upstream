@@ -41,7 +41,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/str_util.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 string DriverVersionToString(DriverVersion version) {
   return port::Printf("%d.%d.%d", std::get<0>(version), std::get<1>(version), std::get<2>(version));
@@ -234,5 +234,5 @@ port::StatusOr<DriverVersion> Diagnostician::FindKernelDriverVersion() {
 }
 
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor

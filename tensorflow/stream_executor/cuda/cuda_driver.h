@@ -28,7 +28,7 @@ limitations under the License.
 #include "cuda/include/cuda.h"
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 // Identifies the memory space where an allocation resides. See
 // CUDADriver::GetPointerMemorySpace().
@@ -514,7 +514,7 @@ class CudaContext {
   const int64 id_;
 };
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_DRIVER_H_

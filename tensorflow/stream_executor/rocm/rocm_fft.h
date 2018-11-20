@@ -30,7 +30,7 @@ namespace stream_executor {
 
 class Stream;
 
-namespace rocm {
+namespace gpu {
 
 class ROCMExecutor;
 
@@ -126,7 +126,7 @@ class ROCMFft : public fft::FftSupport {
   SE_DISALLOW_COPY_AND_ASSIGN(ROCMFft);
 };
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_FFT_H_

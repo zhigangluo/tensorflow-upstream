@@ -20,7 +20,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 bool ROCMStream::Init() {
   if (!ROCMDriver::CreateStream(parent_->device_ordinal(), &rocm_stream_)) {
@@ -57,5 +57,5 @@ hipStream_t AsROCMStreamValue(Stream *stream) {
   return AsROCMStream(stream)->rocm_stream();
 }
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor

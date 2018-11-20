@@ -20,7 +20,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/statusor.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 ROCMEvent::ROCMEvent(ROCMExecutor* parent)
     : parent_(parent), rocm_event_(nullptr) {}
@@ -66,5 +66,5 @@ const hipEvent_t& ROCMEvent::rocm_event() {
   return rocm_event_;
 }
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor

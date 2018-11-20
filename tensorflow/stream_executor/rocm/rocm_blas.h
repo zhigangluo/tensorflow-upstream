@@ -30,7 +30,7 @@ namespace stream_executor {
 
 class Stream;
 
-namespace rocm {
+namespace gpu {
 
 // Opaque and unique identifier for the rocBLAS plugin.
 extern const PluginId kRocBlasPlugin;
@@ -153,7 +153,7 @@ class ROCMBlas : public blas::BlasSupport {
   SE_DISALLOW_COPY_AND_ASSIGN(ROCMBlas);
 };
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_BLAS_H_

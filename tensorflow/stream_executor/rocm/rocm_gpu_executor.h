@@ -36,7 +36,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 // ROCM-platform implementation of the platform-agnostic
 // StreamExecutorInferface.
@@ -278,7 +278,7 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
   SE_DISALLOW_COPY_AND_ASSIGN(ROCMExecutor);
 };
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_GPU_EXECUTOR_H_

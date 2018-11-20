@@ -24,7 +24,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 class ROCMExecutor;
 
@@ -87,7 +87,7 @@ ROCMStream *AsROCMStream(Stream *stream);
 // Extracts a hipStream_t from a ROCMStream-backed Stream object.
 hipStream_t AsROCMStreamValue(Stream *stream);
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_STREAM_H_

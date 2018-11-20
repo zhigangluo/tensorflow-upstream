@@ -19,7 +19,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 // Opaque and unique identifier for the ROCm platform.
 // This is needed so that plugins can refer to/identify this platform without
@@ -28,7 +28,7 @@ namespace rocm {
 // and ROCmExecutor.
 extern const Platform::Id kROCmPlatformId;
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_PLATFORM_ID_H_

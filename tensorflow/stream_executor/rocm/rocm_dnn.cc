@@ -66,7 +66,7 @@ using dnn::ConvolutionDescriptor;
 using dnn::PoolingDescriptor;
 using dnn::NormalizeDescriptor;
 
-namespace rocm {
+namespace gpu {
 
 const int kVlogLevel = 2;
 
@@ -123,7 +123,7 @@ static port::ThreadPool* GetROCmThreadpool() {
   struct WrapperShim__##__name {                                   \
     template <typename... Args>                                    \
     miopenStatus_t operator()(ROCMExecutor* parent, Args... args) { \
-      rocm::ScopedActivateExecutorContext sac{parent};             \
+      gpu::ScopedActivateExecutorContext sac{parent};             \
       miopenStatus_t retval = ::__name(args...);                    \
       return retval;                                               \
     }                                                              \
@@ -433,7 +433,7 @@ port::Status MIOpenSupport::Init() {
 
   LOG(ERROR) << "could not create miopen handle: " << ToString(status);
   if (status == miopenStatusNotInitialized) {
-    auto result = rocm::Diagnostician::FindKernelDriverVersion();
+    auto result = gpu::Diagnostician::FindKernelDriverVersion();
     if (!result.ok()) {
       LOG(ERROR) << "error retrieving driver version: "
                  << DriverVersionStatusToString(result);
@@ -4869,17 +4869,17 @@ bool MIOpenSupport::DoFusedBatchNormActivationBackward(
       offset_backprop_data, output_profile_result);
 }
 
-}  // namespace rocm
+}  // namespace gpu
 
 void initialize_miopen() {
   port::Status status =
       PluginRegistry::Instance()
           ->RegisterFactory<PluginRegistry::DnnFactory>(
-              rocm::kROCmPlatformId, rocm::kMIOpenPlugin, "MIOpen",
+              gpu::kROCmPlatformId, gpu::kMIOpenPlugin, "MIOpen",
               [](internal::StreamExecutorInterface*
                      parent) -> dnn::DnnSupport* {
-                rocm::ROCMExecutor* rocm_executor =
-                    dynamic_cast<rocm::ROCMExecutor*>(parent);
+                gpu::ROCMExecutor* rocm_executor =
+                    dynamic_cast<gpu::ROCMExecutor*>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
                       << "Attempting to initialize an instance of the MIOpen "
@@ -4887,8 +4887,8 @@ void initialize_miopen() {
                   return nullptr;
                 }
 
-                rocm::MIOpenSupport* dnn =
-                    new rocm::MIOpenSupport(rocm_executor);
+                gpu::MIOpenSupport* dnn =
+                    new gpu::MIOpenSupport(rocm_executor);
                 if (!dnn->Init().ok()) {
                   // Note: Init() will log a more specific error.
                   delete dnn;
@@ -4902,9 +4902,9 @@ void initialize_miopen() {
                << status.error_message();
   }
 
-  PluginRegistry::Instance()->SetDefaultFactory(rocm::kROCmPlatformId,
+  PluginRegistry::Instance()->SetDefaultFactory(gpu::kROCmPlatformId,
                                                      PluginKind::kDnn,
-                                                     rocm::kMIOpenPlugin);
+                                                     gpu::kMIOpenPlugin);
 }
 
 }  // namespace stream_executor

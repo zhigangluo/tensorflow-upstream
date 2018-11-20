@@ -29,7 +29,7 @@ namespace stream_executor {
 
 class StreamExecutor;
 
-namespace cuda {
+namespace gpu {
 
 class CUDAExecutor;
 class ScopedActivateContext;
@@ -55,7 +55,7 @@ class ScopedActivateExecutorContext {
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedActivateExecutorContext);
 };
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_ACTIVATION_H_

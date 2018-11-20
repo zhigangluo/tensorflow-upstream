@@ -32,7 +32,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kCuFftPlugin);
 
@@ -47,7 +47,7 @@ namespace wrap {
   struct WrapperShim__##__name {                                 \
     template <typename... Args>                                  \
     cufftResult operator()(CUDAExecutor *parent, Args... args) { \
-      cuda::ScopedActivateExecutorContext sac{parent};           \
+      gpu::ScopedActivateExecutorContext sac{parent};           \
       return ::__name(args...);                                  \
     }                                                            \
   } __name;
@@ -565,22 +565,22 @@ STREAM_EXECUTOR_CUDA_DEFINE_FFT(double, Z2Z, D2Z, Z2D)
 
 #undef STREAM_EXECUTOR_CUDA_DEFINE_FFT
 
-}  // namespace cuda
+}  // namespace gpu
 
 void initialize_cufft() {
   port::Status status =
       PluginRegistry::Instance()->RegisterFactory<PluginRegistry::FftFactory>(
-          cuda::kCudaPlatformId, cuda::kCuFftPlugin, "cuFFT",
+          gpu::kCudaPlatformId, gpu::kCuFftPlugin, "cuFFT",
           [](internal::StreamExecutorInterface *parent) -> fft::FftSupport * {
-            cuda::CUDAExecutor *cuda_executor =
-                dynamic_cast<cuda::CUDAExecutor *>(parent);
+            gpu::CUDAExecutor *cuda_executor =
+                dynamic_cast<gpu::CUDAExecutor *>(parent);
             if (cuda_executor == nullptr) {
               LOG(ERROR) << "Attempting to initialize an instance of the cuFFT "
                          << "support library with a non-CUDA StreamExecutor";
               return nullptr;
             }
 
-            return new cuda::CUDAFft(cuda_executor);
+            return new gpu::CUDAFft(cuda_executor);
           });
   if (!status.ok()) {
     LOG(ERROR) << "Unable to register cuFFT factory: "
@@ -588,7 +588,7 @@ void initialize_cufft() {
   }
 
   PluginRegistry::Instance()->SetDefaultFactory(
-      cuda::kCudaPlatformId, PluginKind::kFft, cuda::kCuFftPlugin);
+      gpu::kCudaPlatformId, PluginKind::kFft, gpu::kCuFftPlugin);
 }
 
 }  // namespace stream_executor

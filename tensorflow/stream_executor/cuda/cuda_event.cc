@@ -20,7 +20,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/statusor.h"
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 CUDAEvent::CUDAEvent(CUDAExecutor* parent)
     : parent_(parent), cuda_event_(nullptr) {}
@@ -66,5 +66,5 @@ const CUevent& CUDAEvent::cuda_event() {
   return cuda_event_;
 }
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor

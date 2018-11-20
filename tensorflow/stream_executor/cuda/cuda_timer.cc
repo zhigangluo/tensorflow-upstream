@@ -21,7 +21,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/status.h"
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 bool CUDATimer::Init() {
   CHECK(start_event_ == nullptr && stop_event_ == nullptr);
@@ -90,5 +90,5 @@ bool CUDATimer::Stop(CUDAStream* stream) {
   return status.ok();
 }
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor

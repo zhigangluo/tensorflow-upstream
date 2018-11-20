@@ -43,7 +43,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream_executor.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kRocBlasPlugin);
 
@@ -54,7 +54,7 @@ namespace wrap {
     static const char *kName;                                       \
     template <typename... Args>                                     \
     rocblas_status operator()(ROCMExecutor *parent, Args... args) { \
-      rocm::ScopedActivateExecutorContext sac{parent};              \
+      gpu::ScopedActivateExecutorContext sac{parent};              \
       return ::__name(args...);                                     \
     }                                                               \
   } __name;                                                         \
@@ -283,7 +283,7 @@ bool ROCMBlas::Init() {
   return true;
 }
 
-ROCMBlas::ROCMBlas(rocm::ROCMExecutor *parent)
+ROCMBlas::ROCMBlas(gpu::ROCMExecutor *parent)
     : parent_(CHECK_NOTNULL(parent)), blas_(nullptr) {}
 
 ROCMBlas::~ROCMBlas() {
@@ -2301,17 +2301,17 @@ bool ROCMBlas::DoBlasGemmStridedBatched(
 	     << "for the \"complex<double>\" dataype" ;
   return false;
 }
-}  // namespace rocm
+}  // namespace gpu
 
 void initialize_rocblas() {
   port::Status status =
       PluginRegistry::Instance()
           ->RegisterFactory<PluginRegistry::BlasFactory>(
-              rocm::kROCmPlatformId, rocm::kRocBlasPlugin, "rocBLAS",
+              gpu::kROCmPlatformId, gpu::kRocBlasPlugin, "rocBLAS",
               [](internal::StreamExecutorInterface
                      *parent) -> blas::BlasSupport * {
-                rocm::ROCMExecutor *rocm_executor =
-                    dynamic_cast<rocm::ROCMExecutor *>(parent);
+                gpu::ROCMExecutor *rocm_executor =
+                    dynamic_cast<gpu::ROCMExecutor *>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
                       << "Attempting to initialize an instance of the rocBLAS "
@@ -2319,8 +2319,8 @@ void initialize_rocblas() {
                   return nullptr;
                 }
 
-                rocm::ROCMBlas *blas =
-                    new rocm::ROCMBlas(rocm_executor);
+                gpu::ROCMBlas *blas =
+                    new gpu::ROCMBlas(rocm_executor);
                 if (!blas->Init()) {
                   // Note: Init() will log a more specific error.
                   delete blas;
@@ -2334,9 +2334,9 @@ void initialize_rocblas() {
                << status.error_message();
   }
 
-  PluginRegistry::Instance()->SetDefaultFactory(rocm::kROCmPlatformId,
+  PluginRegistry::Instance()->SetDefaultFactory(gpu::kROCmPlatformId,
                                                      PluginKind::kBlas,
-                                                     rocm::kRocBlasPlugin);
+                                                     gpu::kRocBlasPlugin);
 }
 
 }  // namespace stream_executor

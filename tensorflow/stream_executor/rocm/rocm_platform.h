@@ -32,7 +32,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/trace_listener.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 // Opaque and unique identifier for the ROCM platform plugin.
 // This is needed so that plugins can refer to/identify this platform without
@@ -105,7 +105,7 @@ class ROCmPlatform : public Platform {
   SE_DISALLOW_COPY_AND_ASSIGN(ROCmPlatform);
 };
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_PLATFORM_H_

@@ -22,7 +22,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/status.h"
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 // CUDAEvent wraps a CUevent in the platform-independent EventInterface
 // interface.
@@ -56,7 +56,7 @@ class CUDAEvent : public internal::EventInterface {
   CUevent cuda_event_;
 };
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_EVENT_H_

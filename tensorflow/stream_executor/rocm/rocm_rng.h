@@ -28,7 +28,7 @@ class Stream;
 template <typename ElemT>
 class DeviceMemory;
 
-namespace rocm {
+namespace gpu {
 
 // Opaque and unique identifier for the hipRAND plugin.
 extern const PluginId kHipRandPlugin;
@@ -94,7 +94,7 @@ class ROCMRng : public rng::RngSupport {
   SE_DISALLOW_COPY_AND_ASSIGN(ROCMRng);
 };
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_RNG_H_

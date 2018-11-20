@@ -181,10 +181,10 @@ class CheckNumericsOp<GPUDevice, T> : public AsyncOpKernel {
                      abnormal_detected_host, context, done]() {
       // ROCM TODO: figure out a better way for this
 #if GOOGLE_CUDA
-      se::cuda::ScopedActivateExecutorContext scoped_activation{
+      se::gpu::ScopedActivateExecutorContext scoped_activation{
           stream->parent()};
 #elif TENSORFLOW_USE_ROCM
-      se::rocm::ScopedActivateExecutorContext scoped_activation{
+      se::gpu::ScopedActivateExecutorContext scoped_activation{
           stream->parent()};
 #endif
       auto abnormal_detected_host_flat = abnormal_detected_host.flat<int>();

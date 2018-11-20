@@ -546,7 +546,7 @@ AMDGPUCompiler::CompileAheadOfTime(
 }
 
 se::Platform::Id AMDGPUCompiler::PlatformId() const {
-  return se::rocm::kROCmPlatformId;
+  return se::gpu::kROCmPlatformId;
 }
 
 }  // namespace gpu
@@ -554,7 +554,7 @@ se::Platform::Id AMDGPUCompiler::PlatformId() const {
 
 static bool InitModule() {
   xla::Compiler::RegisterCompilerFactory(
-      stream_executor::rocm::kROCmPlatformId,
+      stream_executor::gpu::kROCmPlatformId,
       []() { return absl::make_unique<xla::gpu::AMDGPUCompiler>(); });
   return true;
 }

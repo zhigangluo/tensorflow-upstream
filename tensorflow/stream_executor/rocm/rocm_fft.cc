@@ -32,7 +32,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kRocFftPlugin);
 
@@ -47,7 +47,7 @@ namespace wrap {
   struct WrapperShim__##__name {                                  \
     template <typename... Args>                                   \
     hipfftResult operator()(ROCMExecutor *parent, Args... args) { \
-      rocm::ScopedActivateExecutorContext sac{parent};            \
+      gpu::ScopedActivateExecutorContext sac{parent};            \
       return ::__name(args...);                                   \
     }                                                             \
   } __name;
@@ -555,7 +555,7 @@ PERFTOOLS_GPUTOOLS_ROCM_DEFINE_FFT(double, Z2Z, D2Z, Z2D)
 
 #undef PERFTOOLS_GPUTOOLS_ROCM_DEFINE_FFT
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 namespace se = ::stream_executor;
@@ -564,11 +564,11 @@ REGISTER_MODULE_INITIALIZER(register_hipfft, {
   se::port::Status status =
       se::PluginRegistry::Instance()
           ->RegisterFactory<se::PluginRegistry::FftFactory>(
-              se::rocm::kROCmPlatformId, se::rocm::kRocFftPlugin, "rocFFT",
+              se::gpu::kROCmPlatformId, se::gpu::kRocFftPlugin, "rocFFT",
               [](se::internal::StreamExecutorInterface
                      *parent) -> se::fft::FftSupport * {
-                se::rocm::ROCMExecutor *rocm_executor =
-                    dynamic_cast<se::rocm::ROCMExecutor *>(parent);
+                se::gpu::ROCMExecutor *rocm_executor =
+                    dynamic_cast<se::gpu::ROCMExecutor *>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
                       << "Attempting to initialize an instance of the rocFFT "
@@ -576,14 +576,14 @@ REGISTER_MODULE_INITIALIZER(register_hipfft, {
                   return nullptr;
                 }
 
-                return new se::rocm::ROCMFft(rocm_executor);
+                return new se::gpu::ROCMFft(rocm_executor);
               });
   if (!status.ok()) {
     LOG(ERROR) << "Unable to register rocFFT factory: "
                << status.error_message();
   }
 
-  se::PluginRegistry::Instance()->SetDefaultFactory(se::rocm::kROCmPlatformId,
+  se::PluginRegistry::Instance()->SetDefaultFactory(se::gpu::kROCmPlatformId,
                                                      se::PluginKind::kFft,
-                                                     se::rocm::kRocFftPlugin);
+                                                     se::gpu::kRocFftPlugin);
 });

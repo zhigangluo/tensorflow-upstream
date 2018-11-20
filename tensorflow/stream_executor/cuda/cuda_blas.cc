@@ -70,7 +70,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream_executor.h"
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kCuBlasPlugin);
 
@@ -81,7 +81,7 @@ namespace wrap {
     static const char *kName;                                       \
     template <typename... Args>                                     \
     cublasStatus_t operator()(CUDAExecutor *parent, Args... args) { \
-      cuda::ScopedActivateExecutorContext sac{parent};              \
+      gpu::ScopedActivateExecutorContext sac{parent};              \
       return ::__name(args...);                                     \
     }                                                               \
   } __name;                                                         \
@@ -468,7 +468,7 @@ bool CUDABlas::Init() {
   return true;
 }
 
-CUDABlas::CUDABlas(cuda::CUDAExecutor *parent)
+CUDABlas::CUDABlas(gpu::CUDAExecutor *parent)
     : parent_(CHECK_NOTNULL(parent)), blas_(nullptr) {}
 
 CUDABlas::~CUDABlas() {
@@ -3075,15 +3075,15 @@ bool CUDABlas::DoBlasTrsm(Stream *stream, blas::Side side,
       CUDAComplex(CUDAMemory(a)), lda, CUDAComplex(CUDAMemoryMutable(b)), ldb);
 }
 
-}  // namespace cuda
+}  // namespace gpu
 
 void initialize_cublas() {
   port::Status status =
       PluginRegistry::Instance()->RegisterFactory<PluginRegistry::BlasFactory>(
-          cuda::kCudaPlatformId, cuda::kCuBlasPlugin, "cuBLAS",
+          gpu::kCudaPlatformId, gpu::kCuBlasPlugin, "cuBLAS",
           [](internal::StreamExecutorInterface *parent) -> blas::BlasSupport * {
-            cuda::CUDAExecutor *cuda_executor =
-                dynamic_cast<cuda::CUDAExecutor *>(parent);
+            gpu::CUDAExecutor *cuda_executor =
+                dynamic_cast<gpu::CUDAExecutor *>(parent);
             if (cuda_executor == nullptr) {
               LOG(ERROR)
                   << "Attempting to initialize an instance of the cuBLAS "
@@ -3091,7 +3091,7 @@ void initialize_cublas() {
               return nullptr;
             }
 
-            cuda::CUDABlas *blas = new cuda::CUDABlas(cuda_executor);
+            gpu::CUDABlas *blas = new gpu::CUDABlas(cuda_executor);
             if (!blas->Init()) {
               // Note: Init() will log a more specific error.
               delete blas;
@@ -3106,7 +3106,7 @@ void initialize_cublas() {
   }
 
   PluginRegistry::Instance()->SetDefaultFactory(
-      cuda::kCudaPlatformId, PluginKind::kBlas, cuda::kCuBlasPlugin);
+      gpu::kCudaPlatformId, PluginKind::kBlas, gpu::kCuBlasPlugin);
 }
 
 }  // namespace stream_executor

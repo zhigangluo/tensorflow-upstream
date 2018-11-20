@@ -31,7 +31,7 @@ namespace stream_executor {
 template <typename ElemT>
 class DeviceMemory;
 
-namespace rocm {
+namespace gpu {
 
 // Converts a const DeviceMemory reference to its underlying typed pointer in
 // ROCM
@@ -98,7 +98,7 @@ inline hipDoubleComplex ROCMComplexValue(std::complex<double> val) {
   return {val.real(), val.imag()};
 }
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_HELPERS_H_

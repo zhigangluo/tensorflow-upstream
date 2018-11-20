@@ -25,7 +25,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/stringprintf.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 ROCmPlatform::ROCmPlatform()
     : name_("ROCM"), min_numa_node_(0), limit_numa_node_(0) {}
@@ -99,7 +99,7 @@ int ROCmPlatform::VisibleDeviceCount() const {
   // Throw away the result - it logs internally, and this [containing] function
   // isn't in the path of user control. It's safe to call this > 1x.
 
-  if (!rocm::ROCMDriver::Init().ok()) {
+  if (!gpu::ROCMDriver::Init().ok()) {
     return -1;
   }
 
@@ -156,14 +156,14 @@ void ROCmPlatform::UnregisterTraceListener(TraceListener* listener) {
   LOG(FATAL) << "not yet implemented: unregister ROCM trace listener";
 }
 
-}  // namespace rocm
+}  // namespace gpu
 
 static void InitializeROCmPlatform() {
   // Disabling leak checking, MultiPlatformManager does not destroy its
   // registered platforms.
   auto status = MultiPlatformManager::PlatformWithName("ROCM");
   if (!status.ok()) {
-    std::unique_ptr<rocm::ROCmPlatform> platform(new rocm::ROCmPlatform);
+    std::unique_ptr<gpu::ROCmPlatform> platform(new gpu::ROCmPlatform);
     SE_CHECK_OK(MultiPlatformManager::RegisterPlatform(std::move(platform)));
   }
 }

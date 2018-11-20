@@ -24,7 +24,7 @@ limitations under the License.
 
 namespace tensorflow {
 
-using se::rocm::ScopedActivateExecutorContext;
+using se::gpu::ScopedActivateExecutorContext;
 
 // Contains data for a single stream used for rccl communication; this includes
 // a background thread that calls RcclManager::LoopKernelLaunches.

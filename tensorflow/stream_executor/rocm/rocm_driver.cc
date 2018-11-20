@@ -46,7 +46,7 @@ bool FLAGS_gpuexec_rocm_device_0_only = false;
 constexpr bool kVerifyROCmDevice = false;
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 namespace {
 
@@ -1281,5 +1281,5 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return current;
 }
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
