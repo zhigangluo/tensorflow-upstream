@@ -9,6 +9,7 @@ load("//tensorflow:tensorflow.bzl", "cc_header_only_library")
 
 STREAM_EXECUTOR_HEADERS = glob([
     "*.h",
+    "gpu/*.h",
     "cuda/*.h",
     "rocm/*.h",
     "host/*.h",

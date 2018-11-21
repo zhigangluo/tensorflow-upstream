@@ -26,7 +26,8 @@ limitations under the License.
 #include <unordered_map>
 
 #include "absl/strings/string_view.h"
-#include "tensorflow/stream_executor/cuda/cuda_kernel.h"
+#include "tensorflow/stream_executor/gpu/gpu_kernel.h"
+#include "tensorflow/stream_executor/cuda/cuda_driver.h"
 #include "tensorflow/stream_executor/event.h"
 #include "tensorflow/stream_executor/lib/status.h"
 #include "tensorflow/stream_executor/lib/statusor.h"
@@ -247,8 +248,8 @@ class CUDAExecutor : public internal::StreamExecutorInterface {
                                    void *data);
 
   // Collects metadata for the specified kernel.
-  bool GetKernelMetadata(CUDAKernel *cuda_kernel,
-                         KernelMetadata *kernel_metadata);
+  bool GetKernelMetadata(GPUKernel* cuda_kernel,
+                         KernelMetadata* kernel_metadata);
 
   // Prints to VLOG(2) information about the kernel's occupancy and how it might
   // be improved.

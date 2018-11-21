@@ -59,6 +59,29 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
+static hipFunction_t AsHipFunction(GPUFunctionHandle hnd) {
+  return reinterpret_cast<hipFunction_t>(hnd);
+}
+
+// Returns the current kernel cache configuration preference as a
+// hipFuncCache_t.
+hipFuncCache_t AsROCMCacheConfig(KernelCacheConfig config) {
+  switch (config) {
+    case KernelCacheConfig::kNoPreference:
+      return hipFuncCachePreferNone;
+    case KernelCacheConfig::kPreferShared:
+      return hipFuncCachePreferShared;
+      ;
+    case KernelCacheConfig::kPreferL1:
+      return hipFuncCachePreferL1;
+      ;
+    case KernelCacheConfig::kPreferEqual:
+      return hipFuncCachePreferEqual;
+    default:
+      LOG(FATAL) << "Unknown KernelCacheConfig" << static_cast<int32>(config);
+  }
+}
+
 static ROCMEvent *AsROCMEvent(Event *event) {
   DCHECK(event != nullptr);
   return static_cast<ROCMEvent *>(event->implementation());
@@ -199,7 +222,7 @@ static string GetBinaryDir(bool strip_exe) {
 
 bool ROCMExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
                              KernelBase *kernel) {
-  ROCMKernel *rocm_kernel = AsROCMKernel(kernel);
+  GPUKernel* rocm_kernel = AsGPUKernel(kernel);
   hipModule_t module = nullptr;
   const string *kernelname;
 
@@ -232,14 +255,17 @@ bool ROCMExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
   }
 
   VLOG(2) << "getting function " << *kernelname << " from module " << module;
-  if (!ROCMDriver::GetModuleFunction(device_ordinal_, module, kernelname->c_str(),
-                                     rocm_kernel->rocm_function_ptr())) {
+  hipFunction_t hipfunc = nullptr;
+  if (!ROCMDriver::GetModuleFunction(device_ordinal_, module,
+                                     kernelname->c_str(), &hipfunc)) {
     return false;
   }
 
+  rocm_kernel->SetFunctionHandle(hipfunc);
+
   // We have to trust the kernel loader spec arity because there doesn't appear
   // to be a way to reflect on the number of expected arguments w/the ROCM API.
-  rocm_kernel->set_arity(spec.arity());
+  rocm_kernel->SetArity(spec.arity());
 
   KernelMetadata kernel_metadata;
   if (!GetKernelMetadata(rocm_kernel, &kernel_metadata)) {
@@ -250,8 +276,8 @@ bool ROCMExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
   return true;
 }
 
-bool ROCMExecutor::GetKernelMetadata(ROCMKernel *rocm_kernel,
-                                     KernelMetadata *kernel_metadata) {
+bool ROCMExecutor::GetKernelMetadata(GPUKernel* rocm_kernel,
+                                     KernelMetadata* kernel_metadata) {
   int value = 0;
   // ROCM TODO implement this feature in HIP
   kernel_metadata->set_registers_per_thread(value);
@@ -267,8 +293,8 @@ bool ROCMExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
                           const KernelArgsArrayBase &args) {
   CHECK_EQ(kernel.Arity(), args.number_of_arguments());
   hipStream_t hipstream = AsROCMStreamValue(stream);
-  const ROCMKernel *rocm_kernel = AsROCMKernel(&kernel);
-  hipFunction_t hipfunc = rocm_kernel->AsROCMFunctionValue();
+  const GPUKernel* rocm_kernel = AsGPUKernel(&kernel);
+  hipFunction_t hipfunc = AsHipFunction(rocm_kernel->GetFunctionHandle());
 
   // Only perform/print the occupancy check once.  Even just checking to see
   // whether we've done an occupancy check on this kernel before isn't free
@@ -285,7 +311,8 @@ bool ROCMExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
 
   if (rocm_kernel->GetPreferredCacheConfig() !=
       KernelCacheConfig::kNoPreference) {
-    ROCMDriver::FuncSetCacheConfig(hipfunc, rocm_kernel->GetROCMCacheConfig());
+    ROCMDriver::FuncSetCacheConfig(
+        hipfunc, AsROCMCacheConfig(rocm_kernel->GetPreferredCacheConfig()));
   }
 
   // prepare kernargs
@@ -793,7 +820,7 @@ ROCMExecutor::CreateEventImplementation() {
 
 std::unique_ptr<internal::KernelInterface>
 ROCMExecutor::CreateKernelImplementation() {
-  return std::unique_ptr<internal::KernelInterface>(new ROCMKernel());
+  return std::unique_ptr<internal::KernelInterface>(new GPUKernel());
 }
 
 std::unique_ptr<internal::StreamInterface>

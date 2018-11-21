@@ -25,7 +25,8 @@ limitations under the License.
 #include <map>
 #include <set>
 
-#include "tensorflow/stream_executor/rocm/rocm_kernel.h"
+#include "tensorflow/stream_executor/gpu/gpu_kernel.h"
+#include "tensorflow/stream_executor/rocm/rocm_driver.h"
 #include "tensorflow/stream_executor/event.h"
 #include "tensorflow/stream_executor/lib/status.h"
 #include "tensorflow/stream_executor/lib/statusor.h"
@@ -225,8 +226,8 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
                                    void *data);
 
   // Collects metadata for the specified kernel.
-  bool GetKernelMetadata(ROCMKernel *rocm_kernel,
-                         KernelMetadata *kernel_metadata);
+  bool GetKernelMetadata(GPUKernel* rocm_kernel,
+                         KernelMetadata* kernel_metadata);
 
   // Prints to VLOG(2) information about the kernel's occupancy and how it might
   // be improved.

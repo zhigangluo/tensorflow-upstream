@@ -69,6 +69,26 @@ bool FLAGS_prefer_cubin_to_ptx = true;
 namespace stream_executor {
 namespace gpu {
 
+static CUfunction AsCUfunction(GPUFunctionHandle hnd) {
+  return reinterpret_cast<CUfunction>(hnd);
+}
+
+// Returns the current kernel cache configuration preference as a CUfunc_cache.
+CUfunc_cache AsCUDACacheConfig(KernelCacheConfig config) {
+  switch (config) {
+    case KernelCacheConfig::kNoPreference:
+      return CU_FUNC_CACHE_PREFER_NONE;
+    case KernelCacheConfig::kPreferShared:
+      return CU_FUNC_CACHE_PREFER_SHARED;
+    case KernelCacheConfig::kPreferL1:
+      return CU_FUNC_CACHE_PREFER_L1;
+    case KernelCacheConfig::kPreferEqual:
+      return CU_FUNC_CACHE_PREFER_EQUAL;
+    default:
+      LOG(FATAL) << "Unknown KernelCacheConfig" << static_cast<int32>(config);
+  }
+}
+
 // Hook that can be used to CUBIN-ate PTX before it is loaded into the driver.
 // It has been observed that loading both PTX and cubins into the driver library
 // can cause it to crash, but loading only CUBINs avoids those crashes;
@@ -250,7 +270,7 @@ bool CUDAExecutor::LoadModuleFromPtx(const char *ptx, CUmodule *module) {
 
 bool CUDAExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
                              KernelBase *kernel) {
-  CUDAKernel *cuda_kernel = AsCUDAKernel(kernel);
+  GPUKernel* cuda_kernel = AsGPUKernel(kernel);
   CUmodule module;
   const string *kernelname;
 
@@ -290,14 +310,17 @@ bool CUDAExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
     return false;
   }
   VLOG(2) << "getting function " << *kernelname << " from module " << module;
+  CUfunction cufunc = nullptr;
   if (!CUDADriver::GetModuleFunction(context_, module, kernelname->c_str(),
-                                     cuda_kernel->cuda_function_ptr())) {
+                                     &cufunc)) {
     return false;
   }
 
+  cuda_kernel->SetFunctionHandle(cufunc);
+
   // We have to trust the kernel loader spec arity because there doesn't appear
   // to be a way to reflect on the number of expected arguments w/the CUDA API.
-  cuda_kernel->set_arity(spec.arity());
+  cuda_kernel->SetArity(spec.arity());
 
   KernelMetadata kernel_metadata;
   if (!GetKernelMetadata(cuda_kernel, &kernel_metadata)) {
@@ -383,19 +406,19 @@ bool CUDAExecutor::UnloadModule(ModuleHandle module_handle) {
   return UnloadGpuBinary(gpu_binary);
 }
 
-bool CUDAExecutor::GetKernelMetadata(CUDAKernel *cuda_kernel,
-                                     KernelMetadata *kernel_metadata) {
+bool CUDAExecutor::GetKernelMetadata(GPUKernel* cuda_kernel,
+                                     KernelMetadata* kernel_metadata) {
   int value;
-  if (!CUDADriver::FuncGetAttribute(CU_FUNC_ATTRIBUTE_NUM_REGS,
-                                    *cuda_kernel->cuda_function_ptr(),
-                                    &value)) {
+  if (!CUDADriver::FuncGetAttribute(
+          CU_FUNC_ATTRIBUTE_NUM_REGS,
+          AsCUfunction(cuda_kernel->GetFunctionHandle()), &value)) {
     return false;
   }
   kernel_metadata->set_registers_per_thread(value);
 
-  if (!CUDADriver::FuncGetAttribute(CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES,
-                                    *cuda_kernel->cuda_function_ptr(),
-                                    &value)) {
+  if (!CUDADriver::FuncGetAttribute(
+          CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES,
+          AsCUfunction(cuda_kernel->GetFunctionHandle()), &value)) {
     return false;
   }
   kernel_metadata->set_shared_memory_bytes(value);
@@ -408,8 +431,8 @@ bool CUDAExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
                           const KernelArgsArrayBase &args) {
   CHECK_EQ(kernel.Arity(), args.number_of_arguments());
   CUstream custream = AsCUDAStreamValue(stream);
-  const CUDAKernel *cuda_kernel = AsCUDAKernel(&kernel);
-  CUfunction cufunc = cuda_kernel->AsCUDAFunctionValue();
+  const GPUKernel* cuda_kernel = AsGPUKernel(&kernel);
+  CUfunction cufunc = AsCUfunction(cuda_kernel->GetFunctionHandle());
 
   // Only perform/print the occupancy check once.  Even just checking to see
   // whether we've done an occupancy check on this kernel before isn't free
@@ -426,7 +449,8 @@ bool CUDAExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
 
   if (cuda_kernel->GetPreferredCacheConfig() !=
       KernelCacheConfig::kNoPreference) {
-    CUDADriver::FuncSetCacheConfig(cufunc, cuda_kernel->GetCUDACacheConfig());
+    CUDADriver::FuncSetCacheConfig(
+        cufunc, AsCUDACacheConfig(cuda_kernel->GetPreferredCacheConfig()));
   }
 
   void **kernel_params = const_cast<void **>(args.argument_addresses().data());
@@ -470,8 +494,8 @@ void CUDAExecutor::VlogOccupancyInfo(const KernelBase &kernel,
   const DeviceDescription &device_description =
       kernel.parent()->GetDeviceDescription();
 
-  const CUDAKernel *cuda_kernel = AsCUDAKernel(&kernel);
-  CUfunction cufunc = cuda_kernel->AsCUDAFunctionValue();
+  const GPUKernel* cuda_kernel = AsGPUKernel(&kernel);
+  CUfunction cufunc = AsCUfunction(cuda_kernel->GetFunctionHandle());
 
   int blocks_per_sm = CalculateOccupancy(device_description, regs_per_thread,
                                          smem_per_block, thread_dims, cufunc);
@@ -927,7 +951,7 @@ CUDAExecutor::CreateEventImplementation() {
 
 std::unique_ptr<internal::KernelInterface>
 CUDAExecutor::CreateKernelImplementation() {
-  return std::unique_ptr<internal::KernelInterface>(new CUDAKernel());
+  return std::unique_ptr<internal::KernelInterface>(new GPUKernel());
 }
 
 std::unique_ptr<internal::StreamInterface>
