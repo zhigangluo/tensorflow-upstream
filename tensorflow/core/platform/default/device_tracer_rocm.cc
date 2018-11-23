@@ -143,7 +143,7 @@ class DeviceTracerBase : public DeviceTracerIf {
     int64_t start_timestamp_ns;
     int64_t end_timestamp_ns;
     int device_id;
-    uint64 stream_id;
+    uint64 queue_id;
     uint64 correlation_id;
     uint8 activityDomain;
     uint8 activityId;
@@ -154,7 +154,7 @@ class DeviceTracerBase : public DeviceTracerIf {
     int64_t start_timestamp_ns;
     int64_t end_timestamp_ns;
     int device_id;
-    uint64 stream_id;
+    uint64 queue_id;
     uint64 correlation_id;
     uint8 activityDomain;
     uint8 activityId;
@@ -300,10 +300,10 @@ Status DeviceTracerBase::Collect(StepStatsCollector *collector) {
     auto nscopy = new NodeExecStats;
     *nscopy = *ns;
     collector->Save(strings::StrCat(stream_device, "all"), ns);
-    collector->Save(strings::StrCat(stream_device, rec.stream_id), nscopy);
+    collector->Save(strings::StrCat(stream_device, rec.queue_id), nscopy);
     DT_LOG2("KERNEL REC: " <<
       name <<
-      ", " << strings::StrCat(stream_device, rec.stream_id) <<
+      ", " << strings::StrCat(stream_device, rec.queue_id) <<
       ", corrid " << rec.correlation_id <<
       ", start " << (start_walltime_us_ + ((rec.start_timestamp_ns - start_timestamp_ns_) / 1000)) << "us" <<
       ", elapsed " << elapsed_us << "us"
@@ -337,12 +337,12 @@ Status DeviceTracerBase::Collect(StepStatsCollector *collector) {
     auto nscopy = new NodeExecStats;
     *nscopy = *ns;
     collector->Save(memcpy_device, ns);
-    collector->Save(strings::StrCat(stream_device, rec.stream_id), nscopy);
+    collector->Save(strings::StrCat(stream_device, rec.queue_id), nscopy);
     DT_LOG2("MEMCPY REC: " <<
       strings::StrCat(name, ":", cmd_kind_string) <<
       ", " << details <<
       ", " << memcpy_device <<
-      ", " << strings::StrCat(stream_device, rec.stream_id) <<
+      ", " << strings::StrCat(stream_device, rec.queue_id) <<
       ", corrid " << rec.correlation_id <<
       ", start " << start_walltime_us_ + ((rec.start_timestamp_ns - start_timestamp_ns_) / 1000) << "us" <<
       ", elapsed " << elapsed_us << "us"
@@ -421,7 +421,7 @@ void DeviceTracerBase::AddActivityRecord(const roctracer_record_t* record) {
       (int64)(record->begin_ns),
       (int64)(record->end_ns),
       record->device_id,
-      record->stream_id,
+      record->queue_id,
       record->correlation_id,
       (uint8)(record->domain),
       (uint8)(record->activity_id),
@@ -434,7 +434,7 @@ void DeviceTracerBase::AddActivityRecord(const roctracer_record_t* record) {
       (int64)(record->begin_ns),
       (int64)(record->end_ns),
       record->device_id,
-      record->stream_id,
+      record->queue_id,
       record->correlation_id,
       (uint8)(record->domain),
       (uint8)(record->activity_id),
