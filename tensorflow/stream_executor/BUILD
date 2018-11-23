@@ -147,6 +147,7 @@ cc_library(
         "@local_config_rocm//rocm:rocfft",
         "@local_config_rocm//rocm:rocblas",
         "@local_config_rocm//rocm:miopen",
+        "@local_config_rocm//rocm:roctracer",
     ]),
     alwayslink = 1,
 )
