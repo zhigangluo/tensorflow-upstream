@@ -79,9 +79,16 @@ ENV PATH="$HCC_HOME/bin:$HIP_PATH/bin:${PATH}"
 ENV PATH="$ROCM_PATH/bin:${PATH}"
 ENV PATH="$OPENCL_ROOT/bin:${PATH}"
 
-# Workadround : build HIP from source using fork that holds roc-1.9.x with HIP PR 692
-RUN cd $HOME && git clone -b roc-1.9.x-reinit https://github.com/whchung/HIP.git
-RUN cd $HOME/HIP && mkdir build && cd build && cmake .. && make -j$(nproc) package && dpkg -i *.deb
+# clone rocTracer and HIP/HCC forkis supported roctracer
+RUN cd $HOME && git clone -b amd-master https://github.com/ROCmSoftwarePlatform/roctracer.git
+RUN cd $HOME && git clone -b roctracer-hip-frontend-181113 --recursive https://github.com/eshcherb/hcc.git
+RUN cd $HOME && git clone -b roctracer-hip-frontend-181113 https://github.com/eshcherb/HIP.git
+# build HCC
+RUN cd $HOME/hcc && mkdir build && cd build && cmake -DUSE_PROF_API=1 -DPROF_API_HEADER_PATH=$HOME/roctracer/inc/roctracer .. && sudo make package -j$(nproc) && sudo dpkg -i *.deb
+# build HIP
+RUN cd $HOME/HIP && mkdir build && cd build && cmake -DUSE_PROF_API=1 -DPROF_API_HEADER_PATH=$HOME/roctracer/inc/roctracer .. && sudo make package -j$(nproc) && sudo dpkg -i *.deb
+# build rocTracer
+RUN cd $HOME/roctracer && mkdir build && cd build && HCC_HOME=/opt/rocm/hcc HIP_PATH=/opt/rocm/hip CMAKE_PREFIX_PATH=/opt/rocm/lib:/opt/rocm/include/hsa cmake -DCMAKE_INSTALL_PREFIX=/opt/rocm .. && make package -j$(nproc) && sudo dpkg -i *.deb
 
 # Add target file to help determine which device(s) to build for
 RUN bash -c 'echo -e "gfx803\ngfx900\ngfx906" >> /opt/rocm/bin/target.lst'
