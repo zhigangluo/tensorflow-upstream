@@ -17,6 +17,7 @@ limitations under the License.
 #define TENSORFLOW_COMPILER_XLA_SERVICE_GPU_TARGET_MACHINE_FEATURES_H_
 
 #include <string>
+#include "llvm/IR/Intrinsics.h"
 
 
 namespace xla {
@@ -26,22 +27,28 @@ namespace gpu {
 // compiling for.
 class TargetMachineFeatures {
  public:
-  // Returns the minimum alignment for a buffer of size size_bytes.
-
-  virtual std::string simt_intrinsic(const std::string &name) = 0;
+  // Return simt intrinsic for  
+  virtual llvm::Intrinsic::ID  simt_intrinsic(const std::string &name) = 0;
 
   virtual ~TargetMachineFeatures() = default;
 
 };
 
+// TODO: Move into AMD backend compiler implementation after its been refactored
 class AMDGPUMachineFeatures : public TargetMachineFeatures {
  public:
-  // Returns the minimum alignment for a buffer of size size_bytes.
-  std::string simt_intrinsic(const std::string &name);
+  llvm::Intrinsic::ID simt_intrinsic(const std::string &name);
   AMDGPUMachineFeatures(){};
-  ~AMDGPUMachineFeatures();
+  ~AMDGPUMachineFeatures(){};
 };
 
+// TODO: Move into NVPTX backend compiler implementation after its been refactored
+class NVPTXMachineFeatures : public TargetMachineFeatures {
+ public:
+  llvm::Intrinsic::ID simt_intrinsic(const std::string &name);
+  NVPTXMachineFeatures(){};
+  ~NVPTXMachineFeatures(){};
+};
 
 }  // namespace gpu
 }  // namespace xla

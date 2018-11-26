@@ -388,14 +388,14 @@ StatusOr<std::unique_ptr<Executable>> AMDGPUCompiler::RunBackend(
     TF_RETURN_IF_ERROR(protobuf_util::DumpProtoToDirectory(
         proto, xla_dump_optimized_hlo_proto_to, module->name()));
   }
-  AMDGPUMachineFeatures target_machine;
   IrEmitterContext ir_emitter_context(module.get(), buffer_assignment.get(),
                                       &stream_exec->GetDeviceDescription(),
                                       &llvm_module);
 
   HloComputation* entry_computation = module->entry_computation();
+  AMDGPUMachineFeatures target_machine_features;
   IrEmitterUnnested ir_emitter(module->config(), entry_computation,
-                               &ir_emitter_context);
+                               &ir_emitter_context, &target_machine_features);
 
   TF_RETURN_IF_ERROR(ir_emitter.EmitConstantGlobals());
 

@@ -19,31 +19,42 @@ limitations under the License.
 
 namespace xla {
 namespace gpu {
-
-std::string AMDGPUMachineFeatures::simt_intrinsic(const std::string &name) {
-
-    if (tensorflow::str_util::EndsWith(name, ".__thread_id_x")) {
-        return "llvm.amdgcn.workitem.id.x";
-    } else if (tensorflow::str_util::EndsWith(name, ".__thread_id_y")) {
-        return "llvm.amdgcn.workitem.id.y";
-    } else if (tensorflow::str_util::EndsWith(name, ".__thread_id_z")) {
-        return "llvm.amdgcn.workitem.id.z";
-    } else if (tensorflow::str_util::EndsWith(name, ".__thread_id_w")) {
-        return "llvm.amdgcn.workitem.id.w";
-    } else if (tensorflow::str_util::EndsWith(name, ".__block_id_x")) {
-        return "llvm.amdgcn.workgroup.id.x";
-    } else if (tensorflow::str_util::EndsWith(name, ".__block_id_y")) {
-        return "llvm.amdgcn.workgroup.id.y";
-    } else if (tensorflow::str_util::EndsWith(name, ".__block_id_z")) {
-        return "llvm.amdgcn.workgroup.id.z";
-    } else if (tensorflow::str_util::EndsWith(name, ".__block_id_w")) {
-        return "llvm.amdgcn.workgroup.id.w";
-    } else if (tensorflow::str_util::EndsWith(name, ".barrier")) {
-        return "llvm.amdgcn.s.barrier";
+llvm::Intrinsic::ID AMDGPUMachineFeatures::simt_intrinsic(const std::string &name) {
+    if (tensorflow::str_util::EndsWith(name, "__thread_id_x")) {
+        return llvm::Intrinsic::amdgcn_workitem_id_x;
+    } else if (tensorflow::str_util::EndsWith(name, "__thread_id_y")) {
+        return llvm::Intrinsic::amdgcn_workitem_id_y;
+    } else if (tensorflow::str_util::EndsWith(name, "__thread_id_z")) {
+        return llvm::Intrinsic::amdgcn_workitem_id_z;
+    } else if (tensorflow::str_util::EndsWith(name, "__block_id_x")) {
+        return llvm::Intrinsic::amdgcn_workgroup_id_x;
+    } else if (tensorflow::str_util::EndsWith(name, "__block_id_y")) {
+        return llvm::Intrinsic::amdgcn_workgroup_id_y;
+    } else if (tensorflow::str_util::EndsWith(name, "__block_id_z")) {
+        return llvm::Intrinsic::amdgcn_workgroup_id_z;
+    } else if (tensorflow::str_util::EndsWith(name, "barrier")) {
+        return llvm::Intrinsic::amdgcn_s_barrier;
     }
-    return "";
+    return llvm::Intrinsic::not_intrinsic;
 }
 
-
+llvm::Intrinsic::ID NVPTXMachineFeatures::simt_intrinsic(const std::string &name) {
+    if (tensorflow::str_util::EndsWith(name, "__thread_id_x")) {
+        return ;x
+    } else if (tensorflow::str_util::EndsWith(name, "__thread_id_y")) {
+        return llvm::Intrinsic::nvvm_read_ptx_sreg_tid_x;
+    } else if (tensorflow::str_util::EndsWith(name, "__thread_id_z")) {
+        return llvm::Intrinsic::nvvm_read_ptx_sreg_tid_y;
+    } else if (tensorflow::str_util::EndsWith(name, "__block_id_x")) {
+        return llvm::Intrinsic::nvvm_read_ptx_sreg_tid_z;
+    } else if (tensorflow::str_util::EndsWith(name, "__block_id_y")) {
+        return llvm::Intrinsic::nvvm_read_ptx_sreg_ctaid_y;
+    } else if (tensorflow::str_util::EndsWith(name, "__block_id_z")) {
+        return llvm::Intrinsic::amdgcn_workgroup_id_z;
+    } else if (tensorflow::str_util::EndsWith(name, "barrier")) {
+        return llvm::Intrinsic::nvvm_barrier0;
+    }
+    return llvm::Intrinsic::not_intrinsic;
+}
 }  // namespace cpu
 }  // namespace xla
