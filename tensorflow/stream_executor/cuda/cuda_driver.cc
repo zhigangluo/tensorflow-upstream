@@ -49,6 +49,26 @@ constexpr bool kVerifyCudaContext = false;
 namespace stream_executor {
 namespace gpu {
 
+// CudaContext wraps a cuda CUcontext handle, and includes a unique id. The
+// unique id is positive, and ids are not repeated within the process.
+class CudaContext {
+ public:
+  CudaContext(CUcontext context, int64 id) : context_(context), id_(id) {}
+
+  CUcontext context() const { return context_; }
+  int64 id() const { return id_; }
+
+  // Disallow copying and moving.
+  CudaContext(CudaContext&&) = delete;
+  CudaContext(const CudaContext&) = delete;
+  CudaContext& operator=(CudaContext&&) = delete;
+  CudaContext& operator=(const CudaContext&) = delete;
+
+ private:
+  CUcontext const context_;
+  const int64 id_;
+};
+
 namespace {
 
 // Manages the singleton map of contexts that we've created, mapping
@@ -118,11 +138,22 @@ string ToString(CUresult result) {
   return absl::StrCat(error_name, ": ", error_string);
 }
 
+// Returns the current context set in CUDA. This is done by calling the cuda
+// driver (e.g., this value is not our cached view of the current context).
+static CUcontext CurrentContextOrDie() {
+  CUcontext current = nullptr;
+  CUresult result = cuCtxGetCurrent(&current);
+  if (result != CUDA_SUCCESS) {
+    LOG(FATAL) << "failed to query current context: " << ToString(result);
+  }
+  return current;
+}
+
 // Returns the current context and checks that it is in the set of CUDA contexts
 // created by StreamExecutor (to ensure that the CUDA runtime didn't create a
 // context behind our backs).
 CUcontext CurrentContext() {
-  CUcontext current = CUDADriver::CurrentContextOrDie();
+  CUcontext current = CurrentContextOrDie();
   if (current != nullptr && !CreatedContexts::Has(current)) {
     LOG(FATAL) << "current context was not created by the StreamExecutor "
                   "cuda_driver API: "
@@ -161,6 +192,96 @@ string MemorySpaceString(MemorySpace memory_space) {
     default:
       LOG(FATAL) << "impossible memory space";
   }
+}
+
+// Returns the device associated with the given context.
+// device is an outparam owned by the caller, must not be null.
+// http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__CTX.html#group__CUDA__CTX_1g4e84b109eba36cdaaade167f34ae881e
+static port::StatusOr<CUdevice> DeviceFromContext(CudaContext* context) {
+  ScopedActivateContext activated{context};
+  CUdevice device = -1;
+  CUresult result = cuCtxGetDevice(&device);
+  if (result == CUDA_SUCCESS) {
+    return device;
+  }
+
+  return port::Status(
+      port::error::INTERNAL,
+      absl::StrCat("failed to get device for context: ", ToString(result)));
+}
+
+// -- Pointer-specific calls.
+
+// Returns the context in which pointer was allocated or registered.
+static port::StatusOr<CudaContext*> GetPointerContext(CUdeviceptr pointer) {
+  CudaContext* context = nullptr;
+  CUresult result =
+      cuPointerGetAttribute(&context, CU_POINTER_ATTRIBUTE_CONTEXT, pointer);
+  if (result == CUDA_SUCCESS) {
+    CHECK(context != nullptr) << "success should entail non-null context";
+    return context;
+  }
+
+  return port::Status(
+      port::error::INTERNAL,
+      absl::StrCat("failed to query device pointer for context: ",
+                   ToString(result)));
+}
+
+// Returns the memory space addressed by pointer.
+static port::StatusOr<MemorySpace> GetPointerMemorySpace(CUdeviceptr pointer) {
+  unsigned int value;
+  CUresult result =
+      cuPointerGetAttribute(&value, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, pointer);
+  if (result == CUDA_SUCCESS) {
+    switch (value) {
+      case CU_MEMORYTYPE_DEVICE:
+        return MemorySpace::kDevice;
+      case CU_MEMORYTYPE_HOST:
+        return MemorySpace::kHost;
+      default:
+        return port::Status(
+            port::error::INTERNAL,
+            absl::StrCat("unknown memory space provided by CUDA API: ", value));
+    }
+  }
+
+  return port::Status(
+      port::error::INTERNAL,
+      absl::StrCat("failed to query device pointer for memory space: ",
+                   ToString(result)));
+}
+
+// Returns the base address and size of the device pointer dptr.
+static port::Status GetPointerAddressRange(CUdeviceptr dptr, CUdeviceptr* base,
+                                           size_t* size) {
+  CUresult result = cuMemGetAddressRange(base, size, dptr);
+  if (result == CUDA_SUCCESS) {
+    return port::Status::OK();
+  } else if (result == CUDA_ERROR_NOT_FOUND) {
+    // We differentiate between "this pointer is unknown" (return here) and
+    // "there was an internal error while performing this operation" (return
+    // below).
+    return port::Status(
+        port::error::NOT_FOUND,
+        port::Printf("not a device pointer %p; %s",
+                     reinterpret_cast<void*>(dptr), ToString(result).c_str()));
+  }
+
+  return port::Status(
+      port::error::INTERNAL,
+      port::Printf("failed to get pointer into for device pointer %p; %s",
+                   reinterpret_cast<void*>(dptr), ToString(result).c_str()));
+}
+
+// Returns the device associated with the context from GetPointerContext().
+static port::StatusOr<CUdevice> GetPointerDevice(CUdeviceptr pointer) {
+  auto result = GetPointerContext(pointer);
+  if (!result.ok()) {
+    return result.status();
+  }
+
+  return DeviceFromContext(result.ValueOrDie());
 }
 
 namespace {
@@ -239,7 +360,7 @@ namespace {
 // logging purposes. Returns "?" if the device could not be successfully
 // queried.
 string CUDAPointerToDeviceString(CUdeviceptr pointer) {
-  auto value = CUDADriver::GetPointerDevice(pointer);
+  auto value = GetPointerDevice(pointer);
   if (value.ok()) {
     return absl::StrCat(value.ValueOrDie());
   }
@@ -251,7 +372,7 @@ string CUDAPointerToDeviceString(CUdeviceptr pointer) {
 // logging purposes. Returns "?" if the memory space could not be successfully
 // queried.
 string CUDAPointerToMemorySpaceString(CUdeviceptr pointer) {
-  auto value = CUDADriver::GetPointerMemorySpace(pointer);
+  auto value = GetPointerMemorySpace(pointer);
   if (value.ok()) {
     return MemorySpaceString(value.ValueOrDie());
   }
@@ -264,13 +385,13 @@ string CUDAPointerToMemorySpaceString(CUdeviceptr pointer) {
 // primarily for logging purposes. Returns "error" if an error is encountered
 // in the process of querying.
 string CUDAPointersToCanAccessString(CUdeviceptr from, CUdeviceptr to) {
-  auto from_context = CUDADriver::GetPointerContext(from);
+  auto from_context = GetPointerContext(from);
   if (!from_context.ok()) {
     LOG(ERROR) << "could not retrieve source pointer's context: "
                << from_context.status();
     return "error";
   }
-  auto to_context = CUDADriver::GetPointerContext(to);
+  auto to_context = GetPointerContext(to);
   if (!to_context.ok()) {
     LOG(ERROR) << "could not retrieve destination pointer's context: "
                << to_context.status();
@@ -402,7 +523,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
     }
   }
 
-  former_context = CUDADriver::CurrentContextOrDie();
+  former_context = CurrentContextOrDie();
   res = cuDevicePrimaryCtxRetain(&new_context, device);
   if (former_context != nullptr) {
     CUdevice former_device;
@@ -745,20 +866,6 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
     LOG(ERROR) << "failed to unload module " << module
                << "; leaking: " << ToString(res);
   }
-}
-
-/* static */ port::StatusOr<CUdevice> CUDADriver::DeviceFromContext(
-    CudaContext* context) {
-  ScopedActivateContext activated{context};
-  CUdevice device = -1;
-  CUresult result = cuCtxGetDevice(&device);
-  if (result == CUDA_SUCCESS) {
-    return device;
-  }
-
-  return port::Status(
-      port::error::INTERNAL,
-      absl::StrCat("failed to get device for context: ", ToString(result)));
 }
 
 /* static */ bool CUDADriver::CreateStream(CudaContext *context,
@@ -1211,78 +1318,6 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return device_count;
 }
 
-/* static */ port::StatusOr<CudaContext*> CUDADriver::GetPointerContext(
-    CUdeviceptr pointer) {
-  CudaContext* context = nullptr;
-  CUresult result =
-      cuPointerGetAttribute(&context, CU_POINTER_ATTRIBUTE_CONTEXT, pointer);
-  if (result == CUDA_SUCCESS) {
-    CHECK(context != nullptr) << "success should entail non-null context";
-    return context;
-  }
-
-  return port::Status(
-      port::error::INTERNAL,
-      absl::StrCat("failed to query device pointer for context: ",
-                   ToString(result)));
-}
-
-/* static */ port::StatusOr<MemorySpace> CUDADriver::GetPointerMemorySpace(
-    CUdeviceptr pointer) {
-  unsigned int value;
-  CUresult result =
-      cuPointerGetAttribute(&value, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, pointer);
-  if (result == CUDA_SUCCESS) {
-    switch (value) {
-      case CU_MEMORYTYPE_DEVICE:
-        return MemorySpace::kDevice;
-      case CU_MEMORYTYPE_HOST:
-        return MemorySpace::kHost;
-      default:
-        return port::Status(
-            port::error::INTERNAL,
-            absl::StrCat("unknown memory space provided by CUDA API: ", value));
-    }
-  }
-
-  return port::Status(
-      port::error::INTERNAL,
-      absl::StrCat("failed to query device pointer for memory space: ",
-                   ToString(result)));
-}
-
-/* static */ port::Status CUDADriver::GetPointerAddressRange(CUdeviceptr dptr,
-                                                             CUdeviceptr *base,
-                                                             size_t *size) {
-  CUresult result = cuMemGetAddressRange(base, size, dptr);
-  if (result == CUDA_SUCCESS) {
-    return port::Status::OK();
-  } else if (result == CUDA_ERROR_NOT_FOUND) {
-    // We differentiate between "this pointer is unknown" (return here) and
-    // "there was an internal error while performing this operation" (return
-    // below).
-    return port::Status(
-        port::error::NOT_FOUND,
-        port::Printf("not a device pointer %p; %s",
-                     reinterpret_cast<void *>(dptr), ToString(result).c_str()));
-  }
-
-  return port::Status(
-      port::error::INTERNAL,
-      port::Printf("failed to get pointer into for device pointer %p; %s",
-                   reinterpret_cast<void *>(dptr), ToString(result).c_str()));
-}
-
-/* static */ port::StatusOr<CUdevice> CUDADriver::GetPointerDevice(
-    CUdeviceptr pointer) {
-  auto result = GetPointerContext(pointer);
-  if (!result.ok()) {
-    return result.status();
-  }
-
-  return DeviceFromContext(result.ValueOrDie());
-}
-
 /* static */ port::Status CUDADriver::GetComputeCapability(int *cc_major,
                                                            int *cc_minor,
                                                            CUdevice device) {
@@ -1541,15 +1576,6 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   }
 
   return max_blocks;
-}
-
-/* static */ CUcontext CUDADriver::CurrentContextOrDie() {
-  CUcontext current = nullptr;
-  CUresult result = cuCtxGetCurrent(&current);
-  if (result != CUDA_SUCCESS) {
-    LOG(FATAL) << "failed to query current context: " << ToString(result);
-  }
-  return current;
 }
 
 }  // namespace gpu

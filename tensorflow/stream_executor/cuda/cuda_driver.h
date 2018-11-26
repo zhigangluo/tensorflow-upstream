@@ -63,11 +63,6 @@ class CUDADriver {
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__INITIALIZE.html#group__CUDA__INITIALIZE_1g0a2f1517e1bd8502c7194c3a8c134bc3
   static port::Status Init();
 
-  // Returns the device associated with the given context.
-  // device is an outparam owned by the caller, must not be null.
-  // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__CTX.html#group__CUDA__CTX_1g4e84b109eba36cdaaade167f34ae881e
-  static port::StatusOr<CUdevice> DeviceFromContext(CudaContext* context);
-
   // Creates a new CUDA stream associated with the given context via
   // cuStreamCreate.
   // stream is an outparam owned by the caller, must not be null.
@@ -354,21 +349,6 @@ class CUDADriver {
   static port::StatusOr<CUresult> QueryEvent(CudaContext* context,
                                              CUevent event);
 
-  // -- Pointer-specific calls.
-
-  // Returns the context in which pointer was allocated or registered.
-  static port::StatusOr<CudaContext*> GetPointerContext(CUdeviceptr pointer);
-
-  // Returns the device associated with the context from GetPointerContext().
-  static port::StatusOr<CUdevice> GetPointerDevice(CUdeviceptr pointer);
-
-  // Returns the memory space addressed by pointer.
-  static port::StatusOr<MemorySpace> GetPointerMemorySpace(CUdeviceptr pointer);
-
-  // Returns the base address and size of the device pointer dptr.
-  static port::Status GetPointerAddressRange(CUdeviceptr dptr,
-                                             CUdeviceptr *base, size_t *size);
-
   // -- Device-specific calls.
 
   // Returns the compute capability for the device; i.e (3, 5).
@@ -468,10 +448,6 @@ class CUDADriver {
       CudaContext* context, CUfunction kernel, int threads_per_block,
       size_t dynamic_shared_memory_bytes);
 
-  // Returns the current context set in CUDA. This is done by calling the cuda
-  // driver (e.g., this value is not our cached view of the current context).
-  static CUcontext CurrentContextOrDie();
-
   // Seam for injecting an error at CUDA initialization time for testing
   // purposes.
   static bool driver_inject_init_error_;
@@ -492,26 +468,6 @@ class ScopedActivateContext {
 
  private:
   CudaContext* to_restore_ = nullptr;
-};
-
-// CudaContext wraps a cuda CUcontext handle, and includes a unique id. The
-// unique id is positive, and ids are not repeated within the process.
-class CudaContext {
- public:
-  CudaContext(CUcontext context, int64 id) : context_(context), id_(id) { }
-
-  CUcontext context() const { return context_; }
-  int64 id() const { return id_; }
-
-  // Disallow copying and moving.
-  CudaContext(CudaContext&&) = delete;
-  CudaContext(const CudaContext&) = delete;
-  CudaContext& operator=(CudaContext&&) = delete;
-  CudaContext& operator=(const CudaContext&) = delete;
-
- private:
-  CUcontext const context_;
-  const int64 id_;
 };
 
 }  // namespace gpu

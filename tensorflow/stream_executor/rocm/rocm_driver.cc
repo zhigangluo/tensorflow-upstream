@@ -144,6 +144,86 @@ string MemorySpaceString(MemorySpace memory_space) {
   }
 }
 
+// Returns the current device set in HIP. This is done by calling the
+// HIP driver (e.g., this value is not our cached view of the current device).
+static int CurrentDeviceOrDie() {
+  int current = -1;
+  hipError_t result = hipGetDevice(&current);
+  if (result != hipSuccess) {
+    LOG(FATAL) << "failed to query current device: " << ToString(result);
+  }
+  return current;
+}
+
+// -- Pointer-specific calls.
+
+// Returns the device associated with the given pointer
+static port::StatusOr<hipDevice_t> GetPointerDevice(hipDeviceptr_t pointer) {
+  hipPointerAttribute_t pointerAttributes;
+  hipError_t result = hipPointerGetAttributes(&pointerAttributes, pointer);
+  if (result != hipSuccess) {
+    return port::Status{
+        port::error::INTERNAL,
+        absl::StrCat("failed to get device for pointer: ", ToString(result))};
+  }
+
+  hipDevice_t device;
+  result = hipDeviceGet(&device, pointerAttributes.device);
+  if (result != hipSuccess) {
+    return port::Status{
+        port::error::INTERNAL,
+        absl::StrCat("failed to get device for pointer: ", ToString(result))};
+  }
+
+  return device;
+}
+
+// Returns the memory space addressed by pointer.
+static port::StatusOr<MemorySpace> GetPointerMemorySpace(
+    hipDeviceptr_t pointer) {
+  unsigned int value;
+  hipError_t result = hipSuccess;
+  if (result == hipSuccess) {
+    switch (value) {
+      case hipMemoryTypeDevice:
+        return MemorySpace::kDevice;
+      case hipMemoryTypeHost:
+        return MemorySpace::kHost;
+      default:
+        return port::Status{
+            port::error::INTERNAL,
+            absl::StrCat("unknown memory space provided by ROCM API: ", value)};
+    }
+  }
+
+  return port::Status{
+      port::error::INTERNAL,
+      absl::StrCat("failed to query device pointer for memory space: ",
+                   ToString(result))};
+}
+
+// Returns the base address and size of the device pointer dptr.
+static port::Status GetPointerAddressRange(hipDeviceptr_t dptr,
+                                           hipDeviceptr_t* base, size_t* size) {
+  hipError_t result = hipMemGetAddressRange(base, size, dptr);
+  if (result == hipSuccess) {
+    return port::Status::OK();
+  } else if (result == hipErrorNotFound) {
+    // We differentiate between "this pointer is unknown" (return here) and
+    // "there was an internal error while performing this operation" (return
+    // below).
+    return port::Status{
+        port::error::NOT_FOUND,
+        port::Printf("not a device pointer %p; %s",
+                     reinterpret_cast<void*>(dptr), ToString(result).c_str())};
+  }
+
+  return port::Status{
+      port::error::INTERNAL,
+      port::Printf("failed to get pointer into for device pointer %p; %s",
+                   reinterpret_cast<void*>(dptr), ToString(result).c_str())};
+}
+
 namespace {
 
 // Call hipDeviceSynchronize and crash if it doesn't succeed.
@@ -169,11 +249,11 @@ ScopedActivateContext::ScopedActivateContext(ROCmContext* context) {
 
   auto* tls = &tls_data.get();
   if (tls->depth == 0) {
-    tls->current_device_ordinal = ROCMDriver::CurrentDeviceOrDie();
+    tls->current_device_ordinal = CurrentDeviceOrDie();
   }
 
   if (kVerifyROCmContext) {
-    CHECK_EQ(ROCMDriver::CurrentDeviceOrDie(), tls->current_device_ordinal);
+    CHECK_EQ(CurrentDeviceOrDie(), tls->current_device_ordinal);
   }
 
   tls->depth++;
@@ -181,7 +261,7 @@ ScopedActivateContext::ScopedActivateContext(ROCmContext* context) {
   to_restore_ = context;
 
   if (context->device_ordinal() == tls->current_device_ordinal) {
-    DCHECK_EQ(ROCMDriver::CurrentDeviceOrDie(), context->device_ordinal());
+    DCHECK_EQ(CurrentDeviceOrDie(), context->device_ordinal());
     return;
   }
 
@@ -200,14 +280,14 @@ ScopedActivateContext::~ScopedActivateContext() {
   auto* tls = &tls_data.get();
 
   if (kVerifyROCmContext) {
-    CHECK_EQ(ROCMDriver::CurrentDeviceOrDie(), tls->current_device_ordinal);
+    CHECK_EQ(CurrentDeviceOrDie(), tls->current_device_ordinal);
   }
 
   tls->depth--;
   DCHECK_GE(tls->depth, 0);
 
   if (to_restore_->device_ordinal() == tls->current_device_ordinal) {
-    DCHECK_EQ(ROCMDriver::CurrentDeviceOrDie(), to_restore_->device_ordinal());
+    DCHECK_EQ(CurrentDeviceOrDie(), to_restore_->device_ordinal());
     return;
   }
 
@@ -226,7 +306,7 @@ namespace {
 // logging purposes. Returns "?" if the device could not be successfully
 // queried.
 string ROCMPointerToDeviceString(hipDeviceptr_t pointer) {
-  auto value = ROCMDriver::GetPointerDevice(pointer);
+  auto value = GetPointerDevice(pointer);
   if (value.ok()) {
     return absl::StrCat(value.ValueOrDie());
   }
@@ -238,7 +318,7 @@ string ROCMPointerToDeviceString(hipDeviceptr_t pointer) {
 // logging purposes. Returns "?" if the memory space could not be successfully
 // queried.
 string ROCMPointerToMemorySpaceString(hipDeviceptr_t pointer) {
-  auto value = ROCMDriver::GetPointerMemorySpace(pointer);
+  auto value = GetPointerMemorySpace(pointer);
   if (value.ok()) {
     return MemorySpaceString(value.ValueOrDie());
   }
@@ -347,7 +427,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
 }
 
 /* static */ port::Status ROCMDriver::CreateContext(
-    int device_ordinal, hipDevice_t device, DeviceOptions device_options,
+    int device_ordinal, hipDevice_t device, const DeviceOptions& device_options,
     ROCmContext** context) {
   *context = new ROCmContext(device_ordinal);
   return port::Status::OK();
@@ -652,6 +732,19 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
     VLOG(2) << "deallocated " << location << " for device "
             << context->device_ordinal();
   }
+}
+
+/* static */ void* ROCMDriver::UnifiedMemoryAllocate(ROCmContext* context,
+                                                     uint64 bytes) {
+  ScopedActivateContext activated{context};
+
+  LOG(ERROR) << "Feature not supported (UnifiedMemoryAllocate)";
+  return nullptr;
+}
+
+/* static */ void ROCMDriver::UnifiedMemoryDeallocate(ROCmContext* context,
+                                                      void* location) {
+  LOG(ERROR) << "Feature not supported (UnifiedMemoryDeallocate)";
 }
 
 /* static */ void* ROCMDriver::HostAllocate(ROCmContext* context,
@@ -1001,72 +1094,6 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return device_count;
 }
 
-/* static */ port::StatusOr<MemorySpace> ROCMDriver::GetPointerMemorySpace(
-    hipDeviceptr_t pointer) {
-  unsigned int value;
-  hipError_t result = hipSuccess;
-  if (result == hipSuccess) {
-    switch (value) {
-      case hipMemoryTypeDevice:
-        return MemorySpace::kDevice;
-      case hipMemoryTypeHost:
-        return MemorySpace::kHost;
-      default:
-        return port::Status{
-            port::error::INTERNAL,
-            absl::StrCat("unknown memory space provided by ROCM API: ", value)};
-    }
-  }
-
-  return port::Status{
-      port::error::INTERNAL,
-      absl::StrCat("failed to query device pointer for memory space: ",
-                   ToString(result))};
-}
-
-/* static */ port::Status ROCMDriver::GetPointerAddressRange(hipDeviceptr_t dptr,
-                                                             hipDeviceptr_t *base,
-                                                             size_t *size) {
-  hipError_t result = hipMemGetAddressRange(base, size, dptr);
-  if (result == hipSuccess) {
-    return port::Status::OK();
-  } else if (result == hipErrorNotFound) {
-    // We differentiate between "this pointer is unknown" (return here) and
-    // "there was an internal error while performing this operation" (return
-    // below).
-    return port::Status{
-        port::error::NOT_FOUND,
-        port::Printf("not a device pointer %p; %s",
-                     reinterpret_cast<void *>(dptr), ToString(result).c_str())};
-  }
-
-  return port::Status{
-      port::error::INTERNAL,
-      port::Printf("failed to get pointer into for device pointer %p; %s",
-                   reinterpret_cast<void *>(dptr), ToString(result).c_str())};
-}
-
-/* static */ port::StatusOr<hipDevice_t> ROCMDriver::GetPointerDevice(
-    hipDeviceptr_t pointer) {
-  hipPointerAttribute_t pointerAttributes;
-  hipError_t result = hipPointerGetAttributes(&pointerAttributes, pointer);
-  if (result != hipSuccess) {
-    return port::Status{
-      port::error::INTERNAL,
-	absl::StrCat("failed to get device for pointer: ", ToString(result))};
-  }
-
-  hipDevice_t device;
-  result = hipDeviceGet(&device, pointerAttributes.device);
-  if (result != hipSuccess) {
-    return port::Status{
-      port::error::INTERNAL,
-	absl::StrCat("failed to get device for pointer: ", ToString(result))};
-  }
-  
-  return device;
-}
-
 /* static */ port::Status ROCMDriver::GetAMDGPUISAVersion(int *version,
                                                           hipDevice_t device) {
   hipDeviceProp_t props;
@@ -1189,6 +1216,11 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return true;
 }
 
+/* static */ port::StatusOr<int> ROCMDriver::GetDeviceAttribute(
+    hipDeviceAttribute_t attribute, hipDevice_t device) {
+  return GetSimpleAttribute<int>(device, attribute);
+}
+
 /* static */ bool ROCMDriver::IsEccEnabled(hipDevice_t device, bool *result) {
   int value = -1;
   hipError_t res = hipSuccess;
@@ -1300,15 +1332,6 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   }
 
   return max_blocks;
-}
-
-/* static */ int ROCMDriver::CurrentDeviceOrDie() {
-  int current = -1;
-  hipError_t result = hipGetDevice(&current);
-  if (result != hipSuccess) {
-    LOG(FATAL) << "failed to query current device: " << ToString(result);
-  }
-  return current;
 }
 
 }  // namespace gpu

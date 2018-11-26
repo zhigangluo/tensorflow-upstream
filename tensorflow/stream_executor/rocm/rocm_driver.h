@@ -87,6 +87,14 @@ class ROCMDriver {
   // context via hipMemFree.
   static void DeviceDeallocate(ROCmContext* context, void* location);
 
+  // Allocates a unified memory space of size bytes associated with the given
+  // context (not yet supported in HIP)
+  static void* UnifiedMemoryAllocate(ROCmContext* context, uint64 bytes);
+
+  // Deallocates a unified memory space of size bytes associated with the given
+  // context (not yet supported in HIP)
+  static void UnifiedMemoryDeallocate(ROCmContext* context, void* location);
+
   // Allocates page-locked and ROCM-registered memory on the host via
   // hipMemAllocHost.
   static void* HostAllocate(ROCmContext* context, uint64 bytes);
@@ -119,7 +127,7 @@ class ROCMDriver {
   // Given a device to create a context for, returns a context handle into the
   // context outparam, which must not be null.
   static port::Status CreateContext(int device_ordinal, hipDevice_t device,
-                                    DeviceOptions device_options,
+                                    const DeviceOptions& device_options,
                                     ROCmContext** context);
   // Destroys the provided context via hipCtxDestroy.
   // Don't do this while clients could still be using the context, per the docs
@@ -259,7 +267,6 @@ class ROCMDriver {
 
   // Blocks the calling thread until the operations associated with the context
   // have been completed, via hipCtxSynchronize.
-  //
   static bool SynchronizeContext(ROCmContext* context);
 
   // Returns true if all stream tasks have completed at time of the call. Note
@@ -289,18 +296,6 @@ class ROCMDriver {
   // complete (or an error status).
   static port::StatusOr<hipError_t> QueryEvent(ROCmContext* context,
                                                hipEvent_t event);
-
-  // -- Pointer-specific calls.
-
-  // Returns the device associated with the context from GetPointerContext().
-  static port::StatusOr<hipDevice_t> GetPointerDevice(hipDeviceptr_t pointer);
-
-  // Returns the memory space addressed by pointer.
-  static port::StatusOr<MemorySpace> GetPointerMemorySpace(hipDeviceptr_t pointer);
-
-  // Returns the base address and size of the device pointer dptr.
-  static port::Status GetPointerAddressRange(hipDeviceptr_t dptr,
-                                             hipDeviceptr_t *base, size_t *size);
 
   // -- Device-specific calls.
 
@@ -342,6 +337,10 @@ class ROCMDriver {
   static bool GetDeviceProperties(hipDeviceProp_t *device_properties,
                                   int device_ordinal);
 
+  // Gets a specific integer-valued property about the given device.
+  static port::StatusOr<int> GetDeviceAttribute(hipDeviceAttribute_t attribute,
+                                                hipDevice_t device);
+
   // Returns whether ECC is enabled for the given hipDevice_t via
   // hipDeviceGetattribute with CU_DEVICE_ATTRIBUTE_ECC_ENABLED.
   static bool IsEccEnabled(hipDevice_t device, bool *result);
@@ -380,10 +379,6 @@ class ROCMDriver {
   static port::StatusOr<int> GetMaxOccupiedBlocksPerCore(
       ROCmContext* context, hipFunction_t kernel, int threads_per_block,
       size_t dynamic_shared_memory_bytes);
-
-  // Returns the current device set in HIP. This is done by calling the
-  // HIP driver (e.g., this value is not our cached view of the current device).
-  static int CurrentDeviceOrDie();
 
   // Seam for injecting an error at CUDA initialization time for testing
   // purposes.
