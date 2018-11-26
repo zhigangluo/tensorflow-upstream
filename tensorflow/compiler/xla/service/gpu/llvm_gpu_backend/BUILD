@@ -25,6 +25,8 @@ cc_library(
     hdrs = ["target_machine_features.h"],
     deps = [
         "//tensorflow/core:lib",
+        "@llvm//:support",
+        "@llvm//:core",
     ],
 )
 
