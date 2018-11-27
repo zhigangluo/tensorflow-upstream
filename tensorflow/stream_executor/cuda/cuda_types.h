@@ -30,6 +30,10 @@ CUstream* AsCUstreamPtr(GPUStreamHandle* hndPtr);
 // Extracts a CUstream from a CUDAStream-backed Stream object.
 // (declared here - defined in cuda_stream.cc) 
 CUstream AsCUstream(Stream *stream);
+
+CUevent AsCUevent(GPUEventHandle hnd);
+
+CUevent* AsCUeventPtr(GPUEventHandle* hndPtr);
  
 }  // namespace gpu
 }  // namespace stream_executor

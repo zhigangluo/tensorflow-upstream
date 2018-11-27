@@ -23,6 +23,8 @@ namespace gpu {
 // hipStream_t / CUstream   
 using GPUStreamHandle = void*;
 
+// hipEvent_t / CUevent   
+using GPUEventHandle = void*;
 
  
 }  // namespace gpu

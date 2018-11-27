@@ -751,7 +751,7 @@ void CUDAExecutor::DeallocateTimer(Timer *timer) {
 }
 
 bool CUDAExecutor::CreateStreamDependency(Stream *dependent, Stream *other) {
-  CUevent other_completed_event = *AsCUDAStream(other)->completed_event();
+  GPUEventHandle other_completed_event = AsCUDAStream(other)->completed_event();
   bool ok = CUDADriver::RecordEvent(context_, other_completed_event,
                                     AsCUDAStreamValue(other))
       .ok();

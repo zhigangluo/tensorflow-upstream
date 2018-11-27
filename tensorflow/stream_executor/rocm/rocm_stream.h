@@ -59,7 +59,7 @@ class ROCMStream : public internal::StreamInterface {
   // Retrieves an event which indicates that all work enqueued into the stream
   // has completed. Ownership of the event is not transferred to the caller, the
   // event is owned by this stream.
-  hipEvent_t* completed_event() { return &completed_event_; }
+  GPUEventHandle completed_event() { return completed_event_; }
 
   // Returns the GPUStreamHandle value for passing to the ROCM API.
   //
@@ -77,7 +77,7 @@ class ROCMStream : public internal::StreamInterface {
   GPUStreamHandle rocm_stream_;  // Wrapped ROCM stream handle.
 
   // Event that indicates this stream has completed.
-  hipEvent_t completed_event_ = nullptr;
+  GPUEventHandle completed_event_ = nullptr;
 };
 
 // Helper functions to simplify extremely common flows.

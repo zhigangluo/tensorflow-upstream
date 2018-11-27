@@ -608,7 +608,7 @@ void ROCMExecutor::DeallocateTimer(Timer *timer) {
 }
 
 bool ROCMExecutor::CreateStreamDependency(Stream *dependent, Stream *other) {
-  hipEvent_t other_completed_event = *AsROCMStream(other)->completed_event();
+  GPUEventHandle other_completed_event = AsROCMStream(other)->completed_event();
   bool ok = ROCMDriver::RecordEvent(context_, other_completed_event,
                                     AsROCMStreamValue(other))
                 .ok();

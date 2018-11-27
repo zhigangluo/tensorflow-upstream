@@ -1018,14 +1018,14 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
 }
 
 /* static */ port::Status CUDADriver::DestroyEvent(GPUContext* context,
-                                                   CUevent *event) {
+                                                   GPUEventHandle *event) {
   if (*event == nullptr) {
     return port::Status(port::error::INVALID_ARGUMENT,
                         "input event cannot be null");
   }
 
   ScopedActivateContext activated{context};
-  CUresult res = cuEventDestroy(*event);
+  CUresult res = cuEventDestroy(*AsCUeventPtr(event));
   *event = nullptr;
 
   switch (res) {
@@ -1046,10 +1046,10 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
 }
 
 /* static */ port::Status CUDADriver::RecordEvent(GPUContext* context,
-                                                  CUevent event,
+                                                  GPUEventHandle event,
                                                   GPUStreamHandle stream) {
   ScopedActivateContext activated{context};
-  CUresult res = cuEventRecord(event, AsCUstream(stream));
+  CUresult res = cuEventRecord(AsCUevent(event), AsCUstream(stream));
   switch (res) {
     case CUDA_SUCCESS:
       return port::Status::OK();
@@ -1068,9 +1068,9 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
 }
 
 /* static */ port::StatusOr<CUresult> CUDADriver::QueryEvent(
-    GPUContext *context, CUevent event) {
+    GPUContext *context, GPUEventHandle event) {
   ScopedActivateContext activated{context};
-  CUresult res = cuEventQuery(event);
+  CUresult res = cuEventQuery(AsCUevent(event));
   if (res != CUDA_SUCCESS && res != CUDA_ERROR_NOT_READY) {
     return port::Status(
         port::error::INTERNAL,
@@ -1082,16 +1082,16 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
 
 /* static */ bool CUDADriver::GetEventElapsedTime(GPUContext* context,
                                                   float *elapsed_milliseconds,
-                                                  CUevent start, CUevent stop) {
+                                                  GPUEventHandle start, GPUEventHandle stop) {
   ScopedActivateContext activated{context};
   // The stop event must have completed in order for cuEventElapsedTime to
   // work.
-  CUresult res = cuEventSynchronize(stop);
+  CUresult res = cuEventSynchronize(AsCUevent(stop));
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "failed to synchronize the stop event: " << ToString(res);
     return false;
   }
-  res = cuEventElapsedTime(elapsed_milliseconds, start, stop);
+  res = cuEventElapsedTime(elapsed_milliseconds, AsCUevent(start), AsCUevent(stop));
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "failed to get elapsed time between events: "
                << ToString(res);
@@ -1103,9 +1103,9 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
 
 /* static */ bool CUDADriver::WaitStreamOnEvent(GPUContext* context,
                                                 GPUStreamHandle stream,
-                                                CUevent event) {
+                                                GPUEventHandle event) {
   ScopedActivateContext activation(context);
-  CUresult res = cuStreamWaitEvent(AsCUstream(stream), event, 0 /* = flags */);
+  CUresult res = cuStreamWaitEvent(AsCUstream(stream), AsCUevent(event), 0 /* = flags */);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "could not wait stream on event: " << ToString(res);
     return false;
@@ -1278,7 +1278,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
 }
 
 /* static */ port::Status CUDADriver::CreateEvent(GPUContext* context,
-                                                  CUevent *result,
+                                                  GPUEventHandle *event,
                                                   EventFlags flags) {
   int cuflags;
   switch (flags) {
@@ -1293,7 +1293,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
   }
 
   ScopedActivateContext activated{context};
-  CUresult res = cuEventCreate(result, cuflags);
+  CUresult res = cuEventCreate(AsCUeventPtr(event), cuflags);
 
   if (res == CUDA_SUCCESS) {
     return port::Status::OK();

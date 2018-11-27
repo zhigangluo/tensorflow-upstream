@@ -26,6 +26,13 @@ CUstream* AsCUstreamPtr(GPUStreamHandle* hndPtr) {
   return reinterpret_cast<CUstream*>(hndPtr);
 }
 
+CUevent AsCUevent(GPUEventHandle hnd) {
+  return reinterpret_cast<CUevent>(hnd);
+}
+
+CUevent* AsCUeventPtr(GPUEventHandle* hndPtr) {
+  return reinterpret_cast<CUevent*>(hndPtr);
+}
 }  // namespace gpu
 }  // namespace stream_executor
 
