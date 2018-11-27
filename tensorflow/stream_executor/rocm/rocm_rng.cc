@@ -15,6 +15,7 @@ limitations under the License.
 
 #include "rocm/include/hiprand/hiprand.h"
 #include "tensorflow/stream_executor/rocm/rocm_rng.h"
+#include "tensorflow/stream_executor/rocm/rocm_types.h"
 
 #include "tensorflow/stream_executor/rocm/rocm_activation.h"
 #include "tensorflow/stream_executor/rocm/rocm_gpu_executor.h"
@@ -130,7 +131,7 @@ bool ROCMRng::Init() {
 
 bool ROCMRng::SetStream(Stream *stream) {
   hiprandStatus_t ret =
-      wrap::hiprandSetStream(parent_, rng_, AsROCMStreamValue(stream));
+      wrap::hiprandSetStream(parent_, rng_, AsHipStream(stream));
   if (ret != HIPRAND_STATUS_SUCCESS) {
     LOG(ERROR) << "failed to set stream for random generation: " << ret;
     return false;

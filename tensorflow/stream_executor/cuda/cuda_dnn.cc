@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/stream_executor/cuda/cuda_dnn.h"
+#include "tensorflow/stream_executor/cuda/cuda_types.h"
 
 #include <functional>
 #include <memory>
@@ -228,7 +229,7 @@ class CudnnAccess {
   CudnnHandle GetHandle(CUDAExecutor* executor, Stream* stream) {
     mutex_lock lock(mutex_);
     gpu::ScopedActivateExecutorContext context(executor);
-    CUstream cu_stream = stream ? AsCUDAStreamValue(stream) : cudaStreamLegacy;
+    CUstream cu_stream = stream ? AsCUstream(stream) : cudaStreamLegacy;
     auto status = cudnnSetStream(handle_, cu_stream);
     CHECK_EQ(status, CUDNN_STATUS_SUCCESS) << "Failed to set cuDNN stream.";
     return CudnnHandle(std::move(context), std::move(lock), handle_);

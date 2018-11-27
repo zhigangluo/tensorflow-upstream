@@ -430,7 +430,7 @@ bool CUDAExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
                           const BlockDim &block_dims, const KernelBase &kernel,
                           const KernelArgsArrayBase &args) {
   CHECK_EQ(kernel.Arity(), args.number_of_arguments());
-  CUstream custream = AsCUDAStreamValue(stream);
+  GPUStreamHandle custream = AsCUDAStreamValue(stream);
   const GPUKernel* cuda_kernel = AsGPUKernel(&kernel);
   CUfunction cufunc = AsCUfunction(cuda_kernel->GetFunctionHandle());
 
@@ -692,7 +692,7 @@ bool CUDAExecutor::HostCallback(Stream *stream,
                                        InternalHostCallback, callback_ptr);
 }
 
-/* static */ void CUDAExecutor::InternalHostCallback(CUstream stream,
+/* static */ void CUDAExecutor::InternalHostCallback(GPUStreamHandle stream,
                                                      CUresult status,
                                                      void *data) {
   std::function<void()> *callback =

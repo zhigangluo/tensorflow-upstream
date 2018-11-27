@@ -28,7 +28,7 @@ namespace gpu {
 
 class CUDAExecutor;
 
-// Wraps a CUstream in order to satisfy the platform-independent
+// Wraps a GPUStreamHandle in order to satisfy the platform-independent
 // StreamInterface.
 //
 // Thread-safe post-initialization.
@@ -61,20 +61,20 @@ class CUDAStream : public internal::StreamInterface {
   // event is owned by this stream.
   CUevent* completed_event() { return &completed_event_; }
 
-  // Returns the CUstream value for passing to the CUDA API.
+  // Returns the GPUStreamHandle value for passing to the CUDA API.
   //
   // Precond: this CUDAStream has been allocated (otherwise passing a nullptr
   // into the NVIDIA library causes difficult-to-understand faults).
-  CUstream cuda_stream() const {
+  GPUStreamHandle cuda_stream() const {
     DCHECK(cuda_stream_ != nullptr);
-    return const_cast<CUstream>(cuda_stream_);
+    return const_cast<GPUStreamHandle>(cuda_stream_);
   }
 
   CUDAExecutor *parent() const { return parent_; }
 
  private:
   CUDAExecutor *parent_;  // Executor that spawned this stream.
-  CUstream cuda_stream_;  // Wrapped CUDA stream handle.
+  GPUStreamHandle cuda_stream_;  // Wrapped CUDA stream handle.
 
   // Event that indicates this stream has completed.
   CUevent completed_event_ = nullptr;
@@ -84,8 +84,8 @@ class CUDAStream : public internal::StreamInterface {
 // Converts a Stream to the underlying CUDAStream implementation.
 CUDAStream *AsCUDAStream(Stream *stream);
 
-// Extracts a CUstream from a CUDAStream-backed Stream object.
-CUstream AsCUDAStreamValue(Stream *stream);
+// Extracts a GPUStreamHandle from a CUDAStream-backed Stream object.
+GPUStreamHandle AsCUDAStreamValue(Stream *stream);
 
 }  // namespace gpu
 }  // namespace stream_executor

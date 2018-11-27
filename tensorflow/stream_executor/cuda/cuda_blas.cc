@@ -19,6 +19,7 @@ limitations under the License.
 #define SE_CUDA_DATA_HALF CUDA_R_16F
 
 #include "tensorflow/stream_executor/cuda/cuda_blas.h"
+#include "tensorflow/stream_executor/cuda/cuda_types.h"
 
 // Both Eigen Half.h and CUDA cuda_fp16.h provide similar typedef for __half. As
 // such, there are two ways to get the typedef for __half:
@@ -482,7 +483,7 @@ bool CUDABlas::SetStream(Stream *stream) {
   CHECK(AsCUDAStreamValue(stream) != nullptr);
   CHECK(blas_ != nullptr);
   cublasStatus_t ret =
-      wrap::cublasSetStream(parent_, blas_, AsCUDAStreamValue(stream));
+      wrap::cublasSetStream(parent_, blas_, AsCUstream(stream));
   if (ret != CUBLAS_STATUS_SUCCESS) {
     LOG(ERROR) << "failed to set stream for cuBLAS calls: " << ToString(ret);
     return false;

@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/stream_executor/cuda/cuda_rng.h"
+#include "tensorflow/stream_executor/cuda/cuda_types.h"
 
 #include "tensorflow/stream_executor/cuda/cuda_activation.h"
 #include "tensorflow/stream_executor/cuda/cuda_gpu_executor.h"
@@ -130,7 +131,7 @@ bool CUDARng::Init() {
 
 bool CUDARng::SetStream(Stream *stream) {
   curandStatus_t ret =
-      wrap::curandSetStream(parent_, rng_, AsCUDAStreamValue(stream));
+      wrap::curandSetStream(parent_, rng_, AsCUstream(stream));
   if (ret != CURAND_STATUS_SUCCESS) {
     LOG(ERROR) << "failed to set stream for random generation: " << ret;
     return false;
