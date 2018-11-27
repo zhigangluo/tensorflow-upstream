@@ -43,25 +43,25 @@ bool FLAGS_gpuexec_rocm_device_0_only = false;
 
 // Debugging: on each push and pop of a rocm context, verify the current device
 // matches the expected one.
-constexpr bool kVerifyROCmContext = false;
+constexpr bool kVerifyGPUContext = false;
 
 namespace stream_executor {
 namespace gpu {
 
-// ROCmContext wraps the device_ordinal.
+// GPUContext wraps the device_ordinal.
 // Only reason we need this wrapper class is to make the ROCMDriver* API
 // similar to the CUDADriver* API (eventual goal being a common GPUDriver* API)
-class ROCmContext {
+class GPUContext {
  public:
-  ROCmContext(const int v) : device_ordinal_(v) {}
+  GPUContext(const int v) : device_ordinal_(v) {}
 
   int device_ordinal() const { return device_ordinal_; }
 
   // Disallow copying and moving.
-  ROCmContext(ROCmContext&&) = delete;
-  ROCmContext(const ROCmContext&) = delete;
-  ROCmContext& operator=(ROCmContext&&) = delete;
-  ROCmContext& operator=(const ROCmContext&) = delete;
+  GPUContext(GPUContext&&) = delete;
+  GPUContext(const GPUContext&) = delete;
+  GPUContext& operator=(GPUContext&&) = delete;
+  GPUContext& operator=(const GPUContext&) = delete;
 
  private:
   const int device_ordinal_;
@@ -244,7 +244,7 @@ SE_STATIC_THREAD_LOCAL_POD(ThreadLocalData, tls_data);
 
 }  // namespace
 
-ScopedActivateContext::ScopedActivateContext(ROCmContext* context) {
+ScopedActivateContext::ScopedActivateContext(GPUContext* context) {
   if (FLAGS_gpuexec_rocm_sync_around_driver_calls) { SynchronizeOrDie(); }
 
   auto* tls = &tls_data.get();
@@ -252,7 +252,7 @@ ScopedActivateContext::ScopedActivateContext(ROCmContext* context) {
     tls->current_device_ordinal = CurrentDeviceOrDie();
   }
 
-  if (kVerifyROCmContext) {
+  if (kVerifyGPUContext) {
     CHECK_EQ(CurrentDeviceOrDie(), tls->current_device_ordinal);
   }
 
@@ -279,7 +279,7 @@ ScopedActivateContext::~ScopedActivateContext() {
 
   auto* tls = &tls_data.get();
 
-  if (kVerifyROCmContext) {
+  if (kVerifyGPUContext) {
     CHECK_EQ(CurrentDeviceOrDie(), tls->current_device_ordinal);
   }
 
@@ -347,8 +347,8 @@ string ROCMPointersToCanAccessString(hipDeviceptr_t from, hipDeviceptr_t to) {
     return "error";
   }
 
-  ROCmContext fromCtx(from_pointerAttributes.device);
-  ROCmContext toCtx(to_pointerAttributes.device);
+  GPUContext fromCtx(from_pointerAttributes.device);
+  GPUContext toCtx(to_pointerAttributes.device);
 
   return ROCMDriver::CanEnablePeerAccess(&fromCtx, &toCtx) ? "true" : "false";
 }
@@ -428,11 +428,11 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
 
 /* static */ port::Status ROCMDriver::CreateContext(
     int device_ordinal, hipDevice_t device, const DeviceOptions& device_options,
-    ROCmContext** context) {
-  *context = new ROCmContext(device_ordinal);
+    GPUContext** context) {
+  *context = new GPUContext(device_ordinal);
   return port::Status::OK();
 }
-/* static */ void ROCMDriver::DestroyContext(ROCmContext* context) {
+/* static */ void ROCMDriver::DestroyContext(GPUContext* context) {
   if (context == nullptr) {
     return;
   }
@@ -465,7 +465,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
 }
 
 /* static */ port::StatusOr<hipSharedMemConfig>
-ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
+ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
   hipSharedMemConfig shared_mem_config;
   ScopedActivateContext activation{context};
   hipError_t result = hipDeviceGetSharedMemConfig(&shared_mem_config);
@@ -481,7 +481,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::ContextSetSharedMemConfig(
-    ROCmContext* context, hipSharedMemConfig shared_mem_config) {
+    GPUContext* context, hipSharedMemConfig shared_mem_config) {
   ScopedActivateContext activation{context};
   hipError_t result = hipDeviceSetSharedMemConfig(shared_mem_config);
   if (result != hipSuccess) {
@@ -497,7 +497,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ bool ROCMDriver::LaunchKernel(
-    ROCmContext* context, hipFunction_t function, unsigned int grid_dim_x,
+    GPUContext* context, hipFunction_t function, unsigned int grid_dim_x,
     unsigned int grid_dim_y, unsigned int grid_dim_z, unsigned int block_dim_x,
     unsigned int block_dim_y, unsigned int block_dim_z,
     unsigned int shared_mem_bytes, hipStream_t stream, void** kernel_params,
@@ -519,7 +519,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ bool ROCMDriver::LoadHsaco(ROCmContext* context,
+/* static */ bool ROCMDriver::LoadHsaco(GPUContext* context,
                                         const char* hsaco_contents,
                                         hipModule_t* module) {
   port::Notification notification;
@@ -545,7 +545,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return ret;
 }
 
-/* static */ bool ROCMDriver::SynchronousMemsetUint8(ROCmContext* context,
+/* static */ bool ROCMDriver::SynchronousMemsetUint8(GPUContext* context,
                                                      hipDeviceptr_t location,
                                                      uint8 value, size_t size) {
   ScopedActivateContext activation{context};
@@ -557,7 +557,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ bool ROCMDriver::SynchronousMemsetUint32(ROCmContext* context,
+/* static */ bool ROCMDriver::SynchronousMemsetUint32(GPUContext* context,
                                                       hipDeviceptr_t location,
                                                       uint32 value,
                                                       size_t uint32_count) {
@@ -575,7 +575,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ bool ROCMDriver::AsynchronousMemsetUint8(ROCmContext* context,
+/* static */ bool ROCMDriver::AsynchronousMemsetUint8(GPUContext* context,
                                                       hipDeviceptr_t location,
                                                       uint8 value,
                                                       size_t uint32_count,
@@ -590,7 +590,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ bool ROCMDriver::AsynchronousMemsetUint32(ROCmContext* context,
+/* static */ bool ROCMDriver::AsynchronousMemsetUint32(GPUContext* context,
                                                        hipDeviceptr_t location,
                                                        uint32 value,
                                                        size_t uint32_count,
@@ -612,7 +612,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ bool ROCMDriver::AddStreamCallback(ROCmContext* context,
+/* static */ bool ROCMDriver::AddStreamCallback(GPUContext* context,
                                                 hipStream_t stream,
                                                 StreamCallback callback,
                                                 void* data) {
@@ -624,7 +624,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ bool ROCMDriver::GetModuleFunction(ROCmContext* context,
+/* static */ bool ROCMDriver::GetModuleFunction(GPUContext* context,
                                                 hipModule_t module,
                                                 const char* kernel_name,
                                                 hipFunction_t* function) {
@@ -640,7 +640,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ bool ROCMDriver::GetModuleSymbol(ROCmContext* context,
+/* static */ bool ROCMDriver::GetModuleSymbol(GPUContext* context,
                                               hipModule_t module,
                                               const char* symbol_name,
                                               hipDeviceptr_t* dptr,
@@ -660,7 +660,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ void ROCMDriver::UnloadModule(ROCmContext* context,
+/* static */ void ROCMDriver::UnloadModule(GPUContext* context,
                                            hipModule_t module) {
   ScopedActivateContext activated{context};
   hipError_t res = hipModuleUnload(module);
@@ -670,22 +670,22 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   }
 }
 
-/* static */ bool ROCMDriver::CreateStream(ROCmContext* context,
-                                           hipStream_t* out) {
+/* static */ bool ROCMDriver::CreateStream(GPUContext* context,
+                                           hipStream_t* stream) {
   ScopedActivateContext activated{context};
-  hipError_t res = hipStreamCreateWithFlags(out, hipStreamDefault);  // switch to hipStreamNonBlocking?
+  hipError_t res = hipStreamCreateWithFlags(stream, hipStreamDefault);  // switch to hipStreamNonBlocking?
   if (res != hipSuccess) {
     LOG(ERROR) << "could not allocate ROCM stream for device "
                << context->device_ordinal() << ": " << ToString(res);
     return false;
   }
 
-  VLOG(2) << "successfully created stream " << *out << " for device "
+  VLOG(2) << "successfully created stream " << *stream << " for device "
           << context->device_ordinal() << " on thread";
   return true;
 }
 
-/* static */ void ROCMDriver::DestroyStream(ROCmContext* context,
+/* static */ void ROCMDriver::DestroyStream(GPUContext* context,
                                             hipStream_t* stream) {
   if (*stream == nullptr) {
     return;
@@ -703,7 +703,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   }
 }
 
-/* static */ void* ROCMDriver::DeviceAllocate(ROCmContext* context,
+/* static */ void* ROCMDriver::DeviceAllocate(GPUContext* context,
                                               uint64 bytes) {
   ScopedActivateContext activated{context};
   hipDeviceptr_t result = 0;
@@ -720,7 +720,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return ptr;
 }
 
-/* static */ void ROCMDriver::DeviceDeallocate(ROCmContext* context,
+/* static */ void ROCMDriver::DeviceDeallocate(GPUContext* context,
                                                void* location) {
   ScopedActivateContext activation{context};
   hipDeviceptr_t pointer = absl::bit_cast<hipDeviceptr_t>(location);
@@ -734,7 +734,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   }
 }
 
-/* static */ void* ROCMDriver::UnifiedMemoryAllocate(ROCmContext* context,
+/* static */ void* ROCMDriver::UnifiedMemoryAllocate(GPUContext* context,
                                                      uint64 bytes) {
   ScopedActivateContext activated{context};
 
@@ -742,12 +742,12 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return nullptr;
 }
 
-/* static */ void ROCMDriver::UnifiedMemoryDeallocate(ROCmContext* context,
+/* static */ void ROCMDriver::UnifiedMemoryDeallocate(GPUContext* context,
                                                       void* location) {
   LOG(ERROR) << "Feature not supported (UnifiedMemoryDeallocate)";
 }
 
-/* static */ void* ROCMDriver::HostAllocate(ROCmContext* context,
+/* static */ void* ROCMDriver::HostAllocate(GPUContext* context,
                                             uint64 bytes) {
   ScopedActivateContext activation{context};
   void *host_mem = nullptr;
@@ -760,7 +760,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return host_mem;
 }
 
-/* static */ void ROCMDriver::HostDeallocate(ROCmContext* context,
+/* static */ void ROCMDriver::HostDeallocate(GPUContext* context,
                                              void* location) {
   ScopedActivateContext activation{context};
   hipError_t res = hipHostFree(location);
@@ -770,7 +770,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   }
 }
 
-/* static */ bool ROCMDriver::HostRegister(ROCmContext* context, void* location,
+/* static */ bool ROCMDriver::HostRegister(GPUContext* context, void* location,
                                            uint64 bytes) {
   ScopedActivateContext activation{context};
   // "Portable" memory is visible to all ROCM contexts. Safe for our use model.
@@ -784,7 +784,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ bool ROCMDriver::HostUnregister(ROCmContext* context,
+/* static */ bool ROCMDriver::HostUnregister(GPUContext* context,
                                              void* location) {
   ScopedActivateContext activation{context};
   hipError_t res = hipHostUnregister(location);
@@ -796,7 +796,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ port::Status ROCMDriver::DestroyEvent(ROCmContext* context,
+/* static */ port::Status ROCMDriver::DestroyEvent(GPUContext* context,
                                                    hipEvent_t* event) {
   if (*event == nullptr) {
     return port::Status{port::error::INVALID_ARGUMENT,
@@ -824,7 +824,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   }
 }
 
-/* static */ port::Status ROCMDriver::RecordEvent(ROCmContext* context,
+/* static */ port::Status ROCMDriver::RecordEvent(GPUContext* context,
                                                   hipEvent_t event,
                                                   hipStream_t stream) {
   ScopedActivateContext activated{context};
@@ -847,7 +847,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ port::StatusOr<hipError_t> ROCMDriver::QueryEvent(
-    ROCmContext* context, hipEvent_t event) {
+    GPUContext* context, hipEvent_t event) {
   ScopedActivateContext activated{context};
   hipError_t res = hipEventQuery(event);
   if (res != hipSuccess && res != hipErrorNotReady) {
@@ -859,7 +859,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return res;
 }
 
-/* static */ bool ROCMDriver::GetEventElapsedTime(ROCmContext* context,
+/* static */ bool ROCMDriver::GetEventElapsedTime(GPUContext* context,
                                                   float* elapsed_milliseconds,
                                                   hipEvent_t start,
                                                   hipEvent_t stop) {
@@ -881,7 +881,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ bool ROCMDriver::WaitStreamOnEvent(ROCmContext* context,
+/* static */ bool ROCMDriver::WaitStreamOnEvent(GPUContext* context,
                                                 hipStream_t stream,
                                                 hipEvent_t event) {
   ScopedActivateContext activation{context};
@@ -894,7 +894,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ bool ROCMDriver::SynchronizeContext(ROCmContext* context) {
+/* static */ bool ROCMDriver::SynchronizeContext(GPUContext* context) {
   ScopedActivateContext activation{context};
   hipError_t res = hipDeviceSynchronize();
   if (res != hipSuccess) {
@@ -906,7 +906,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ port::Status ROCMDriver::SynchronizeStream(ROCmContext* context,
+/* static */ port::Status ROCMDriver::SynchronizeStream(GPUContext* context,
                                                         hipStream_t stream) {
   ScopedActivateContext activated{context};
   CHECK(stream != nullptr);
@@ -922,7 +922,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return port::Status::OK();
 }
 
-/* static */ bool ROCMDriver::IsStreamIdle(ROCmContext* context,
+/* static */ bool ROCMDriver::IsStreamIdle(GPUContext* context,
                                            hipStream_t stream) {
   ScopedActivateContext activated{context};
   CHECK(stream != nullptr);
@@ -938,7 +938,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::SynchronousMemcpyD2H(
-    ROCmContext* context, void* host_dst, hipDeviceptr_t gpu_src, uint64 size) {
+    GPUContext* context, void* host_dst, hipDeviceptr_t gpu_src, uint64 size) {
   ScopedActivateContext activation{context};
   hipError_t res = hipMemcpyDtoH(host_dst, gpu_src, size);
   if (res != hipSuccess) {
@@ -954,7 +954,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::SynchronousMemcpyH2D(
-    ROCmContext* context, hipDeviceptr_t gpu_dst, const void* host_src,
+    GPUContext* context, hipDeviceptr_t gpu_dst, const void* host_src,
     uint64 size) {
   ScopedActivateContext activation{context};
   hipError_t res = hipMemcpyHtoD(gpu_dst, const_cast<void*>(host_src), size);
@@ -970,7 +970,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::SynchronousMemcpyD2D(
-    ROCmContext* context, hipDeviceptr_t gpu_dst, hipDeviceptr_t gpu_src,
+    GPUContext* context, hipDeviceptr_t gpu_dst, hipDeviceptr_t gpu_src,
     uint64 size) {
   ScopedActivateContext activation{context};
   hipError_t res = hipMemcpyDtoD(gpu_dst, gpu_src, size);
@@ -985,7 +985,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return port::Status::OK();
 }
 
-/* static */ bool ROCMDriver::AsynchronousMemcpyD2H(ROCmContext* context,
+/* static */ bool ROCMDriver::AsynchronousMemcpyD2H(GPUContext* context,
                                                     void* host_dst,
                                                     hipDeviceptr_t gpu_src,
                                                     uint64 size,
@@ -1005,7 +1005,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ bool ROCMDriver::AsynchronousMemcpyH2D(ROCmContext* context,
+/* static */ bool ROCMDriver::AsynchronousMemcpyH2D(GPUContext* context,
                                                     hipDeviceptr_t gpu_dst,
                                                     const void* host_src,
                                                     uint64 size,
@@ -1024,7 +1024,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ bool ROCMDriver::AsynchronousMemcpyD2D(ROCmContext* context,
+/* static */ bool ROCMDriver::AsynchronousMemcpyD2D(GPUContext* context,
                                                     hipDeviceptr_t gpu_dst,
                                                     hipDeviceptr_t gpu_src,
                                                     uint64 size,
@@ -1050,7 +1050,7 @@ ROCMDriver::ContextGetSharedMemConfig(ROCmContext* context) {
   return true;
 }
 
-/* static */ port::Status ROCMDriver::CreateEvent(ROCmContext* context,
+/* static */ port::Status ROCMDriver::CreateEvent(GPUContext* context,
                                                   hipEvent_t* result,
                                                   EventFlags flags) {
   int hipflags;
@@ -1234,7 +1234,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return true;
 }
 
-/* static */ bool ROCMDriver::GetDeviceMemoryInfo(ROCmContext* context,
+/* static */ bool ROCMDriver::GetDeviceMemoryInfo(GPUContext* context,
                                                   int64* free_out,
                                                   int64* total_out) {
   ScopedActivateContext activation{context};
@@ -1278,8 +1278,8 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return pci_bus_id;
 }
 
-/* static */ bool ROCMDriver::CanEnablePeerAccess(ROCmContext* from,
-                                                  ROCmContext* to) {
+/* static */ bool ROCMDriver::CanEnablePeerAccess(GPUContext* from,
+                                                  GPUContext* to) {
   if (from->device_ordinal() == to->device_ordinal()) {
     return true;  // A device can always access its own memory.
   }
@@ -1295,8 +1295,8 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return can_access_peer;
 }
 
-/* static */ port::Status ROCMDriver::EnablePeerAccess(ROCmContext* from,
-                                                       ROCmContext* to) {
+/* static */ port::Status ROCMDriver::EnablePeerAccess(GPUContext* from,
+                                                       GPUContext* to) {
   if (from->device_ordinal() == to->device_ordinal()) {
     return port::Status::OK();  // A device can always access its own memory.
   }
@@ -1317,7 +1317,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
 }
 
 /* static */ port::StatusOr<int> ROCMDriver::GetMaxOccupiedBlocksPerCore(
-    ROCmContext* context, hipFunction_t kernel, int threads_per_block,
+    GPUContext* context, hipFunction_t kernel, int threads_per_block,
     size_t dynamic_shared_memory_bytes) {
   ScopedActivateContext activation{context};
 

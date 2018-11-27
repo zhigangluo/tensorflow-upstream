@@ -110,12 +110,12 @@ static hipDeviceptr_t AsROCmDevicePtr(DeviceMemoryBase *gpu_mem) {
   return AsROCmDevicePtr(*gpu_mem);
 }
 
-static ROCmContext* GetROCmContext(Stream* stream) {
+static GPUContext* GetGPUContext(Stream* stream) {
   return static_cast<ROCMExecutor*>(stream->parent()->implementation())
       ->rocm_context();
 }
 
-ROCmContext* ExtractROCmContext(ROCMExecutor* rocm_exec) {
+GPUContext* ExtractGPUContext(ROCMExecutor* rocm_exec) {
   CHECK(rocm_exec != nullptr);
   return rocm_exec->rocm_context();
 }
@@ -343,7 +343,7 @@ bool ROCMExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
   };
 
   if (!ROCMDriver::LaunchKernel(
-          GetROCmContext(stream), hipfunc, block_dims.x, block_dims.y,
+          GetGPUContext(stream), hipfunc, block_dims.x, block_dims.y,
           block_dims.z, thread_dims.x, thread_dims.y, thread_dims.z,
           args.number_of_shared_bytes(), hipstream, nullptr, (void**)&config)) {
     LOG(ERROR) << "failed to launch ROCM kernel with args: "

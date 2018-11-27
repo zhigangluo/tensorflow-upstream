@@ -44,25 +44,25 @@ bool FLAGS_gpuexec_cuda_device_0_only = false;
 
 // Debugging: on each push and pop of a cuda context, verify the current context
 // matches the expected one.
-constexpr bool kVerifyCudaContext = false;
+constexpr bool kVerifyGPUContext = false;
 
 namespace stream_executor {
 namespace gpu {
 
-// CudaContext wraps a cuda CUcontext handle, and includes a unique id. The
+// GPUContext wraps a cuda CUcontext handle, and includes a unique id. The
 // unique id is positive, and ids are not repeated within the process.
-class CudaContext {
+class GPUContext {
  public:
-  CudaContext(CUcontext context, int64 id) : context_(context), id_(id) {}
+  GPUContext(CUcontext context, int64 id) : context_(context), id_(id) {}
 
   CUcontext context() const { return context_; }
   int64 id() const { return id_; }
 
   // Disallow copying and moving.
-  CudaContext(CudaContext&&) = delete;
-  CudaContext(const CudaContext&) = delete;
-  CudaContext& operator=(CudaContext&&) = delete;
-  CudaContext& operator=(const CudaContext&) = delete;
+  GPUContext(GPUContext&&) = delete;
+  GPUContext(const GPUContext&) = delete;
+  GPUContext& operator=(GPUContext&&) = delete;
+  GPUContext& operator=(const GPUContext&) = delete;
 
  private:
   CUcontext const context_;
@@ -72,8 +72,8 @@ class CudaContext {
 namespace {
 
 // Manages the singleton map of contexts that we've created, mapping
-// from the CUcontext to the CudaContext* that we pass around internally.
-// This also manages assignment of unique ids to CudaContexts, to allow
+// from the CUcontext to the GPUContext* that we pass around internally.
+// This also manages assignment of unique ids to GPUContexts, to allow
 // for fast comparison of a context against the current context.
 //
 // CUDA-runtime-created contexts are avoided, if triple angle
@@ -88,14 +88,14 @@ class CreatedContexts {
   }
 
   // Adds context to the live set, or returns it if it's already present.
-  static CudaContext* Add(CUcontext context) {
+  static GPUContext* Add(CUcontext context) {
     CHECK(context != nullptr);
     mutex_lock lock(mu_);
     auto insert_result = Live()->insert(std::make_pair(context, nullptr));
     auto it = insert_result.first;
     if (insert_result.second) {
       // context was not present in the map.  Add it.
-      it->second = MakeUnique<CudaContext>(context, next_id_++);
+      it->second = MakeUnique<GPUContext>(context, next_id_++);
     }
     return it->second.get();
   }
@@ -111,9 +111,9 @@ class CreatedContexts {
 
  private:
   // Returns the live map singleton.
-  static std::map<CUcontext, std::unique_ptr<CudaContext>> *Live() {
+  static std::map<CUcontext, std::unique_ptr<GPUContext>> *Live() {
     static auto singleton =
-        new std::map<CUcontext, std::unique_ptr<CudaContext>>;
+        new std::map<CUcontext, std::unique_ptr<GPUContext>>;
     return singleton;
   }
 
@@ -197,7 +197,7 @@ string MemorySpaceString(MemorySpace memory_space) {
 // Returns the device associated with the given context.
 // device is an outparam owned by the caller, must not be null.
 // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__CTX.html#group__CUDA__CTX_1g4e84b109eba36cdaaade167f34ae881e
-static port::StatusOr<CUdevice> DeviceFromContext(CudaContext* context) {
+static port::StatusOr<CUdevice> DeviceFromContext(GPUContext* context) {
   ScopedActivateContext activated{context};
   CUdevice device = -1;
   CUresult result = cuCtxGetDevice(&device);
@@ -213,8 +213,8 @@ static port::StatusOr<CUdevice> DeviceFromContext(CudaContext* context) {
 // -- Pointer-specific calls.
 
 // Returns the context in which pointer was allocated or registered.
-static port::StatusOr<CudaContext*> GetPointerContext(CUdeviceptr pointer) {
-  CudaContext* context = nullptr;
+static port::StatusOr<GPUContext*> GetPointerContext(CUdeviceptr pointer) {
+  GPUContext* context = nullptr;
   CUresult result =
       cuPointerGetAttribute(&context, CU_POINTER_ATTRIBUTE_CONTEXT, pointer);
   if (result == CUDA_SUCCESS) {
@@ -297,7 +297,7 @@ void SynchronizeOrDie() {
 
 struct ThreadLocalData {
   int64 id;
-  CudaContext* context;  // Only valid if id == a known good context.
+  GPUContext* context;  // Only valid if id == a known good context.
   int depth;
 };
 
@@ -305,13 +305,13 @@ SE_STATIC_THREAD_LOCAL_POD(ThreadLocalData, tls_data);
 
 }  // namespace
 
-ScopedActivateContext::ScopedActivateContext(CudaContext* cuda_context) {
+ScopedActivateContext::ScopedActivateContext(GPUContext* cuda_context) {
   if (FLAGS_gpuexec_cuda_sync_around_driver_calls) SynchronizeOrDie();
 
   auto* tls = &tls_data.get();
   tls->depth++;
   if (tls->id == cuda_context->id()) {
-    if (kVerifyCudaContext) {
+    if (kVerifyGPUContext) {
       CHECK_EQ(CurrentContext(), cuda_context->context());
     }
     DCHECK_EQ(CurrentContext(), cuda_context->context());
@@ -334,8 +334,8 @@ ScopedActivateContext::~ScopedActivateContext() {
 
   auto* tls = &tls_data.get();
 
-  if (kVerifyCudaContext) {
-    // Note that if kVerifyCudaContext is used, and contexts are deleted, it's
+  if (kVerifyGPUContext) {
+    // Note that if kVerifyGPUContext is used, and contexts are deleted, it's
     // possible this could fail in the CurrentContext() call.
     CHECK_EQ(CurrentContext(),
              tls->context == nullptr ? nullptr : tls->context->context());
@@ -495,7 +495,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
 
 /* static */ port::Status CUDADriver::CreateContext(
     CUdevice device, const DeviceOptions &device_options,
-    CudaContext **context) {
+    GPUContext **context) {
   *context = nullptr;
 
   int flags = 0;
@@ -569,7 +569,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
   return port::Status(port::error::INTERNAL, message);
 }
 
-/* static */ void CUDADriver::DestroyContext(CudaContext* context) {
+/* static */ void CUDADriver::DestroyContext(GPUContext* context) {
   if (context == nullptr) {
     return;
   }
@@ -613,7 +613,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
 }
 
 /* static */ port::StatusOr<CUsharedconfig>
-CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
+CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
   CUsharedconfig shared_mem_config;
   ScopedActivateContext activation(context);
   CUresult result = cuCtxGetSharedMemConfig(&shared_mem_config);
@@ -631,7 +631,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
 }
 
 /* static */ port::Status CUDADriver::ContextSetSharedMemConfig(
-    CudaContext* context, CUsharedconfig shared_mem_config) {
+    GPUContext* context, CUsharedconfig shared_mem_config) {
   ScopedActivateContext activation(context);
   CUresult result = cuCtxSetSharedMemConfig(shared_mem_config);
   if (result != CUDA_SUCCESS) {
@@ -649,7 +649,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
 }
 
 /* static */ bool CUDADriver::LaunchKernel(
-    CudaContext* context, CUfunction function, unsigned int grid_dim_x,
+    GPUContext* context, CUfunction function, unsigned int grid_dim_x,
     unsigned int grid_dim_y, unsigned int grid_dim_z, unsigned int block_dim_x,
     unsigned int block_dim_y, unsigned int block_dim_z,
     unsigned int shared_mem_bytes, CUstream stream, void **kernel_params,
@@ -671,7 +671,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ port::Status CUDADriver::LoadCubin(CudaContext* context,
+/* static */ port::Status CUDADriver::LoadCubin(GPUContext* context,
                                                 const char *cubin_bytes,
                                                 CUmodule *module) {
   ScopedActivateContext activation(context);
@@ -684,7 +684,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return port::Status::OK();
 }
 
-/* static */ bool CUDADriver::LoadPtx(CudaContext* context,
+/* static */ bool CUDADriver::LoadPtx(GPUContext* context,
                                       const char *ptx_contents,
                                       CUmodule *module) {
   port::Notification notification;
@@ -754,7 +754,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return ret;
 }
 
-/* static */ bool CUDADriver::SynchronousMemsetUint8(CudaContext* context,
+/* static */ bool CUDADriver::SynchronousMemsetUint8(GPUContext* context,
                                                      CUdeviceptr location,
                                                      uint8 value, size_t size) {
   ScopedActivateContext activation(context);
@@ -766,7 +766,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ bool CUDADriver::SynchronousMemsetUint32(CudaContext* context,
+/* static */ bool CUDADriver::SynchronousMemsetUint32(GPUContext* context,
                                                       CUdeviceptr location,
                                                       uint32 value,
                                                       size_t uint32_count) {
@@ -779,7 +779,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ bool CUDADriver::AsynchronousMemsetUint8(CudaContext* context,
+/* static */ bool CUDADriver::AsynchronousMemsetUint8(GPUContext* context,
                                                       CUdeviceptr location,
                                                       uint8 value,
                                                       size_t uint32_count,
@@ -794,7 +794,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ bool CUDADriver::AsynchronousMemsetUint32(CudaContext* context,
+/* static */ bool CUDADriver::AsynchronousMemsetUint32(GPUContext* context,
                                                        CUdeviceptr location,
                                                        uint32 value,
                                                        size_t uint32_count,
@@ -809,7 +809,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ bool CUDADriver::AddStreamCallback(CudaContext* context,
+/* static */ bool CUDADriver::AddStreamCallback(GPUContext* context,
                                                 CUstream stream,
                                                 StreamCallback callback,
                                                 void *data) {
@@ -822,7 +822,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ bool CUDADriver::GetModuleFunction(CudaContext *context,
+/* static */ bool CUDADriver::GetModuleFunction(GPUContext *context,
                                                 CUmodule module,
                                                 const char *kernel_name,
                                                 CUfunction *function) {
@@ -838,7 +838,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ bool CUDADriver::GetModuleSymbol(CudaContext* context,
+/* static */ bool CUDADriver::GetModuleSymbol(GPUContext* context,
                                               CUmodule module,
                                               const char *symbol_name,
                                               CUdeviceptr *dptr,
@@ -858,7 +858,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ void CUDADriver::UnloadModule(CudaContext *context,
+/* static */ void CUDADriver::UnloadModule(GPUContext *context,
                                            CUmodule module) {
   ScopedActivateContext activated{context};
   CUresult res = cuModuleUnload(module);
@@ -868,7 +868,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   }
 }
 
-/* static */ bool CUDADriver::CreateStream(CudaContext *context,
+/* static */ bool CUDADriver::CreateStream(GPUContext *context,
                                            CUstream *out) {
   // TODO(leary) can we switch this to CU_STREAM_NON_BLOCKING or will that mess
   // up synchronization with respect to memsets and any other things that have
@@ -886,7 +886,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ void CUDADriver::DestroyStream(CudaContext* context,
+/* static */ void CUDADriver::DestroyStream(GPUContext* context,
                                             CUstream *stream) {
   if (*stream == nullptr) {
     return;
@@ -904,7 +904,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   }
 }
 
-/* static */ void *CUDADriver::DeviceAllocate(CudaContext *context,
+/* static */ void *CUDADriver::DeviceAllocate(GPUContext *context,
                                               uint64 bytes) {
   ScopedActivateContext activated{context};
   CUdeviceptr result = 0;
@@ -921,7 +921,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return ptr;
 }
 
-/* static */ void CUDADriver::DeviceDeallocate(CudaContext* context,
+/* static */ void CUDADriver::DeviceDeallocate(GPUContext* context,
                                                void *location) {
   ScopedActivateContext activation(context);
   CUdeviceptr pointer = absl::bit_cast<CUdeviceptr>(location);
@@ -934,7 +934,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   }
 }
 
-/* static */ void *CUDADriver::UnifiedMemoryAllocate(CudaContext *context,
+/* static */ void *CUDADriver::UnifiedMemoryAllocate(GPUContext *context,
                                                      uint64 bytes) {
   ScopedActivateContext activation(context);
   CUdeviceptr result = 0;
@@ -951,7 +951,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return ptr;
 }
 
-/* static */ void CUDADriver::UnifiedMemoryDeallocate(CudaContext *context,
+/* static */ void CUDADriver::UnifiedMemoryDeallocate(GPUContext *context,
                                                       void *location) {
   ScopedActivateContext activation(context);
   CUdeviceptr pointer = absl::bit_cast<CUdeviceptr>(location);
@@ -965,7 +965,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   }
 }
 
-/* static */ void *CUDADriver::HostAllocate(CudaContext *context,
+/* static */ void *CUDADriver::HostAllocate(GPUContext *context,
                                             uint64 bytes) {
   ScopedActivateContext activation(context);
   void *host_mem = nullptr;
@@ -978,7 +978,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return host_mem;
 }
 
-/* static */ void CUDADriver::HostDeallocate(CudaContext* context,
+/* static */ void CUDADriver::HostDeallocate(GPUContext* context,
                                              void *location) {
   ScopedActivateContext activation(context);
   CUresult res = cuMemFreeHost(location);
@@ -988,7 +988,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   }
 }
 
-/* static */ bool CUDADriver::HostRegister(CudaContext* context, void *location,
+/* static */ bool CUDADriver::HostRegister(GPUContext* context, void *location,
                                            uint64 bytes) {
   ScopedActivateContext activation(context);
   // "Portable" memory is visible to all CUDA contexts. Safe for our use model.
@@ -1002,7 +1002,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ bool CUDADriver::HostUnregister(CudaContext* context,
+/* static */ bool CUDADriver::HostUnregister(GPUContext* context,
                                              void *location) {
   ScopedActivateContext activation(context);
   CUresult res = cuMemHostUnregister(location);
@@ -1014,7 +1014,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ port::Status CUDADriver::DestroyEvent(CudaContext* context,
+/* static */ port::Status CUDADriver::DestroyEvent(GPUContext* context,
                                                    CUevent *event) {
   if (*event == nullptr) {
     return port::Status(port::error::INVALID_ARGUMENT,
@@ -1042,7 +1042,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   }
 }
 
-/* static */ port::Status CUDADriver::RecordEvent(CudaContext* context,
+/* static */ port::Status CUDADriver::RecordEvent(GPUContext* context,
                                                   CUevent event,
                                                   CUstream stream) {
   ScopedActivateContext activated{context};
@@ -1065,7 +1065,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
 }
 
 /* static */ port::StatusOr<CUresult> CUDADriver::QueryEvent(
-    CudaContext *context, CUevent event) {
+    GPUContext *context, CUevent event) {
   ScopedActivateContext activated{context};
   CUresult res = cuEventQuery(event);
   if (res != CUDA_SUCCESS && res != CUDA_ERROR_NOT_READY) {
@@ -1077,7 +1077,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return res;
 }
 
-/* static */ bool CUDADriver::GetEventElapsedTime(CudaContext* context,
+/* static */ bool CUDADriver::GetEventElapsedTime(GPUContext* context,
                                                   float *elapsed_milliseconds,
                                                   CUevent start, CUevent stop) {
   ScopedActivateContext activated{context};
@@ -1098,7 +1098,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ bool CUDADriver::WaitStreamOnEvent(CudaContext* context,
+/* static */ bool CUDADriver::WaitStreamOnEvent(GPUContext* context,
                                                 CUstream stream,
                                                 CUevent event) {
   ScopedActivateContext activation(context);
@@ -1111,7 +1111,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ bool CUDADriver::SynchronizeContext(CudaContext* context) {
+/* static */ bool CUDADriver::SynchronizeContext(GPUContext* context) {
   ScopedActivateContext activation(context);
   CUresult res = cuCtxSynchronize();
   if (res != CUDA_SUCCESS) {
@@ -1123,7 +1123,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ port::Status CUDADriver::SynchronizeStream(CudaContext *context,
+/* static */ port::Status CUDADriver::SynchronizeStream(GPUContext *context,
                                                         CUstream stream) {
   ScopedActivateContext activated{context};
   CHECK(stream != nullptr);
@@ -1139,7 +1139,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return port::Status::OK();
 }
 
-/* static */ bool CUDADriver::IsStreamIdle(CudaContext *context,
+/* static */ bool CUDADriver::IsStreamIdle(GPUContext *context,
                                            CUstream stream) {
   ScopedActivateContext activated{context};
   CHECK(stream != nullptr);
@@ -1154,7 +1154,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return false;
 }
 
-/* static */ port::Status CUDADriver::SynchronousMemcpyD2H(CudaContext *context,
+/* static */ port::Status CUDADriver::SynchronousMemcpyD2H(GPUContext *context,
                                                            void *host_dst,
                                                            CUdeviceptr gpu_src,
                                                            uint64 size) {
@@ -1172,7 +1172,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return port::Status::OK();
 }
 
-/* static */ port::Status CUDADriver::SynchronousMemcpyH2D(CudaContext *context,
+/* static */ port::Status CUDADriver::SynchronousMemcpyH2D(GPUContext *context,
                                                            CUdeviceptr gpu_dst,
                                                            const void *host_src,
                                                            uint64 size) {
@@ -1189,7 +1189,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return port::Status::OK();
 }
 
-/* static */ port::Status CUDADriver::SynchronousMemcpyD2D(CudaContext *context,
+/* static */ port::Status CUDADriver::SynchronousMemcpyD2D(GPUContext *context,
                                                            CUdeviceptr gpu_dst,
                                                            CUdeviceptr gpu_src,
                                                            uint64 size) {
@@ -1206,7 +1206,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return port::Status::OK();
 }
 
-/* static */ bool CUDADriver::AsynchronousMemcpyD2H(CudaContext* context,
+/* static */ bool CUDADriver::AsynchronousMemcpyD2H(GPUContext* context,
                                                     void *host_dst,
                                                     CUdeviceptr gpu_src,
                                                     uint64 size,
@@ -1227,7 +1227,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ bool CUDADriver::AsynchronousMemcpyH2D(CudaContext* context,
+/* static */ bool CUDADriver::AsynchronousMemcpyH2D(GPUContext* context,
                                                     CUdeviceptr gpu_dst,
                                                     const void *host_src,
                                                     uint64 size,
@@ -1247,7 +1247,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ bool CUDADriver::AsynchronousMemcpyD2D(CudaContext* context,
+/* static */ bool CUDADriver::AsynchronousMemcpyD2D(GPUContext* context,
                                                     CUdeviceptr gpu_dst,
                                                     CUdeviceptr gpu_src,
                                                     uint64 size,
@@ -1274,7 +1274,7 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
   return true;
 }
 
-/* static */ port::Status CUDADriver::CreateEvent(CudaContext* context,
+/* static */ port::Status CUDADriver::CreateEvent(GPUContext* context,
                                                   CUevent *result,
                                                   EventFlags flags) {
   int cuflags;
@@ -1468,7 +1468,7 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   return true;
 }
 
-/* static */ bool CUDADriver::GetDeviceMemoryInfo(CudaContext* context,
+/* static */ bool CUDADriver::GetDeviceMemoryInfo(GPUContext* context,
                                                   int64 *free_out,
                                                   int64 *total_out) {
   ScopedActivateContext activation(context);
@@ -1512,8 +1512,8 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   return pci_bus_id;
 }
 
-/* static */ bool CUDADriver::CanEnablePeerAccess(CudaContext* from,
-                                                  CudaContext* to) {
+/* static */ bool CUDADriver::CanEnablePeerAccess(GPUContext* from,
+                                                  GPUContext* to) {
   if (from == to) {
     return true;  // A context can always access its own memory.
   }
@@ -1541,8 +1541,8 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   return can_access_peer;
 }
 
-/* static */ port::Status CUDADriver::EnablePeerAccess(CudaContext* from,
-                                                       CudaContext* to) {
+/* static */ port::Status CUDADriver::EnablePeerAccess(GPUContext* from,
+                                                       GPUContext* to) {
   if (from == to) {
     return port::Status::OK();  // A context can always access its own memory.
   }
@@ -1561,7 +1561,7 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
 }
 
 /* static */ port::StatusOr<int> CUDADriver::GetMaxOccupiedBlocksPerCore(
-    CudaContext* context, CUfunction kernel, int threads_per_block,
+    GPUContext* context, CUfunction kernel, int threads_per_block,
     size_t dynamic_shared_memory_bytes) {
   ScopedActivateContext activation(context);
 

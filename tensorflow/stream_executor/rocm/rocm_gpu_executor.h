@@ -210,7 +210,7 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
 
   void* GpuContextHack() { return context_; }
 
-  ROCmContext* rocm_context() { return context_; }
+  GPUContext* rocm_context() { return context_; }
 
  private:
   // Attempts to find a more specific version of the file indicated by
@@ -268,7 +268,7 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
   hipDevice_t device_;
 
   // Handle for session with the library/driver. Immutable post-initialization.
-  ROCmContext* context_;
+  GPUContext* context_;
 
   // The device ordinal value that this executor was initialized with; recorded
   // for use in getting device metadata. Immutable post-initialization.

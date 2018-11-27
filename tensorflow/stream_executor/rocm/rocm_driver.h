@@ -37,7 +37,7 @@ enum class MemorySpace { kHost, kDevice };
 // Returns a casual string, such as "host" for the provided memory space.
 string MemorySpaceString(MemorySpace memory_space);
 
-class ROCmContext;
+class GPUContext;
 
 // ROCMDriver contains wrappers for calls to the userspace library driver. It's
 // useful to isolate these calls and put basic wrappers around them to separate
@@ -59,12 +59,12 @@ class ROCMDriver {
   // Creates a new ROCM stream associated with the given device via
   // hipStreamCreate.
   // stream is an outparam owned by the caller, must not be null.
-  static bool CreateStream(ROCmContext* context, hipStream_t* stream);
+  static bool CreateStream(GPUContext* context, hipStream_t* stream);
 
   // Destroys a ROCM stream associated with the given context.
   // stream is owned by the caller, must not be null, and *stream is set to null
   // if the stream is successfully destroyed.
-  static void DestroyStream(ROCmContext* context, hipStream_t* stream);
+  static void DestroyStream(GPUContext* context, hipStream_t* stream);
 
   // ROCM events can explicitly disable event TSC retrieval for some presumed
   // performance improvement if timing is unnecessary.
@@ -72,38 +72,38 @@ class ROCMDriver {
 
   // Creates a new event associated with the given context.
   // result is an outparam owned by the caller and must not be null.
-  static port::Status CreateEvent(ROCmContext* context, hipEvent_t* result,
+  static port::Status CreateEvent(GPUContext* context, hipEvent_t* result,
                                   EventFlags flags);
 
   // Destroys *event and turns it into a nullptr. event may not be null, but
   // *event may be, via hipEventDestroy
-  static port::Status DestroyEvent(ROCmContext* context, hipEvent_t* event);
+  static port::Status DestroyEvent(GPUContext* context, hipEvent_t* event);
 
   // Allocates a GPU memory space of size bytes associated with the given
   // context via hipMemAlloc.
-  static void* DeviceAllocate(ROCmContext* context, uint64 bytes);
+  static void* DeviceAllocate(GPUContext* context, uint64 bytes);
 
   // Deallocates a GPU memory space of size bytes associated with the given
   // context via hipMemFree.
-  static void DeviceDeallocate(ROCmContext* context, void* location);
+  static void DeviceDeallocate(GPUContext* context, void* location);
 
   // Allocates a unified memory space of size bytes associated with the given
   // context (not yet supported in HIP)
-  static void* UnifiedMemoryAllocate(ROCmContext* context, uint64 bytes);
+  static void* UnifiedMemoryAllocate(GPUContext* context, uint64 bytes);
 
   // Deallocates a unified memory space of size bytes associated with the given
   // context (not yet supported in HIP)
-  static void UnifiedMemoryDeallocate(ROCmContext* context, void* location);
+  static void UnifiedMemoryDeallocate(GPUContext* context, void* location);
 
   // Allocates page-locked and ROCM-registered memory on the host via
   // hipMemAllocHost.
-  static void* HostAllocate(ROCmContext* context, uint64 bytes);
+  static void* HostAllocate(GPUContext* context, uint64 bytes);
 
   // Deallocates a location created by HostAllocate, via hipMemFreeHost.
-  static void HostDeallocate(ROCmContext* context, void* location);
+  static void HostDeallocate(GPUContext* context, void* location);
 
   // Registers a memory region at location of size bytes via hipMemHostRegister.
-  static bool HostRegister(ROCmContext* context, void* location, uint64 bytes);
+  static bool HostRegister(GPUContext* context, void* location, uint64 bytes);
 
   // Unregisters a memory region that was previously registered at location via
   // hipMemHostUnregister.
@@ -111,7 +111,7 @@ class ROCMDriver {
   //
   // TODO(leary) verify an error will be returned if the location wasn't
   // previously registered.
-  static bool HostUnregister(ROCmContext* context, void* location);
+  static bool HostUnregister(GPUContext* context, void* location);
 
   // Given a device ordinal, returns a device handle into the device outparam,
   // which must not be null.
@@ -128,11 +128,11 @@ class ROCMDriver {
   // context outparam, which must not be null.
   static port::Status CreateContext(int device_ordinal, hipDevice_t device,
                                     const DeviceOptions& device_options,
-                                    ROCmContext** context);
+                                    GPUContext** context);
   // Destroys the provided context via hipCtxDestroy.
   // Don't do this while clients could still be using the context, per the docs
   // bad things will happen.
-  static void DestroyContext(ROCmContext* context);
+  static void DestroyContext(GPUContext* context);
 
   // Queries the runtime for the specified attribute of the specified function.
   static bool FuncGetAttribute(hipDeviceAttribute_t attribute,
@@ -145,17 +145,17 @@ class ROCMDriver {
   // Gets the preferred shared memory bank configuration for the specified
   // CONTEXT (not function!), either default or four- or eight-byte bank size.
   static port::StatusOr<hipSharedMemConfig> ContextGetSharedMemConfig(
-      ROCmContext* context);
+      GPUContext* context);
 
   // Sets the preferred shared memory bank configuration for the specified
   // CONTEXT (not function!), either default or four- or eight-byte bank size.
   static port::Status ContextSetSharedMemConfig(
-      ROCmContext* context, hipSharedMemConfig shared_mem_config);
+      GPUContext* context, hipSharedMemConfig shared_mem_config);
 
   // Launches a HIP kernel via hipLaunchKernel.
   // TODO(leary) describe the structure of kernel_params and extra in a readable
   // way.
-  static bool LaunchKernel(ROCmContext* context, hipFunction_t function,
+  static bool LaunchKernel(GPUContext* context, hipFunction_t function,
                            unsigned int grid_dim_x, unsigned int grid_dim_y,
                            unsigned int grid_dim_z, unsigned int block_dim_x,
                            unsigned int block_dim_y, unsigned int block_dim_z,
@@ -164,13 +164,13 @@ class ROCMDriver {
 
   // Loads HSACO with the ROCM runtime and stores the resulting handle in
   // "module". Any error logs that are produced are logged internally.
-  static bool LoadHsaco(ROCmContext* context, const char* hsaco_contents,
+  static bool LoadHsaco(GPUContext* context, const char* hsaco_contents,
                         hipModule_t* module);
 
   // Retrieves a named kernel from a loaded module, and places the resulting
   // handle into function (outparam) on success. Neither kernel_name nor
   // function may be null. No ownership is taken of kernel_name.
-  static bool GetModuleFunction(ROCmContext* context, hipModule_t module,
+  static bool GetModuleFunction(GPUContext* context, hipModule_t module,
                                 const char* kernel_name,
                                 hipFunction_t* function);
 
@@ -178,58 +178,58 @@ class ROCMDriver {
   // a device pointer and size of the symbol on success. symbol_name may not be
   // null. At least one of dptr or bytes should not be null. No ownership is
   // taken of symbol_name.
-  static bool GetModuleSymbol(ROCmContext* context, hipModule_t module,
+  static bool GetModuleSymbol(GPUContext* context, hipModule_t module,
                               const char* symbol_name, hipDeviceptr_t* dptr,
                               size_t* bytes);
 
   // Unloads module from the current context via cuModuleUnload.
   // TODO(leary) the documentation doesn't say what kind of disasters happen
   // if you try to unload a module while its hipFunction_ts are in use.
-  static void UnloadModule(ROCmContext* context, hipModule_t module);
+  static void UnloadModule(GPUContext* context, hipModule_t module);
 
   // Performs a synchronous memset of the device memory segment via hipMemsetD8.
-  static bool SynchronousMemsetUint8(ROCmContext* context,
+  static bool SynchronousMemsetUint8(GPUContext* context,
                                      hipDeviceptr_t location, uint8 value,
                                      size_t size);
 
   // Performs a synchronous memset of the device memory segment via hipMemsetD32.
-  static bool SynchronousMemsetUint32(ROCmContext* context,
+  static bool SynchronousMemsetUint32(GPUContext* context,
                                       hipDeviceptr_t location, uint32 value,
                                       size_t uint32_count);
 
   // Performs an asynchronous memset of the device memory segment via
   // hipMemsetD8Async.
-  static bool AsynchronousMemsetUint8(ROCmContext* context,
+  static bool AsynchronousMemsetUint8(GPUContext* context,
                                       hipDeviceptr_t location, uint8 value,
                                       size_t uint32_count, hipStream_t stream);
 
   // Performs an asynchronous memset of the device memory segment via
   // hipMemsetD32Async.
-  static bool AsynchronousMemsetUint32(ROCmContext* context,
+  static bool AsynchronousMemsetUint32(GPUContext* context,
                                        hipDeviceptr_t location, uint32 value,
                                        size_t uint32_count, hipStream_t stream);
 
   // -- Synchronous memcopies.
 
-  static port::Status SynchronousMemcpyD2H(ROCmContext* context, void* host_dst,
+  static port::Status SynchronousMemcpyD2H(GPUContext* context, void* host_dst,
                                            hipDeviceptr_t gpu_src, uint64 size);
-  static port::Status SynchronousMemcpyH2D(ROCmContext* context,
+  static port::Status SynchronousMemcpyH2D(GPUContext* context,
                                            hipDeviceptr_t gpu_dst,
                                            const void* host_src, uint64 size);
-  static port::Status SynchronousMemcpyD2D(ROCmContext* context,
+  static port::Status SynchronousMemcpyD2D(GPUContext* context,
                                            hipDeviceptr_t gpu_dst,
                                            hipDeviceptr_t gpu_src, uint64 size);
 
   // -- Asynchronous memcopies.
 
-  static bool AsynchronousMemcpyD2H(ROCmContext* context, void* host_dst,
+  static bool AsynchronousMemcpyD2H(GPUContext* context, void* host_dst,
                                     hipDeviceptr_t gpu_src, uint64 size,
                                     hipStream_t stream);
-  static bool AsynchronousMemcpyH2D(ROCmContext* context,
+  static bool AsynchronousMemcpyH2D(GPUContext* context,
                                     hipDeviceptr_t gpu_dst,
                                     const void* host_src, uint64 size,
                                     hipStream_t stream);
-  static bool AsynchronousMemcpyD2D(ROCmContext* context,
+  static bool AsynchronousMemcpyD2D(GPUContext* context,
                                     hipDeviceptr_t gpu_dst,
                                     hipDeviceptr_t gpu_src, uint64 size,
                                     hipStream_t stream);
@@ -247,12 +247,12 @@ class ROCMDriver {
   // Enqueues a callback operation into stream.
   // See StreamCallback above ROCM documentation for additional
   // details.
-  static bool AddStreamCallback(ROCmContext* context, hipStream_t stream,
+  static bool AddStreamCallback(GPUContext* context, hipStream_t stream,
                                 StreamCallback callback, void* data);
 
   // Causes stream to wait for event to trigger before proceeding via
   // hipStreamWaitEvent.
-  static bool WaitStreamOnEvent(ROCmContext* context, hipStream_t stream,
+  static bool WaitStreamOnEvent(GPUContext* context, hipStream_t stream,
                                 hipEvent_t event);
 
   // Blocks the calling thread until the operations enqueued onto stream have
@@ -262,39 +262,39 @@ class ROCMDriver {
   // while another thread blocks like this, can you wind up waiting an unbounded
   // amount of time?
   //
-  static port::Status SynchronizeStream(ROCmContext* context,
+  static port::Status SynchronizeStream(GPUContext* context,
                                         hipStream_t stream);
 
   // Blocks the calling thread until the operations associated with the context
   // have been completed, via hipCtxSynchronize.
-  static bool SynchronizeContext(ROCmContext* context);
+  static bool SynchronizeContext(GPUContext* context);
 
   // Returns true if all stream tasks have completed at time of the call. Note
   // the potential for races around this call (if another thread adds work to
   // the stream immediately after this returns).
-  static bool IsStreamIdle(ROCmContext* context, hipStream_t stream);
+  static bool IsStreamIdle(GPUContext* context, hipStream_t stream);
 
   // Returns whether code in the from context can access memory in the to
   // context via hipDeviceCanAccessPeer.
-  static bool CanEnablePeerAccess(ROCmContext* from, ROCmContext* to);
+  static bool CanEnablePeerAccess(GPUContext* from, GPUContext* to);
 
   // Enables peer access per CanEnablePeerAccess, via hipDeviceEnablePeerAccess.
-  static port::Status EnablePeerAccess(ROCmContext* from, ROCmContext* to);
+  static port::Status EnablePeerAccess(GPUContext* from, GPUContext* to);
 
   // Returns the elapsed milliseconds between start and stop via
   // hipEventElapsedTime.
-  static bool GetEventElapsedTime(ROCmContext* context,
+  static bool GetEventElapsedTime(GPUContext* context,
                                   float* elapsed_milliseconds, hipEvent_t start,
                                   hipEvent_t stop);
 
   // Records that an event occurred when execution reaches the current point in
   // thestream via hipEventRecord.
-  static port::Status RecordEvent(ROCmContext* context, hipEvent_t event,
+  static port::Status RecordEvent(GPUContext* context, hipEvent_t event,
                                   hipStream_t stream);
 
   // Polls (without blocking) to determine the status of an event - pending or
   // complete (or an error status).
-  static port::StatusOr<hipError_t> QueryEvent(ROCmContext* context,
+  static port::StatusOr<hipError_t> QueryEvent(GPUContext* context,
                                                hipEvent_t event);
 
   // -- Device-specific calls.
@@ -351,7 +351,7 @@ class ROCMDriver {
 
   // Returns the free amount of memory and total amount of memory, as reported
   // by hipMemGetInfo.
-  static bool GetDeviceMemoryInfo(ROCmContext* context, int64* free,
+  static bool GetDeviceMemoryInfo(GPUContext* context, int64* free,
                                   int64* total);
 
   // Returns a PCI bus id string for the device.
@@ -377,7 +377,7 @@ class ROCMDriver {
   // Returns the maximum number of blocks (per multiprocessor) occupied by the
   // specified kernel/hipFunction_t when launched with the specified parameters.
   static port::StatusOr<int> GetMaxOccupiedBlocksPerCore(
-      ROCmContext* context, hipFunction_t kernel, int threads_per_block,
+      GPUContext* context, hipFunction_t kernel, int threads_per_block,
       size_t dynamic_shared_memory_bytes);
 
   // Seam for injecting an error at CUDA initialization time for testing
@@ -389,14 +389,14 @@ class ROCMDriver {
 class ScopedActivateContext {
  public:
   // Activates the given device , if it is not the currently active device
-  explicit ScopedActivateContext(ROCmContext* context);
+  explicit ScopedActivateContext(GPUContext* context);
 
   // Checks that the device has remained activated for the duration of the
   // scope.
   ~ScopedActivateContext();
 
  private:
-  ROCmContext* to_restore_ = nullptr;
+  GPUContext* to_restore_ = nullptr;
 };
 
 }  // namespace gpu
