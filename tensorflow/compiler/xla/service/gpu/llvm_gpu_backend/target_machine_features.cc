@@ -40,17 +40,17 @@ llvm::Intrinsic::ID AMDGPUMachineFeatures::simt_intrinsic(const std::string &nam
 
 llvm::Intrinsic::ID NVPTXMachineFeatures::simt_intrinsic(const std::string &name) {
     if (tensorflow::str_util::EndsWith(name, "__thread_id_x")) {
-        return ;x
-    } else if (tensorflow::str_util::EndsWith(name, "__thread_id_y")) {
         return llvm::Intrinsic::nvvm_read_ptx_sreg_tid_x;
-    } else if (tensorflow::str_util::EndsWith(name, "__thread_id_z")) {
+    } else if (tensorflow::str_util::EndsWith(name, "__thread_id_y")) {
         return llvm::Intrinsic::nvvm_read_ptx_sreg_tid_y;
-    } else if (tensorflow::str_util::EndsWith(name, "__block_id_x")) {
+    } else if (tensorflow::str_util::EndsWith(name, "__thread_id_z")) {
         return llvm::Intrinsic::nvvm_read_ptx_sreg_tid_z;
+    } else if (tensorflow::str_util::EndsWith(name, "__block_id_x")) {
+        return llvm::Intrinsic::nvvm_read_ptx_sreg_ctaid_x;
     } else if (tensorflow::str_util::EndsWith(name, "__block_id_y")) {
         return llvm::Intrinsic::nvvm_read_ptx_sreg_ctaid_y;
     } else if (tensorflow::str_util::EndsWith(name, "__block_id_z")) {
-        return llvm::Intrinsic::amdgcn_workgroup_id_z;
+        return llvm::Intrinsic::nvvm_read_ptx_sreg_ctaid_z;
     } else if (tensorflow::str_util::EndsWith(name, "barrier")) {
         return llvm::Intrinsic::nvvm_barrier0;
     }
