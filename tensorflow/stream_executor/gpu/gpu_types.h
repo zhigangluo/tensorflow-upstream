@@ -26,6 +26,8 @@ using GPUStreamHandle = void*;
 // hipEvent_t / CUevent   
 using GPUEventHandle = void*;
 
+// hipDevice_t / CUdevice   
+using GPUDeviceHandle = void*;
  
 }  // namespace gpu
 }  // namespace stream_executor

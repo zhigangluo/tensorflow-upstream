@@ -285,7 +285,7 @@ class CUDAExecutor : public internal::StreamExecutorInterface {
 
   // Handle for the CUDA device being operated on. Immutable
   // post-initialization.
-  CUdevice device_;
+  GPUDeviceHandle device_;
 
   // Handle for session with the library/driver. Immutable post-initialization.
   GPUContext* context_;

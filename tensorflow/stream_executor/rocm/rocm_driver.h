@@ -119,15 +119,15 @@ class ROCMDriver {
   //
   // N.B. these device handles do not have a corresponding destroy function in
   // the ROCM driver API.
-  static port::Status GetDevice(int device_ordinal, hipDevice_t *device);
+  static port::Status GetDevice(int device_ordinal, GPUDeviceHandle *device);
 
   // Given a device handle, returns the name reported by the driver for the
   // device.
-  static bool GetDeviceName(hipDevice_t device, string *name_out);
+  static bool GetDeviceName(GPUDeviceHandle device, string *name_out);
 
   // Given a device to create a context for, returns a context handle into the
   // context outparam, which must not be null.
-  static port::Status CreateContext(int device_ordinal, hipDevice_t device,
+  static port::Status CreateContext(int device_ordinal, GPUDeviceHandle device,
                                     const DeviceOptions& device_options,
                                     GPUContext** context);
   // Destroys the provided context via hipCtxDestroy.
@@ -302,36 +302,36 @@ class ROCMDriver {
 
   // Returns AMDGPU ISA version for the device; i.e 803, 900.
   static port::Status GetAMDGPUISAVersion(int *version,
-                                          hipDevice_t device);
+                                          GPUDeviceHandle device);
 
   // Returns the number of multiprocessors on the device (note that the device
   // may be multi-GPU-per-board).
-  static port::StatusOr<int> GetMultiprocessorCount(hipDevice_t device);
+  static port::StatusOr<int> GetMultiprocessorCount(GPUDeviceHandle device);
 
   // Returns the limit on number of threads that can be resident in a single
   // multiprocessor.
-  static port::StatusOr<int64> GetMaxThreadsPerMultiprocessor(hipDevice_t device);
+  static port::StatusOr<int64> GetMaxThreadsPerMultiprocessor(GPUDeviceHandle device);
 
   // Returns the limit on number of threads which may be resident for a single
   // block (cooperative thread array).
-  static port::StatusOr<int64> GetMaxThreadsPerBlock(hipDevice_t device);
+  static port::StatusOr<int64> GetMaxThreadsPerBlock(GPUDeviceHandle device);
 
   // Returns the amount of shared memory available on a single GPU core (i.e.
   // CU on ROCM devices).
-  static port::StatusOr<int64> GetMaxSharedMemoryPerCore(hipDevice_t device);
+  static port::StatusOr<int64> GetMaxSharedMemoryPerCore(GPUDeviceHandle device);
 
   // Returns the amount of shared memory available for a single block
   // (cooperative thread array).
-  static port::StatusOr<int64> GetMaxSharedMemoryPerBlock(hipDevice_t device);
+  static port::StatusOr<int64> GetMaxSharedMemoryPerBlock(GPUDeviceHandle device);
 
   // Returns the maximum supported number of registers per block.
-  static port::StatusOr<int64> GetMaxRegistersPerBlock(hipDevice_t device);
+  static port::StatusOr<int64> GetMaxRegistersPerBlock(GPUDeviceHandle device);
 
   // Returns the number of threads per warp.
-  static port::StatusOr<int64> GetThreadsPerWarp(hipDevice_t device);
+  static port::StatusOr<int64> GetThreadsPerWarp(GPUDeviceHandle device);
 
   // Queries the grid limits for device with hipDeviceGetAttribute calls.
-  static bool GetGridLimits(int *x, int *y, int *z, hipDevice_t device);
+  static bool GetGridLimits(int *x, int *y, int *z, GPUDeviceHandle device);
 
   // Returns a grab-bag of device properties in a caller-owned device_properties
   // structure for device_ordinal via hipDeviceGetProperties.
@@ -340,15 +340,15 @@ class ROCMDriver {
 
   // Gets a specific integer-valued property about the given device.
   static port::StatusOr<int> GetDeviceAttribute(hipDeviceAttribute_t attribute,
-                                                hipDevice_t device);
+                                                GPUDeviceHandle device);
 
-  // Returns whether ECC is enabled for the given hipDevice_t via
+  // Returns whether ECC is enabled for the given GPUDeviceHandle via
   // hipDeviceGetattribute with CU_DEVICE_ATTRIBUTE_ECC_ENABLED.
-  static bool IsEccEnabled(hipDevice_t device, bool *result);
+  static bool IsEccEnabled(GPUDeviceHandle device, bool *result);
 
   // Returns the total amount of memory available for allocation by the ROCM
   // context, in bytes, via hipDeviceTotalMem.
-  static bool GetDeviceTotalMemory(hipDevice_t device, uint64 *result);
+  static bool GetDeviceTotalMemory(GPUDeviceHandle device, uint64 *result);
 
   // Returns the free amount of memory and total amount of memory, as reported
   // by hipMemGetInfo.
@@ -357,7 +357,7 @@ class ROCMDriver {
 
   // Returns a PCI bus id string for the device.
   // [domain]:[bus]:[device].[function]
-  static string GetPCIBusID(hipDevice_t device);
+  static string GetPCIBusID(GPUDeviceHandle device);
 
   // -- Context- and device-independent calls.
 

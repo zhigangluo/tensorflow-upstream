@@ -394,8 +394,8 @@ static port::Status InternalInit() {
 }
 
 /* static */ port::Status ROCMDriver::GetDevice(int device_ordinal,
-                                                hipDevice_t *device) {
-  hipError_t res = hipDeviceGet(device, device_ordinal);
+                                                GPUDeviceHandle *device) {
+  hipError_t res = hipDeviceGet(AsHipDevicePtr(device), device_ordinal);
   if (res == hipSuccess) {
     return port::Status::OK();
   }
@@ -405,13 +405,13 @@ static port::Status InternalInit() {
       absl::StrCat("failed call to hipDeviceGet: ", ToString(res))};
 }
 
-/* static */ bool ROCMDriver::GetDeviceName(hipDevice_t device,
+/* static */ bool ROCMDriver::GetDeviceName(GPUDeviceHandle device,
                                             string *device_name) {
   static const size_t kCharLimit = 64;
   absl::InlinedVector<char, 4> chars(kCharLimit);
-  hipError_t res = hipDeviceGetName(chars.begin(), kCharLimit - 1, device);
+  hipError_t res = hipDeviceGetName(chars.begin(), kCharLimit - 1, AsHipDevice(device));
   if (res != hipSuccess) {
-    LOG(ERROR) << "failed to get device name for " << device << ": "
+    LOG(ERROR) << "failed to get device name for " << AsHipDevice(device) << ": "
                << ToString(res);
     return false;
   }
@@ -428,7 +428,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
 }
 
 /* static */ port::Status ROCMDriver::CreateContext(
-    int device_ordinal, hipDevice_t device, const DeviceOptions& device_options,
+    int device_ordinal, GPUDeviceHandle device, const DeviceOptions& device_options,
     GPUContext** context) {
   *context = new GPUContext(device_ordinal);
   return port::Status::OK();
@@ -1096,9 +1096,9 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::GetAMDGPUISAVersion(int *version,
-                                                          hipDevice_t device) {
+                                                          GPUDeviceHandle device) {
   hipDeviceProp_t props;
-  hipError_t result = hipGetDeviceProperties(&props, device);
+  hipError_t result = hipGetDeviceProperties(&props, AsHipDevice(device));
   if (result == hipSuccess) {
     *version = props.gcnArch;
     return port::Status::OK();
@@ -1112,10 +1112,10 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
 // Helper function that turns the integer output of hipDeviceGetAttribute to type
 // T and wraps it in a StatusOr.
 template <typename T>
-static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
+static port::StatusOr<T> GetSimpleAttribute(GPUDeviceHandle device,
                                             hipDeviceAttribute_t attribute) {
   int value = -1;
-  hipError_t result = hipDeviceGetAttribute(&value, attribute, device);
+  hipError_t result = hipDeviceGetAttribute(&value, attribute, AsHipDevice(device));
   if (result != hipSuccess) {
     return port::Status{
         port::error::NOT_FOUND,
@@ -1127,51 +1127,51 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
 }
 
 /* static */ port::StatusOr<int> ROCMDriver::GetMultiprocessorCount(
-    hipDevice_t device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int>(device,
                                  hipDeviceAttributeMultiprocessorCount);
 }
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetMaxSharedMemoryPerCore(
-    hipDevice_t device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int64>(
       device, hipDeviceAttributeMaxSharedMemoryPerMultiprocessor);
 }
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetMaxSharedMemoryPerBlock(
-    hipDevice_t device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int64>(
       device, hipDeviceAttributeMaxSharedMemoryPerBlock);
 }
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetMaxThreadsPerMultiprocessor(
-    hipDevice_t device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int64>(
       device, hipDeviceAttributeMaxThreadsPerMultiProcessor);
 }
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetMaxThreadsPerBlock(
-    hipDevice_t device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int64>(device,
                                    hipDeviceAttributeMaxThreadsPerBlock);
 }
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetMaxRegistersPerBlock(
-    hipDevice_t device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int64>(device,
                                    hipDeviceAttributeMaxRegistersPerBlock);
 }
 
 /* static */ port::StatusOr<int64> ROCMDriver::GetThreadsPerWarp(
-    hipDevice_t device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int64>(device, hipDeviceAttributeWarpSize);
 }
 
 /* static */ bool ROCMDriver::GetGridLimits(int *x, int *y, int *z,
-                                            hipDevice_t device) {
+                                            GPUDeviceHandle device) {
   int value;
   hipError_t res =
-      hipDeviceGetAttribute(&value, hipDeviceAttributeMaxGridDimX, device);
+      hipDeviceGetAttribute(&value, hipDeviceAttributeMaxGridDimX, AsHipDevice(device));
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to query max grid dim x: " << ToString(res);
     return false;
@@ -1218,11 +1218,11 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
 }
 
 /* static */ port::StatusOr<int> ROCMDriver::GetDeviceAttribute(
-    hipDeviceAttribute_t attribute, hipDevice_t device) {
+    hipDeviceAttribute_t attribute, GPUDeviceHandle device) {
   return GetSimpleAttribute<int>(device, attribute);
 }
 
-/* static */ bool ROCMDriver::IsEccEnabled(hipDevice_t device, bool *result) {
+/* static */ bool ROCMDriver::IsEccEnabled(GPUDeviceHandle device, bool *result) {
   int value = -1;
   hipError_t res = hipSuccess;
   // ROCM TODO implement this feature in HIP
@@ -1252,10 +1252,10 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return true;
 }
 
-/* static */ bool ROCMDriver::GetDeviceTotalMemory(hipDevice_t device,
+/* static */ bool ROCMDriver::GetDeviceTotalMemory(GPUDeviceHandle device,
                                                    uint64 *result) {
   size_t value = -1;
-  hipError_t res = hipDeviceTotalMem(&value, device);
+  hipError_t res = hipDeviceTotalMem(&value, AsHipDevice(device));
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to query total available memory: " << ToString(res);
     return false;
@@ -1265,12 +1265,12 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return true;
 }
 
-/* static */ string ROCMDriver::GetPCIBusID(hipDevice_t device) {
+/* static */ string ROCMDriver::GetPCIBusID(GPUDeviceHandle device) {
   string pci_bus_id;
   static const int kBufferSize = 64;
   absl::InlinedVector<char, 4> chars(kBufferSize);
   chars[kBufferSize - 1] = '\0';
-  hipError_t res = hipDeviceGetPCIBusId(chars.begin(), kBufferSize - 1, device);
+  hipError_t res = hipDeviceGetPCIBusId(chars.begin(), kBufferSize - 1, AsHipDevice(device));
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to query PCI bus id for device: " << ToString(res);
     return pci_bus_id;

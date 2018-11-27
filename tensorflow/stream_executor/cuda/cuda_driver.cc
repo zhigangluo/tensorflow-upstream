@@ -444,8 +444,8 @@ static port::Status InternalInit() {
 }
 
 /* static */ port::Status CUDADriver::GetDevice(int device_ordinal,
-                                                CUdevice *device) {
-  CUresult res = cuDeviceGet(device, device_ordinal);
+                                                GPUDeviceHandle *device) {
+  CUresult res = cuDeviceGet(AsCUdevicePtr(device), device_ordinal);
   if (res == CUDA_SUCCESS) {
     return port::Status::OK();
   }
@@ -455,13 +455,13 @@ static port::Status InternalInit() {
       absl::StrCat("failed call to cuDeviceGet: ", ToString(res)));
 }
 
-/* static */ bool CUDADriver::GetDeviceName(CUdevice device,
+/* static */ bool CUDADriver::GetDeviceName(GPUDeviceHandle device,
                                             string *device_name) {
   static const size_t kCharLimit = 64;
   absl::InlinedVector<char, 4> chars(kCharLimit);
-  CUresult res = cuDeviceGetName(chars.begin(), kCharLimit - 1, device);
+  CUresult res = cuDeviceGetName(chars.begin(), kCharLimit - 1, AsCUdevice(device));
   if (res != CUDA_SUCCESS) {
-    LOG(ERROR) << "failed to get device name for " << device << ": "
+    LOG(ERROR) << "failed to get device name for " << AsCUdevice(device) << ": "
                << ToString(res);
     return false;
   }
@@ -495,7 +495,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
 }
 
 /* static */ port::Status CUDADriver::CreateContext(
-    CUdevice device, const DeviceOptions &device_options,
+    GPUDeviceHandle device, const DeviceOptions &device_options,
     GPUContext **context) {
   *context = nullptr;
 
@@ -511,7 +511,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
   unsigned int former_primary_context_flags;
   int former_primary_context_is_active;
   CHECK_EQ(CUDA_SUCCESS,
-           cuDevicePrimaryCtxGetState(device, &former_primary_context_flags,
+           cuDevicePrimaryCtxGetState(AsCUdevice(device), &former_primary_context_flags,
                                       &former_primary_context_is_active));
   if (former_primary_context_flags != flags) {
     if (former_primary_context_is_active) {
@@ -520,23 +520,23 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
           << former_primary_context_flags << ") than the desired flag set ("
           << flags << ").";
     } else {
-      CHECK_EQ(CUDA_SUCCESS, cuDevicePrimaryCtxSetFlags(device, flags));
+      CHECK_EQ(CUDA_SUCCESS, cuDevicePrimaryCtxSetFlags(AsCUdevice(device), flags));
     }
   }
 
   former_context = CurrentContextOrDie();
-  res = cuDevicePrimaryCtxRetain(&new_context, device);
+  res = cuDevicePrimaryCtxRetain(&new_context, AsCUdevice(device));
   if (former_context != nullptr) {
     CUdevice former_device;
     if (cuCtxGetDevice(&former_device) == CUDA_SUCCESS) {
       if (former_device == device) {
         if (former_context == new_context) {
           VLOG(2) << "The primary context " << former_context << " for device "
-                  << device
+                  << AsCUdevice(device)
                   << " exists before initializing the StreamExecutor.";
         } else {
           LOG(WARNING) << "A non-primary context " << former_context
-                       << " for device " << device
+                       << " for device " << AsCUdevice(device)
                        << " exists before initializing the StreamExecutor. The "
                        << "primary context is now " << new_context << ". We "
                        << "haven't verified StreamExecutor works with that.";
@@ -1321,10 +1321,10 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
 
 /* static */ port::Status CUDADriver::GetComputeCapability(int *cc_major,
                                                            int *cc_minor,
-                                                           CUdevice device) {
+                                                           GPUDeviceHandle device) {
   *cc_major = 0;
   *cc_minor = 0;
-  CUresult result = cuDeviceComputeCapability(cc_major, cc_minor, device);
+  CUresult result = cuDeviceComputeCapability(cc_major, cc_minor, AsCUdevice(device));
   if (result == CUDA_SUCCESS) {
     return port::Status::OK();
   }
@@ -1338,10 +1338,10 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
 // Helper function that turns the integer output of cuDeviceGetAttribute to type
 // T and wraps it in a StatusOr.
 template <typename T>
-static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
+static port::StatusOr<T> GetSimpleAttribute(GPUDeviceHandle device,
                                             CUdevice_attribute attribute) {
   int value = -1;
-  CUresult result = cuDeviceGetAttribute(&value, attribute, device);
+  CUresult result = cuDeviceGetAttribute(&value, attribute, AsCUdevice(device));
   if (result != CUDA_SUCCESS) {
     return port::Status(
         port::error::NOT_FOUND,
@@ -1353,51 +1353,51 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
 }
 
 /* static */ port::StatusOr<int> CUDADriver::GetMultiprocessorCount(
-    CUdevice device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int>(device,
                                  CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT);
 }
 
 /* static */ port::StatusOr<int64> CUDADriver::GetMaxSharedMemoryPerCore(
-    CUdevice device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int64>(
       device, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR);
 }
 
 /* static */ port::StatusOr<int64> CUDADriver::GetMaxSharedMemoryPerBlock(
-    CUdevice device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int64>(
       device, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK);
 }
 
 /* static */ port::StatusOr<int64> CUDADriver::GetMaxThreadsPerMultiprocessor(
-    CUdevice device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int64>(
       device, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR);
 }
 
 /* static */ port::StatusOr<int64> CUDADriver::GetMaxThreadsPerBlock(
-    CUdevice device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int64>(device,
                                    CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK);
 }
 
 /* static */ port::StatusOr<int64> CUDADriver::GetMaxRegistersPerBlock(
-    CUdevice device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int64>(device,
                                    CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_BLOCK);
 }
 
 /* static */ port::StatusOr<int64> CUDADriver::GetThreadsPerWarp(
-    CUdevice device) {
+    GPUDeviceHandle device) {
   return GetSimpleAttribute<int64>(device, CU_DEVICE_ATTRIBUTE_WARP_SIZE);
 }
 
 /* static */ bool CUDADriver::GetGridLimits(int *x, int *y, int *z,
-                                            CUdevice device) {
+                                            GPUDeviceHandle device) {
   int value;
   CUresult res =
-      cuDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X, device);
+      cuDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X, AsCUdevice(device));
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "failed to query max grid dim x: " << ToString(res);
     return false;
@@ -1444,9 +1444,9 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
 }
 
 /* static */ port::StatusOr<int> CUDADriver::GetDeviceAttribute(
-    CUdevice_attribute attribute, CUdevice device) {
+    CUdevice_attribute attribute, GPUDeviceHandle device) {
   int val;
-  CUresult res = cuDeviceGetAttribute(&val, attribute, device);
+  CUresult res = cuDeviceGetAttribute(&val, attribute, AsCUdevice(device));
   if (res != CUDA_SUCCESS) {
     return port::Status(
         port::error::INTERNAL,
@@ -1456,10 +1456,10 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   return val;
 }
 
-/* static */ bool CUDADriver::IsEccEnabled(CUdevice device, bool *result) {
+/* static */ bool CUDADriver::IsEccEnabled(GPUDeviceHandle device, bool *result) {
   int value = -1;
   CUresult res =
-      cuDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_ECC_ENABLED, device);
+      cuDeviceGetAttribute(&value, CU_DEVICE_ATTRIBUTE_ECC_ENABLED, AsCUdevice(device));
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "failed to query ECC status: " << ToString(res);
     return false;
@@ -1486,10 +1486,10 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   return true;
 }
 
-/* static */ bool CUDADriver::GetDeviceTotalMemory(CUdevice device,
+/* static */ bool CUDADriver::GetDeviceTotalMemory(GPUDeviceHandle device,
                                                    uint64 *result) {
   size_t value = -1;
-  CUresult res = cuDeviceTotalMem(&value, device);
+  CUresult res = cuDeviceTotalMem(&value, AsCUdevice(device));
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "failed to query total available memory: " << ToString(res);
     return false;
@@ -1499,12 +1499,12 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   return true;
 }
 
-/* static */ string CUDADriver::GetPCIBusID(CUdevice device) {
+/* static */ string CUDADriver::GetPCIBusID(GPUDeviceHandle device) {
   string pci_bus_id;
   static const int kBufferSize = 64;
   absl::InlinedVector<char, 4> chars(kBufferSize);
   chars[kBufferSize - 1] = '\0';
-  CUresult res = cuDeviceGetPCIBusId(chars.begin(), kBufferSize - 1, device);
+  CUresult res = cuDeviceGetPCIBusId(chars.begin(), kBufferSize - 1, AsCUdevice(device));
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "failed to query PCI bus id for device: " << ToString(res);
     return pci_bus_id;

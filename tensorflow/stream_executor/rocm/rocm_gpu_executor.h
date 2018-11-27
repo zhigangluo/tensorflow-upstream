@@ -265,7 +265,7 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
 
   // Handle for the ROCM device being operated on. Immutable
   // post-initialization.
-  hipDevice_t device_;
+  GPUDeviceHandle device_;
 
   // Handle for session with the library/driver. Immutable post-initialization.
   GPUContext* context_;
