@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/stream_executor/rocm/rocm_driver.h"
+#include "tensorflow/stream_executor/rocm/rocm_types.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -500,7 +501,7 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
     GPUContext* context, hipFunction_t function, unsigned int grid_dim_x,
     unsigned int grid_dim_y, unsigned int grid_dim_z, unsigned int block_dim_x,
     unsigned int block_dim_y, unsigned int block_dim_z,
-    unsigned int shared_mem_bytes, hipStream_t stream, void** kernel_params,
+    unsigned int shared_mem_bytes, GPUStreamHandle stream, void** kernel_params,
     void** extra) {
   ScopedActivateContext activation{context};
   VLOG(2) << "launching kernel: " << function << "; gdx: " << grid_dim_x
@@ -509,7 +510,7 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
           << " bdz: " << block_dim_z << " smem: " << shared_mem_bytes;
   hipError_t res = hipModuleLaunchKernel(
      function, grid_dim_x, grid_dim_y, grid_dim_z, block_dim_x, block_dim_y,
-     block_dim_z, shared_mem_bytes, stream, kernel_params, extra);
+     block_dim_z, shared_mem_bytes, AsHipStream(stream), kernel_params, extra);
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to launch ROCM kernel: " << function
                << "; result: " << ToString(res);
@@ -579,9 +580,9 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                       hipDeviceptr_t location,
                                                       uint8 value,
                                                       size_t uint32_count,
-                                                      hipStream_t stream) {
+                                                      GPUStreamHandle stream) {
   ScopedActivateContext activation{context};
-  hipError_t res = hipMemsetAsync(location, value, uint32_count, stream);
+  hipError_t res = hipMemsetAsync(location, value, uint32_count, AsHipStream(stream));
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to enqueue async memset operation: " << ToString(res);
     return false;
@@ -594,7 +595,7 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                        hipDeviceptr_t location,
                                                        uint32 value,
                                                        size_t uint32_count,
-                                                       hipStream_t stream) {
+                                                       GPUStreamHandle stream) {
   ScopedActivateContext activation{context};
   void * pointer = absl::bit_cast<void *>(location);
 
@@ -603,7 +604,7 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
   uint32_t value32 = (valueC << 24) | (valueC << 16) | (valueC << 8) | (valueC) ;
   assert (value32 == value); // if mismatch this indicates case where hipMemsetAsyc can't emulate hipMemSetD32
   hipError_t res =
-      hipMemsetAsync(pointer, value, uint32_count*4, stream);
+      hipMemsetAsync(pointer, value, uint32_count*4, AsHipStream(stream));
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to enqueue async memset operation: " << ToString(res);
     return false;
@@ -613,10 +614,10 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
 }
 
 /* static */ bool ROCMDriver::AddStreamCallback(GPUContext* context,
-                                                hipStream_t stream,
+                                                GPUStreamHandle stream,
                                                 StreamCallback callback,
                                                 void* data) {
-  hipError_t res = hipStreamAddCallback(stream, (hipStreamCallback_t) callback, data, 0 /* = flags */);
+  hipError_t res = hipStreamAddCallback(AsHipStream(stream), (hipStreamCallback_t) callback, data, 0 /* = flags */);
   if (res != hipSuccess) {
     LOG(ERROR) << "unable to add host callback: " << ToString(res);
     return false;
@@ -671,33 +672,33 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
 }
 
 /* static */ bool ROCMDriver::CreateStream(GPUContext* context,
-                                           hipStream_t* stream) {
+                                           GPUStreamHandle* stream) {
   ScopedActivateContext activated{context};
-  hipError_t res = hipStreamCreateWithFlags(stream, hipStreamDefault);  // switch to hipStreamNonBlocking?
+  hipError_t res = hipStreamCreateWithFlags(AsHipStreamPtr(stream), hipStreamDefault);  // switch to hipStreamNonBlocking?
   if (res != hipSuccess) {
     LOG(ERROR) << "could not allocate ROCM stream for device "
                << context->device_ordinal() << ": " << ToString(res);
     return false;
   }
 
-  VLOG(2) << "successfully created stream " << *stream << " for device "
+  VLOG(2) << "successfully created stream " << *AsHipStreamPtr(stream) << " for device "
           << context->device_ordinal() << " on thread";
   return true;
 }
 
 /* static */ void ROCMDriver::DestroyStream(GPUContext* context,
-                                            hipStream_t* stream) {
+                                            GPUStreamHandle* stream) {
   if (*stream == nullptr) {
     return;
   }
 
   ScopedActivateContext activated{context};
-  hipError_t res = hipStreamDestroy(*stream);
+  hipError_t res = hipStreamDestroy(*AsHipStreamPtr(stream));
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to destroy ROCM stream for device "
                << context->device_ordinal() << ": " << ToString(res);
   } else {
-    VLOG(2) << "successfully destroyed stream " << *stream << " for device "
+    VLOG(2) << "successfully destroyed stream " << *AsHipStreamPtr(stream) << " for device "
             << context->device_ordinal();
     *stream = nullptr;
   }
@@ -826,9 +827,9 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
 
 /* static */ port::Status ROCMDriver::RecordEvent(GPUContext* context,
                                                   hipEvent_t event,
-                                                  hipStream_t stream) {
+                                                  GPUStreamHandle stream) {
   ScopedActivateContext activated{context};
-  hipError_t res = hipEventRecord(event, stream);
+  hipError_t res = hipEventRecord(event, AsHipStream(stream));
   switch (res) {
     case hipSuccess:
       return port::Status::OK();
@@ -882,10 +883,10 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
 }
 
 /* static */ bool ROCMDriver::WaitStreamOnEvent(GPUContext* context,
-                                                hipStream_t stream,
+                                                GPUStreamHandle stream,
                                                 hipEvent_t event) {
   ScopedActivateContext activation{context};
-  hipError_t res = hipStreamWaitEvent(stream, event, 0 /* = flags */);
+  hipError_t res = hipStreamWaitEvent(AsHipStream(stream), event, 0 /* = flags */);
   if (res != hipSuccess) {
     LOG(ERROR) << "could not wait stream on event: " << ToString(res);
     return false;
@@ -907,26 +908,26 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::SynchronizeStream(GPUContext* context,
-                                                        hipStream_t stream) {
+                                                        GPUStreamHandle stream) {
   ScopedActivateContext activated{context};
   CHECK(stream != nullptr);
-  hipError_t res = hipStreamSynchronize(stream);
+  hipError_t res = hipStreamSynchronize(AsHipStream(stream));
   if (res != hipSuccess) {
     port::Status status = port::InternalError(
         absl::StrCat("could not synchronize on ROCM stream: ", ToString(res)));
     LOG(ERROR) << status << " :: " << port::CurrentStackTrace();
     return status;
   }
-  VLOG(2) << "successfully synchronized stream " << stream << " on device "
+  VLOG(2) << "successfully synchronized stream " << AsHipStream(stream) << " on device "
           << context->device_ordinal();
   return port::Status::OK();
 }
 
 /* static */ bool ROCMDriver::IsStreamIdle(GPUContext* context,
-                                           hipStream_t stream) {
+                                           GPUStreamHandle stream) {
   ScopedActivateContext activated{context};
   CHECK(stream != nullptr);
-  hipError_t res = hipStreamQuery(stream);
+  hipError_t res = hipStreamQuery(AsHipStream(stream));
   if (res == hipSuccess) {
     return true;
   }
@@ -989,9 +990,9 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                     void* host_dst,
                                                     hipDeviceptr_t gpu_src,
                                                     uint64 size,
-                                                    hipStream_t stream) {
+                                                    GPUStreamHandle stream) {
   ScopedActivateContext activation{context};
-  hipError_t res = hipMemcpyDtoHAsync(host_dst, gpu_src, size, stream);
+  hipError_t res = hipMemcpyDtoHAsync(host_dst, gpu_src, size, AsHipStream(stream));
   if (res != hipSuccess) {
     LOG(ERROR) << port::Printf(
         "failed to enqueue async memcpy from device to host: %s; host dst: %p; "
@@ -1001,7 +1002,7 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
   }
   VLOG(2) << "successfully enqueued async memcpy d2h of " << size
           << " bytes from " << absl::bit_cast<void *>(gpu_src) << " to " << host_dst
-          << " on stream " << stream;
+          << " on stream " << AsHipStream(stream);
   return true;
 }
 
@@ -1009,9 +1010,9 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                     hipDeviceptr_t gpu_dst,
                                                     const void* host_src,
                                                     uint64 size,
-                                                    hipStream_t stream) {
+                                                    GPUStreamHandle stream) {
   ScopedActivateContext activation{context};
-  hipError_t res = hipMemcpyHtoDAsync(gpu_dst, const_cast<void*>(host_src), size, stream);
+  hipError_t res = hipMemcpyHtoDAsync(gpu_dst, const_cast<void*>(host_src), size, AsHipStream(stream));
   if (res != hipSuccess) {
     LOG(ERROR) << port::Printf(
         "failed to enqueue async memcpy from host to device: %s; GPU dst: %p; "
@@ -1020,7 +1021,7 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
     return false;
   }
   VLOG(2) << "successfully enqueued async memcpy h2d of " << size << " bytes"
-          << " on stream " << stream;
+          << " on stream " << AsHipStream(stream);
   return true;
 }
 
@@ -1028,9 +1029,9 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                     hipDeviceptr_t gpu_dst,
                                                     hipDeviceptr_t gpu_src,
                                                     uint64 size,
-                                                    hipStream_t stream) {
+                                                    GPUStreamHandle stream) {
   ScopedActivateContext activation{context};
-  hipError_t result = hipMemcpyDtoDAsync(gpu_dst, gpu_src, size, stream);
+  hipError_t result = hipMemcpyDtoDAsync(gpu_dst, gpu_src, size, AsHipStream(stream));
   if (result != hipSuccess) {
     LOG(ERROR) << port::Printf(
         "failed to enqueue async memcpy from device to device: %s"

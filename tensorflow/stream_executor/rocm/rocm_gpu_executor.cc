@@ -301,7 +301,7 @@ bool ROCMExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
                           const BlockDim &block_dims, const KernelBase &kernel,
                           const KernelArgsArrayBase &args) {
   CHECK_EQ(kernel.Arity(), args.number_of_arguments());
-  hipStream_t hipstream = AsROCMStreamValue(stream);
+  GPUStreamHandle hipstream = AsROCMStreamValue(stream);
   const GPUKernel* rocm_kernel = AsGPUKernel(&kernel);
   hipFunction_t hipfunc = AsHipFunction(rocm_kernel->GetFunctionHandle());
 
@@ -549,7 +549,7 @@ bool ROCMExecutor::HostCallback(Stream *stream,
                                        InternalHostCallback, callback_ptr);
 }
 
-/* static */ void ROCMExecutor::InternalHostCallback(hipStream_t stream,
+/* static */ void ROCMExecutor::InternalHostCallback(GPUStreamHandle stream,
                                                      hipError_t status,
                                                      void *data) {
   std::function<void()> *callback =

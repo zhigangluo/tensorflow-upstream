@@ -26,6 +26,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/statusor.h"
 #include "tensorflow/stream_executor/platform/port.h"
 #include "cuda/include/cuda.h"
+#include "tensorflow/stream_executor/gpu/gpu_types.h"
 
 
 namespace stream_executor {
@@ -68,13 +69,13 @@ class CUDADriver {
   // cuStreamCreate.
   // stream is an outparam owned by the caller, must not be null.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__STREAM.html#group__CUDA__STREAM_1ga581f0c5833e21ded8b5a56594e243f4
-  static bool CreateStream(GPUContext* context, CUstream *stream);
+  static bool CreateStream(GPUContext* context, GPUStreamHandle *stream);
 
   // Destroys a CUDA stream associated with the given context.
   // stream is owned by the caller, must not be null, and *stream is set to null
   // if the stream is successfully destroyed.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__STREAM.html#group__CUDA__STREAM_1g244c8833de4596bcd31a06cdf21ee758
-  static void DestroyStream(GPUContext* context, CUstream *stream);
+  static void DestroyStream(GPUContext* context, GPUStreamHandle *stream);
 
   // CUDA events can explicitly disable event TSC retrieval for some presumed
   // performance improvement if timing is unnecessary.
@@ -195,7 +196,7 @@ class CUDADriver {
                            unsigned int grid_dim_x, unsigned int grid_dim_y,
                            unsigned int grid_dim_z, unsigned int block_dim_x,
                            unsigned int block_dim_y, unsigned int block_dim_z,
-                           unsigned int shared_mem_bytes, CUstream stream,
+                           unsigned int shared_mem_bytes, GPUStreamHandle stream,
                            void **kernel_params, void **extra);
 
   // Loads ptx_contents with the CUDA driver's PTX JIT and stores the resulting
@@ -244,14 +245,14 @@ class CUDADriver {
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html#group__CUDA__MEM_1gaef08a7ccd61112f94e82f2b30d43627
   static bool AsynchronousMemsetUint8(GPUContext* context, CUdeviceptr location,
                                       uint8 value, size_t uint32_count,
-                                      CUstream stream);
+                                      GPUStreamHandle stream);
 
   // Performs an asynchronous memset of the device memory segment via
   // cuMemsetD32Async.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html#group__CUDA__MEM_1g58229da5d30f1c0cdf667b320ec2c0f5
   static bool AsynchronousMemsetUint32(GPUContext* context,
                                        CUdeviceptr location, uint32 value,
-                                       size_t uint32_count, CUstream stream);
+                                       size_t uint32_count, GPUStreamHandle stream);
 
   // -- Synchronous memcopies.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html#group__CUDA__MEM_1g4d32266788c440b0220b1a9ba5795169
@@ -270,13 +271,13 @@ class CUDADriver {
 
   static bool AsynchronousMemcpyD2H(GPUContext* context, void *host_dst,
                                     CUdeviceptr gpu_src, uint64 size,
-                                    CUstream stream);
+                                    GPUStreamHandle stream);
   static bool AsynchronousMemcpyH2D(GPUContext* context, CUdeviceptr gpu_dst,
                                     const void *host_src, uint64 size,
-                                    CUstream stream);
+                                    GPUStreamHandle stream);
   static bool AsynchronousMemcpyD2D(GPUContext* context, CUdeviceptr gpu_dst,
                                     CUdeviceptr gpu_src, uint64 size,
-                                    CUstream stream);
+                                    GPUStreamHandle stream);
 
   // The CUDA stream callback type signature.
   // The data passed to AddStreamCallback is subsequently passed to this
@@ -287,18 +288,18 @@ class CUDADriver {
   // * Callbacks from independent streams execute in an undefined order and may
   //   be serialized.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__STREAM.html#group__CUDA__STREAM_1g613d97a277d7640f4cb1c03bd51c2483
-  typedef void (*StreamCallback)(CUstream stream, CUresult status, void *data);
+  typedef void (*StreamCallback)(GPUStreamHandle stream, CUresult status, void *data);
 
   // Enqueues a callback operation into stream.
   // See StreamCallback above and the NVIDIA documentation for additional
   // details.
-  static bool AddStreamCallback(GPUContext* context, CUstream stream,
+  static bool AddStreamCallback(GPUContext* context, GPUStreamHandle stream,
                                 StreamCallback callback, void *data);
 
   // Causes stream to wait for event to trigger before proceeding via
   // cuStreamWaitEvent.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__STREAM.html#axzz334nAXAhM
-  static bool WaitStreamOnEvent(GPUContext* context, CUstream stream,
+  static bool WaitStreamOnEvent(GPUContext* context, GPUStreamHandle stream,
                                 CUevent event);
 
   // Blocks the calling thread until the operations enqueued onto stream have
@@ -309,7 +310,7 @@ class CUDADriver {
   // amount of time?
   //
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__STREAM.html#group__CUDA__STREAM_1g15e49dd91ec15991eb7c0a741beb7dad
-  static port::Status SynchronizeStream(GPUContext* context, CUstream stream);
+  static port::Status SynchronizeStream(GPUContext* context, GPUStreamHandle stream);
 
   // Blocks the calling thread until the operations associated with the context
   // have been completed, via cuCtxSynchronize.
@@ -320,7 +321,7 @@ class CUDADriver {
   // Returns true if all stream tasks have completed at time of the call. Note
   // the potential for races around this call (if another thread adds work to
   // the stream immediately after this returns).
-  static bool IsStreamIdle(GPUContext* context, CUstream stream);
+  static bool IsStreamIdle(GPUContext* context, GPUStreamHandle stream);
 
   // Returns whether code in the from context can access memory in the to
   // context via cuDeviceCanAccessPeer.
@@ -342,7 +343,7 @@ class CUDADriver {
   // thestream via cuEventRecord.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EVENT.html#group__CUDA__EVENT_1g95424d3be52c4eb95d83861b70fb89d1
   static port::Status RecordEvent(GPUContext* context, CUevent event,
-                                  CUstream stream);
+                                  GPUStreamHandle stream);
 
   // Polls (without blocking) to determine the status of an event - pending or
   // complete (or an error status).

@@ -26,6 +26,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/statusor.h"
 #include "tensorflow/stream_executor/platform/port.h"
 #include "rocm/include/hip/hip_runtime.h"
+#include "tensorflow/stream_executor/gpu/gpu_types.h"
 
 namespace stream_executor {
 namespace gpu {
@@ -59,12 +60,12 @@ class ROCMDriver {
   // Creates a new ROCM stream associated with the given device via
   // hipStreamCreate.
   // stream is an outparam owned by the caller, must not be null.
-  static bool CreateStream(GPUContext* context, hipStream_t* stream);
+  static bool CreateStream(GPUContext* context, GPUStreamHandle* stream);
 
   // Destroys a ROCM stream associated with the given context.
   // stream is owned by the caller, must not be null, and *stream is set to null
   // if the stream is successfully destroyed.
-  static void DestroyStream(GPUContext* context, hipStream_t* stream);
+  static void DestroyStream(GPUContext* context, GPUStreamHandle* stream);
 
   // ROCM events can explicitly disable event TSC retrieval for some presumed
   // performance improvement if timing is unnecessary.
@@ -159,7 +160,7 @@ class ROCMDriver {
                            unsigned int grid_dim_x, unsigned int grid_dim_y,
                            unsigned int grid_dim_z, unsigned int block_dim_x,
                            unsigned int block_dim_y, unsigned int block_dim_z,
-                           unsigned int shared_mem_bytes, hipStream_t stream,
+                           unsigned int shared_mem_bytes, GPUStreamHandle stream,
                            void** kernel_params, void** extra);
 
   // Loads HSACO with the ROCM runtime and stores the resulting handle in
@@ -201,13 +202,13 @@ class ROCMDriver {
   // hipMemsetD8Async.
   static bool AsynchronousMemsetUint8(GPUContext* context,
                                       hipDeviceptr_t location, uint8 value,
-                                      size_t uint32_count, hipStream_t stream);
+                                      size_t uint32_count, GPUStreamHandle stream);
 
   // Performs an asynchronous memset of the device memory segment via
   // hipMemsetD32Async.
   static bool AsynchronousMemsetUint32(GPUContext* context,
                                        hipDeviceptr_t location, uint32 value,
-                                       size_t uint32_count, hipStream_t stream);
+                                       size_t uint32_count, GPUStreamHandle stream);
 
   // -- Synchronous memcopies.
 
@@ -224,15 +225,15 @@ class ROCMDriver {
 
   static bool AsynchronousMemcpyD2H(GPUContext* context, void* host_dst,
                                     hipDeviceptr_t gpu_src, uint64 size,
-                                    hipStream_t stream);
+                                    GPUStreamHandle stream);
   static bool AsynchronousMemcpyH2D(GPUContext* context,
                                     hipDeviceptr_t gpu_dst,
                                     const void* host_src, uint64 size,
-                                    hipStream_t stream);
+                                    GPUStreamHandle stream);
   static bool AsynchronousMemcpyD2D(GPUContext* context,
                                     hipDeviceptr_t gpu_dst,
                                     hipDeviceptr_t gpu_src, uint64 size,
-                                    hipStream_t stream);
+                                    GPUStreamHandle stream);
 
   // The ROCM stream callback type signature.
   // The data passed to AddStreamCallback is subsequently passed to this
@@ -242,17 +243,17 @@ class ROCMDriver {
   // * Callbacks must not make any ROCM API calls.
   // * Callbacks from independent streams execute in an undefined order and may
   //   be serialized.
-  typedef void (*StreamCallback)(hipStream_t stream, hipError_t status, void *data);
+  typedef void (*StreamCallback)(GPUStreamHandle stream, hipError_t status, void *data);
 
   // Enqueues a callback operation into stream.
   // See StreamCallback above ROCM documentation for additional
   // details.
-  static bool AddStreamCallback(GPUContext* context, hipStream_t stream,
+  static bool AddStreamCallback(GPUContext* context, GPUStreamHandle stream,
                                 StreamCallback callback, void* data);
 
   // Causes stream to wait for event to trigger before proceeding via
   // hipStreamWaitEvent.
-  static bool WaitStreamOnEvent(GPUContext* context, hipStream_t stream,
+  static bool WaitStreamOnEvent(GPUContext* context, GPUStreamHandle stream,
                                 hipEvent_t event);
 
   // Blocks the calling thread until the operations enqueued onto stream have
@@ -263,7 +264,7 @@ class ROCMDriver {
   // amount of time?
   //
   static port::Status SynchronizeStream(GPUContext* context,
-                                        hipStream_t stream);
+                                        GPUStreamHandle stream);
 
   // Blocks the calling thread until the operations associated with the context
   // have been completed, via hipCtxSynchronize.
@@ -272,7 +273,7 @@ class ROCMDriver {
   // Returns true if all stream tasks have completed at time of the call. Note
   // the potential for races around this call (if another thread adds work to
   // the stream immediately after this returns).
-  static bool IsStreamIdle(GPUContext* context, hipStream_t stream);
+  static bool IsStreamIdle(GPUContext* context, GPUStreamHandle stream);
 
   // Returns whether code in the from context can access memory in the to
   // context via hipDeviceCanAccessPeer.
@@ -290,7 +291,7 @@ class ROCMDriver {
   // Records that an event occurred when execution reaches the current point in
   // thestream via hipEventRecord.
   static port::Status RecordEvent(GPUContext* context, hipEvent_t event,
-                                  hipStream_t stream);
+                                  GPUStreamHandle stream);
 
   // Polls (without blocking) to determine the status of an event - pending or
   // complete (or an error status).

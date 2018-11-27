@@ -28,7 +28,7 @@ namespace gpu {
 
 class ROCMExecutor;
 
-// Wraps a hipStream_t in order to satisfy the platform-independent
+// Wraps a GPUStreamHandle in order to satisfy the platform-independent
 // StreamInterface.
 //
 // Thread-safe post-initialization.
@@ -61,20 +61,20 @@ class ROCMStream : public internal::StreamInterface {
   // event is owned by this stream.
   hipEvent_t* completed_event() { return &completed_event_; }
 
-  // Returns the hipStream_t value for passing to the ROCM API.
+  // Returns the GPUStreamHandle value for passing to the ROCM API.
   //
   // Precond: this ROCMStream has been allocated (otherwise passing a nullptr
   // into ROCM library causes difficult-to-understand faults).
-  hipStream_t rocm_stream() const {
+  GPUStreamHandle rocm_stream() const {
     DCHECK(rocm_stream_ != nullptr);
-    return const_cast<hipStream_t>(rocm_stream_);
+    return const_cast<GPUStreamHandle>(rocm_stream_);
   }
 
   ROCMExecutor *parent() const { return parent_; }
 
  private:
   ROCMExecutor *parent_;  // Executor that spawned this stream.
-  hipStream_t rocm_stream_;  // Wrapped ROCM stream handle.
+  GPUStreamHandle rocm_stream_;  // Wrapped ROCM stream handle.
 
   // Event that indicates this stream has completed.
   hipEvent_t completed_event_ = nullptr;
@@ -84,8 +84,8 @@ class ROCMStream : public internal::StreamInterface {
 // Converts a Stream to the underlying ROCMStream implementation.
 ROCMStream *AsROCMStream(Stream *stream);
 
-// Extracts a hipStream_t from a ROCMStream-backed Stream object.
-hipStream_t AsROCMStreamValue(Stream *stream);
+// Extracts a GPUStreamHandle from a ROCMStream-backed Stream object.
+GPUStreamHandle AsROCMStreamValue(Stream *stream);
 
 }  // namespace gpu
 }  // namespace stream_executor

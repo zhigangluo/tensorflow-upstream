@@ -52,7 +52,7 @@ CUDAStream *AsCUDAStream(Stream *stream) {
   return static_cast<CUDAStream *>(stream->implementation());
 }
 
-CUstream AsCUDAStreamValue(Stream *stream) {
+GPUStreamHandle AsCUDAStreamValue(Stream *stream) {
   DCHECK(stream != nullptr);
   return AsCUDAStream(stream)->cuda_stream();
 }

@@ -52,7 +52,7 @@ ROCMStream *AsROCMStream(Stream *stream) {
   return static_cast<ROCMStream *>(stream->implementation());
 }
 
-hipStream_t AsROCMStreamValue(Stream *stream) {
+GPUStreamHandle AsROCMStreamValue(Stream *stream) {
   DCHECK(stream != nullptr);
   return AsROCMStream(stream)->rocm_stream();
 }
