@@ -29,7 +29,7 @@ namespace gpu {
 class ROCMExecutor;
 class ROCMStream;
 
-// Wraps a pair of hipEvent_ts in order to satisfy the platform-independent
+// Wraps a pair of GPUEventHandles in order to satisfy the platform-independent
 // TimerInferface -- both a start and a stop event are present which may be
 // recorded in a stream.
 class ROCMTimer : public internal::TimerInterface {
@@ -70,9 +70,9 @@ class ROCMTimer : public internal::TimerInterface {
 
  private:
   ROCMExecutor *parent_;
-  hipEvent_t start_event_;  // Event recorded to indicate the "start" timestamp
+  GPUEventHandle start_event_;  // Event recorded to indicate the "start" timestamp
                          // executing in a stream.
-  hipEvent_t stop_event_;   // Event recorded to indicate the "stop" timestamp
+  GPUEventHandle stop_event_;   // Event recorded to indicate the "stop" timestamp
                          // executing in a stream.
 };
 

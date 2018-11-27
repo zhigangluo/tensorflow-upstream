@@ -24,7 +24,7 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-// ROCMEvent wraps a hipEvent_t in the platform-independent EventInterface
+// ROCMEvent wraps a GPUEventHandle in the platform-independent EventInterface
 // interface.
 class ROCMEvent : public internal::EventInterface {
  public:
@@ -46,14 +46,14 @@ class ROCMEvent : public internal::EventInterface {
   Event::Status PollForStatus();
 
   // The underlying ROCM event element.
-  const hipEvent_t& rocm_event();
+  GPUEventHandle rocm_event();
 
  private:
-  // The Executor used to which this object and hipEvent_t are bound.
+  // The Executor used to which this object and GPUEventHandle are bound.
   ROCMExecutor* parent_;
 
   // The underlying ROCM event element.
-  hipEvent_t rocm_event_;
+  GPUEventHandle rocm_event_;
 };
 
 }  // namespace gpu

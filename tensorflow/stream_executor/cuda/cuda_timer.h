@@ -29,7 +29,7 @@ namespace gpu {
 class CUDAExecutor;
 class CUDAStream;
 
-// Wraps a pair of CUevents in order to satisfy the platform-independent
+// Wraps a pair of GPUEventHandles in order to satisfy the platform-independent
 // TimerInferface -- both a start and a stop event are present which may be
 // recorded in a stream.
 class CUDATimer : public internal::TimerInterface {
@@ -71,9 +71,9 @@ class CUDATimer : public internal::TimerInterface {
 
  private:
   CUDAExecutor *parent_;
-  CUevent start_event_;  // Event recorded to indicate the "start" timestamp
+  GPUEventHandle start_event_;  // Event recorded to indicate the "start" timestamp
                          // executing in a stream.
-  CUevent stop_event_;   // Event recorded to indicate the "stop" timestamp
+  GPUEventHandle stop_event_;   // Event recorded to indicate the "stop" timestamp
                          // executing in a stream.
 };
 

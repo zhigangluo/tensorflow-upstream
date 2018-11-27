@@ -798,14 +798,14 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::DestroyEvent(GPUContext* context,
-                                                   hipEvent_t* event) {
+                                                   GPUEventHandle* event) {
   if (*event == nullptr) {
     return port::Status{port::error::INVALID_ARGUMENT,
                         "input event cannot be null"};
   }
 
   ScopedActivateContext activated{context};
-  hipError_t res = hipEventDestroy(*event);
+  hipError_t res = hipEventDestroy(*AsHipEventPtr(event));
   *event = nullptr;
 
   switch (res) {
@@ -826,10 +826,10 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::RecordEvent(GPUContext* context,
-                                                  hipEvent_t event,
+                                                  GPUEventHandle event,
                                                   GPUStreamHandle stream) {
   ScopedActivateContext activated{context};
-  hipError_t res = hipEventRecord(event, AsHipStream(stream));
+  hipError_t res = hipEventRecord(AsHipEvent(event), AsHipStream(stream));
   switch (res) {
     case hipSuccess:
       return port::Status::OK();
@@ -848,9 +848,9 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
 }
 
 /* static */ port::StatusOr<hipError_t> ROCMDriver::QueryEvent(
-    GPUContext* context, hipEvent_t event) {
+    GPUContext* context, GPUEventHandle event) {
   ScopedActivateContext activated{context};
-  hipError_t res = hipEventQuery(event);
+  hipError_t res = hipEventQuery(AsHipEvent(event));
   if (res != hipSuccess && res != hipErrorNotReady) {
     return port::Status{
         port::error::INTERNAL,
@@ -862,8 +862,8 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
 
 /* static */ bool ROCMDriver::GetEventElapsedTime(GPUContext* context,
                                                   float* elapsed_milliseconds,
-                                                  hipEvent_t start,
-                                                  hipEvent_t stop) {
+                                                  GPUEventHandle start,
+                                                  GPUEventHandle stop) {
   ScopedActivateContext activated{context};
   // The stop event must have completed in order for hipEventElapsedTime to
   // work.
@@ -872,7 +872,7 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
     LOG(ERROR) << "failed to synchronize the stop event: " << ToString(res);
     return false;
   }
-  res = hipEventElapsedTime(elapsed_milliseconds, start, stop);
+  res = hipEventElapsedTime(elapsed_milliseconds, AsHipEvent(start), AsHipEvent(stop));
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to get elapsed time between events: "
                << ToString(res);
@@ -884,9 +884,9 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
 
 /* static */ bool ROCMDriver::WaitStreamOnEvent(GPUContext* context,
                                                 GPUStreamHandle stream,
-                                                hipEvent_t event) {
+                                                GPUEventHandle event) {
   ScopedActivateContext activation{context};
-  hipError_t res = hipStreamWaitEvent(AsHipStream(stream), event, 0 /* = flags */);
+  hipError_t res = hipStreamWaitEvent(AsHipStream(stream), AsHipEvent(event), 0 /* = flags */);
   if (res != hipSuccess) {
     LOG(ERROR) << "could not wait stream on event: " << ToString(res);
     return false;
@@ -1052,7 +1052,7 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
 }
 
 /* static */ port::Status ROCMDriver::CreateEvent(GPUContext* context,
-                                                  hipEvent_t* result,
+                                                  GPUEventHandle* event,
                                                   EventFlags flags) {
   int hipflags;
   switch (flags) {
@@ -1067,7 +1067,7 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
   }
 
   ScopedActivateContext activated{context};
-  hipError_t res = hipEventCreateWithFlags(result, hipflags);
+  hipError_t res = hipEventCreateWithFlags(AsHipEventPtr(event), hipflags);
 
   if (res == hipSuccess) {
     return port::Status::OK();

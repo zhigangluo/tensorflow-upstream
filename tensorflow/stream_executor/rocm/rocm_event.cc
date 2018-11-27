@@ -62,7 +62,7 @@ Event::Status ROCMEvent::PollForStatus() {
   }
 }
 
-const hipEvent_t& ROCMEvent::rocm_event() {
+GPUEventHandle ROCMEvent::rocm_event() {
   return rocm_event_;
 }
 

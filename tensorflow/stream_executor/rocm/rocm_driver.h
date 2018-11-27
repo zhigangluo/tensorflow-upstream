@@ -73,12 +73,12 @@ class ROCMDriver {
 
   // Creates a new event associated with the given context.
   // result is an outparam owned by the caller and must not be null.
-  static port::Status CreateEvent(GPUContext* context, hipEvent_t* result,
+  static port::Status CreateEvent(GPUContext* context, GPUEventHandle* result,
                                   EventFlags flags);
 
   // Destroys *event and turns it into a nullptr. event may not be null, but
   // *event may be, via hipEventDestroy
-  static port::Status DestroyEvent(GPUContext* context, hipEvent_t* event);
+  static port::Status DestroyEvent(GPUContext* context, GPUEventHandle* event);
 
   // Allocates a GPU memory space of size bytes associated with the given
   // context via hipMemAlloc.
@@ -254,7 +254,7 @@ class ROCMDriver {
   // Causes stream to wait for event to trigger before proceeding via
   // hipStreamWaitEvent.
   static bool WaitStreamOnEvent(GPUContext* context, GPUStreamHandle stream,
-                                hipEvent_t event);
+                                GPUEventHandle event);
 
   // Blocks the calling thread until the operations enqueued onto stream have
   // been completed, via hipStreamSynchronize.
@@ -285,18 +285,18 @@ class ROCMDriver {
   // Returns the elapsed milliseconds between start and stop via
   // hipEventElapsedTime.
   static bool GetEventElapsedTime(GPUContext* context,
-                                  float* elapsed_milliseconds, hipEvent_t start,
-                                  hipEvent_t stop);
+                                  float* elapsed_milliseconds, GPUEventHandle start,
+                                  GPUEventHandle stop);
 
   // Records that an event occurred when execution reaches the current point in
   // thestream via hipEventRecord.
-  static port::Status RecordEvent(GPUContext* context, hipEvent_t event,
+  static port::Status RecordEvent(GPUContext* context, GPUEventHandle event,
                                   GPUStreamHandle stream);
 
   // Polls (without blocking) to determine the status of an event - pending or
   // complete (or an error status).
   static port::StatusOr<hipError_t> QueryEvent(GPUContext* context,
-                                               hipEvent_t event);
+                                               GPUEventHandle event);
 
   // -- Device-specific calls.
 

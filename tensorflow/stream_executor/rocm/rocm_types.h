@@ -29,7 +29,14 @@ hipStream_t* AsHipStreamPtr(GPUStreamHandle* hndPtr) {
   return reinterpret_cast<hipStream_t*>(hndPtr);
 }
 
- 
+hipEvent_t AsHipEvent(GPUEventHandle hnd) {
+  return reinterpret_cast<hipEvent_t>(hnd);
+}
+
+hipEvent_t* AsHipEventPtr(GPUEventHandle* hndPtr) {
+  return reinterpret_cast<hipEvent_t*>(hndPtr);
+}
+
 }  // namespace gpu
 }  // namespace stream_executor
 

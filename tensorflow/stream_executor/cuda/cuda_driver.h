@@ -85,13 +85,13 @@ class CUDADriver {
   // Creates a new event associated with the given context.
   // result is an outparam owned by the caller and must not be null.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EVENT.html#group__CUDA__EVENT_1g450687e75f3ff992fe01662a43d9d3db
-  static port::Status CreateEvent(GPUContext* context, CUevent *result,
+  static port::Status CreateEvent(GPUContext* context, GPUEventHandle *result,
                                   EventFlags flags);
 
   // Destroys *event and turns it into a nullptr. event may not be null, but
   // *event may be, via cuEventDestroy
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EVENT.html#group__CUDA__EVENT_1g593ec73a8ec5a5fc031311d3e4dca1ef
-  static port::Status DestroyEvent(GPUContext* context, CUevent *event);
+  static port::Status DestroyEvent(GPUContext* context, GPUEventHandle *event);
 
   // Allocates a GPU memory space of size bytes associated with the given
   // context via cuMemAlloc.
@@ -300,7 +300,7 @@ class CUDADriver {
   // cuStreamWaitEvent.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__STREAM.html#axzz334nAXAhM
   static bool WaitStreamOnEvent(GPUContext* context, GPUStreamHandle stream,
-                                CUevent event);
+                                GPUEventHandle event);
 
   // Blocks the calling thread until the operations enqueued onto stream have
   // been completed, via cuStreamSynchronize.
@@ -336,20 +336,20 @@ class CUDADriver {
   // cuEventElapsedTime.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EVENT.html#group__CUDA__EVENT_1gdfb1178807353bbcaa9e245da497cf97
   static bool GetEventElapsedTime(GPUContext* context,
-                                  float *elapsed_milliseconds, CUevent start,
-                                  CUevent stop);
+                                  float *elapsed_milliseconds, GPUEventHandle start,
+                                  GPUEventHandle stop);
 
   // Records that an event occurred when execution reaches the current point in
   // thestream via cuEventRecord.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EVENT.html#group__CUDA__EVENT_1g95424d3be52c4eb95d83861b70fb89d1
-  static port::Status RecordEvent(GPUContext* context, CUevent event,
+  static port::Status RecordEvent(GPUContext* context, GPUEventHandle event,
                                   GPUStreamHandle stream);
 
   // Polls (without blocking) to determine the status of an event - pending or
   // complete (or an error status).
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EVENT.html#group__CUDA__EVENT_1g6f0704d755066b0ee705749ae911deef
   static port::StatusOr<CUresult> QueryEvent(GPUContext* context,
-                                             CUevent event);
+                                             GPUEventHandle event);
 
   // -- Device-specific calls.
 
