@@ -354,10 +354,6 @@ StatusOr<std::unique_ptr<Executable>> AMDGPUCompiler::RunBackend(
   llvm_module.setTargetTriple(kTargetTriple);
   llvm_module.setDataLayout(kDataLayout);
 
-
-  // COnstruct targetmachine features based on triple - base class that provides features of 
-  // different  
-
   // Determine the HLO schedule, which is an ordering of HLO instructions.  This
   // is used by buffer assignment to enable buffer reuse, and the same ordering
   // must also be used to determine the thunk launch schedule.
