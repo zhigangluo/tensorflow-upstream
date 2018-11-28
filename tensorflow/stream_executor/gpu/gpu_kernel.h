@@ -23,7 +23,7 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-// Wraps a CUfunction to implement the platform-independent KernelInterface.
+// Wraps a GPUFunctionHandle to implement the platform-independent KernelInterface.
 class GPUKernel : public internal::KernelInterface {
  public:
   GPUKernel()

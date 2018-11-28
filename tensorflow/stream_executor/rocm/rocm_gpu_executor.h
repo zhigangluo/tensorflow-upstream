@@ -242,7 +242,7 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
   mutex disk_modules_mu_;
 
   // Mapping from filename to hipModule_t, if it was already retrieved.
-  // Multiple hipFunction_t are usually obtained from a single hipModule_t so we
+  // Multiple GPUFunctionHandle are usually obtained from a single hipModule_t so we
   // attempt to hit in this mapping first, before retrieving it.
   std::map<string, hipModule_t> disk_modules_ GUARDED_BY(disk_modules_mu_);
 
@@ -261,11 +261,11 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
 
   // Keeps track of the set of launched kernels. Currently used to suppress the
   // occupancy check on subsequent launches.
-  std::set<hipFunction_t> launched_kernels_ GUARDED_BY(launched_kernels_mu_);
+  std::set<GPUFunctionHandle> launched_kernels_ GUARDED_BY(launched_kernels_mu_);
 
   // Handle for the ROCM device being operated on. Immutable
   // post-initialization.
-  hipDevice_t device_;
+  GPUDeviceHandle device_;
 
   // Handle for session with the library/driver. Immutable post-initialization.
   GPUContext* context_;

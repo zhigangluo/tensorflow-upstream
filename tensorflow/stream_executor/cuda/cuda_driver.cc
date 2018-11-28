@@ -14,7 +14,6 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/stream_executor/cuda/cuda_driver.h"
-#include "tensorflow/stream_executor/cuda/cuda_types.h"
 
 #include <stdint.h>
 #include <stdlib.h>

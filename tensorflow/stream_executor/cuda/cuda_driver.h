@@ -140,11 +140,11 @@ class CUDADriver {
   //
   // N.B. these device handles do not have a corresponding destroy function in
   // the CUDA driver API.
-  static port::Status GetDevice(int device_ordinal, CUdevice *device);
+  static port::Status GetDevice(int device_ordinal, GPUDeviceHandle *device);
 
   // Given a device handle, returns the name reported by the driver for the
   // device.
-  static bool GetDeviceName(CUdevice device, string *name_out);
+  static bool GetDeviceName(GPUDeviceHandle device, string *name_out);
 
   // Given a device to create a context for, returns a context handle into the
   // context outparam, which must not be null.
@@ -153,7 +153,7 @@ class CUDADriver {
   // calling thread. Current documentation on contexts and their influence on
   // userspace processes is given here:
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__CTX.html#group__CUDA__CTX_1g65dc0012348bc84810e2103a40d8e2cf
-  static port::Status CreateContext(CUdevice device,
+  static port::Status CreateContext(GPUDeviceHandle device,
                                     const DeviceOptions& device_options,
                                     GPUContext** context);
 
@@ -168,12 +168,12 @@ class CUDADriver {
   // in terms of integer-sized values, so there's no potential for overrun (as
   // of CUDA 5.5).
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EXEC.html#group__CUDA__EXEC_1g5e92a1b0d8d1b82cb00dcfb2de15961b
-  static bool FuncGetAttribute(CUfunction_attribute attribute,
-                               CUfunction function, int *attribute_value);
+  static bool FuncGetAttribute(GPUFunctionAttribute attribute,
+                               GPUFunctionHandle function, int *attribute_value);
 
   // Sets the preferred cache configuration for the specified function.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EXEC.html#group__CUDA__EXEC_1g40f8c11e81def95dc0072a375f965681
-  static bool FuncSetCacheConfig(CUfunction function,
+  static bool FuncSetCacheConfig(GPUFunctionHandle function,
                                  CUfunc_cache cache_config);
 
   // Gets the preferred shared memory bank configuration for the specified
@@ -192,7 +192,7 @@ class CUDADriver {
   // TODO(leary) describe the structure of kernel_params and extra in a readable
   // way.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EXEC.html#group__CUDA__EXEC_1gb8f3dc3031b40da29d5f9a7139e52e15
-  static bool LaunchKernel(GPUContext* context, CUfunction function,
+  static bool LaunchKernel(GPUContext* context, GPUFunctionHandle function,
                            unsigned int grid_dim_x, unsigned int grid_dim_y,
                            unsigned int grid_dim_z, unsigned int block_dim_x,
                            unsigned int block_dim_y, unsigned int block_dim_z,
@@ -213,14 +213,14 @@ class CUDADriver {
   // handle into function (outparam) on success. Neither kernel_name nor
   // function may be null. No ownership is taken of kernel_name.
   static bool GetModuleFunction(GPUContext* context, CUmodule module,
-                                const char *kernel_name, CUfunction *function);
+                                const char *kernel_name, GPUFunctionHandle *function);
 
   // Retrieves a named global/constant symbol from a loaded module, and returns
   // a device pointer and size of the symbol on success. symbol_name may not be
   // null. At least one of dptr or bytes should not be null. No ownership is
   // taken of symbol_name.
   static bool GetModuleSymbol(GPUContext* context, CUmodule module,
-                              const char *symbol_name, CUdeviceptr *dptr,
+                              const char *symbol_name, GPUDevicePointer *dptr,
                               size_t *bytes);
 
   // Unloads module from the current context via cuModuleUnload.
@@ -231,19 +231,19 @@ class CUDADriver {
 
   // Performs a synchronous memset of the device memory segment via cuMemsetD8.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html#group__CUDA__MEM_1g6e582bf866e9e2fb014297bfaf354d7b
-  static bool SynchronousMemsetUint8(GPUContext* context, CUdeviceptr location,
+  static bool SynchronousMemsetUint8(GPUContext* context, GPUDevicePointer location,
                                      uint8 value, size_t size);
 
   // Performs a synchronous memset of the device memory segment via cuMemsetD32.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html#group__CUDA__MEM_1g983e8d8759acd1b64326317481fbf132
   static bool SynchronousMemsetUint32(GPUContext* context,
-                                      CUdeviceptr location, uint32 value,
+                                      GPUDevicePointer location, uint32 value,
                                       size_t uint32_count);
 
   // Performs an asynchronous memset of the device memory segment via
   // cuMemsetD8Async.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html#group__CUDA__MEM_1gaef08a7ccd61112f94e82f2b30d43627
-  static bool AsynchronousMemsetUint8(GPUContext* context, CUdeviceptr location,
+  static bool AsynchronousMemsetUint8(GPUContext* context, GPUDevicePointer location,
                                       uint8 value, size_t uint32_count,
                                       GPUStreamHandle stream);
 
@@ -251,32 +251,32 @@ class CUDADriver {
   // cuMemsetD32Async.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html#group__CUDA__MEM_1g58229da5d30f1c0cdf667b320ec2c0f5
   static bool AsynchronousMemsetUint32(GPUContext* context,
-                                       CUdeviceptr location, uint32 value,
+                                       GPUDevicePointer location, uint32 value,
                                        size_t uint32_count, GPUStreamHandle stream);
 
   // -- Synchronous memcopies.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html#group__CUDA__MEM_1g4d32266788c440b0220b1a9ba5795169
 
   static port::Status SynchronousMemcpyD2H(GPUContext* context, void* host_dst,
-                                           CUdeviceptr gpu_src, uint64 size);
+                                           GPUDevicePointer gpu_src, uint64 size);
   static port::Status SynchronousMemcpyH2D(GPUContext* context,
-                                           CUdeviceptr gpu_dst,
+                                           GPUDevicePointer gpu_dst,
                                            const void* host_src, uint64 size);
   static port::Status SynchronousMemcpyD2D(GPUContext* context,
-                                           CUdeviceptr gpu_dst,
-                                           CUdeviceptr gpu_src, uint64 size);
+                                           GPUDevicePointer gpu_dst,
+                                           GPUDevicePointer gpu_src, uint64 size);
 
   // -- Asynchronous memcopies.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html#group__CUDA__MEM_1g56f30236c7c5247f8e061b59d3268362
 
   static bool AsynchronousMemcpyD2H(GPUContext* context, void *host_dst,
-                                    CUdeviceptr gpu_src, uint64 size,
+                                    GPUDevicePointer gpu_src, uint64 size,
                                     GPUStreamHandle stream);
-  static bool AsynchronousMemcpyH2D(GPUContext* context, CUdeviceptr gpu_dst,
+  static bool AsynchronousMemcpyH2D(GPUContext* context, GPUDevicePointer gpu_dst,
                                     const void *host_src, uint64 size,
                                     GPUStreamHandle stream);
-  static bool AsynchronousMemcpyD2D(GPUContext* context, CUdeviceptr gpu_dst,
-                                    CUdeviceptr gpu_src, uint64 size,
+  static bool AsynchronousMemcpyD2D(GPUContext* context, GPUDevicePointer gpu_dst,
+                                    GPUDevicePointer gpu_src, uint64 size,
                                     GPUStreamHandle stream);
 
   // The CUDA stream callback type signature.
@@ -357,37 +357,37 @@ class CUDADriver {
   // This is currently done via the deprecated device API.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__DEVICE__DEPRECATED.html#group__CUDA__DEVICE__DEPRECATED_1ge2091bbac7e1fb18c2821612115607ea
   static port::Status GetComputeCapability(int *cc_major, int *cc_minor,
-                                           CUdevice device);
+                                           GPUDeviceHandle device);
 
   // Returns the number of multiprocessors on the device (note that the device
   // may be multi-GPU-per-board).
-  static port::StatusOr<int> GetMultiprocessorCount(CUdevice device);
+  static port::StatusOr<int> GetMultiprocessorCount(GPUDeviceHandle device);
 
   // Returns the limit on number of threads that can be resident in a single
   // multiprocessor.
-  static port::StatusOr<int64> GetMaxThreadsPerMultiprocessor(CUdevice device);
+  static port::StatusOr<int64> GetMaxThreadsPerMultiprocessor(GPUDeviceHandle device);
 
   // Returns the limit on number of threads which may be resident for a single
   // block (cooperative thread array).
-  static port::StatusOr<int64> GetMaxThreadsPerBlock(CUdevice device);
+  static port::StatusOr<int64> GetMaxThreadsPerBlock(GPUDeviceHandle device);
 
   // Returns the amount of shared memory available on a single GPU core (i.e.
   // SM on NVIDIA devices).
-  static port::StatusOr<int64> GetMaxSharedMemoryPerCore(CUdevice device);
+  static port::StatusOr<int64> GetMaxSharedMemoryPerCore(GPUDeviceHandle device);
 
   // Returns the amount of shared memory available for a single block
   // (cooperative thread array).
-  static port::StatusOr<int64> GetMaxSharedMemoryPerBlock(CUdevice device);
+  static port::StatusOr<int64> GetMaxSharedMemoryPerBlock(GPUDeviceHandle device);
 
   // Returns the maximum supported number of registers per block.
-  static port::StatusOr<int64> GetMaxRegistersPerBlock(CUdevice device);
+  static port::StatusOr<int64> GetMaxRegistersPerBlock(GPUDeviceHandle device);
 
   // Returns the number of threads per warp.
-  static port::StatusOr<int64> GetThreadsPerWarp(CUdevice device);
+  static port::StatusOr<int64> GetThreadsPerWarp(GPUDeviceHandle device);
 
   // Queries the grid limits for device with cuDeviceGetAttribute calls.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__DEVICE.html#group__CUDA__DEVICE_1g9c3e1414f0ad901d3278a4d6645fc266
-  static bool GetGridLimits(int *x, int *y, int *z, CUdevice device);
+  static bool GetGridLimits(int *x, int *y, int *z, GPUDeviceHandle device);
 
   // Returns a grab-bag of device properties in a caller-owned device_properties
   // structure for device_ordinal via cuDeviceGetProperties.
@@ -396,23 +396,23 @@ class CUDADriver {
   // GetDeviceAttribute
   //
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__DEVICE__DEPRECATED.html#group__CUDA__DEVICE__DEPRECATED_1g65a5b4e25186bd257df80b98c98cffe6
-  static bool GetDeviceProperties(CUdevprop *device_properties,
+  static bool GetDeviceProperties(GPUDeviceProperty *device_properties,
                                   int device_ordinal);
 
   // Gets a specific integer-valued property about the given device.
   //
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__DEVICE.html#group__CUDA__DEVICE_1g9c3e1414f0ad901d3278a4d6645fc266
-  static port::StatusOr<int> GetDeviceAttribute(CUdevice_attribute attribute,
-                                                CUdevice device);
+  static port::StatusOr<int> GetDeviceAttribute(GPUDeviceAttribute attribute,
+                                                GPUDeviceHandle device);
 
-  // Returns whether ECC is enabled for the given CUdevice via
+  // Returns whether ECC is enabled for the given GPUDeviceHandle via
   // cuDeviceGetattribute with CU_DEVICE_ATTRIBUTE_ECC_ENABLED.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__DEVICE.html#group__CUDA__DEVICE_1g9c3e1414f0ad901d3278a4d6645fc266
-  static bool IsEccEnabled(CUdevice device, bool *result);
+  static bool IsEccEnabled(GPUDeviceHandle device, bool *result);
 
   // Returns the total amount of memory available for allocation by the CUDA
   // context, in bytes, via cuDeviceTotalMem.
-  static bool GetDeviceTotalMemory(CUdevice device, uint64 *result);
+  static bool GetDeviceTotalMemory(GPUDeviceHandle device, uint64 *result);
 
   // Returns the free amount of memory and total amount of memory, as reported
   // by cuMemGetInfo.
@@ -423,7 +423,7 @@ class CUDADriver {
   // Returns a PCI bus id string for the device.
   // [domain]:[bus]:[device].[function]
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html#group__CUDA__MEM_1g85295e7d9745ab8f0aa80dd1e172acfc
-  static string GetPCIBusID(CUdevice device);
+  static string GetPCIBusID(GPUDeviceHandle device);
 
   // -- Context- and device-independent calls.
 
@@ -444,10 +444,10 @@ class CUDADriver {
   // -- Other calls
 
   // Returns the maximum number of blocks (per multiprocessor) occupied by the
-  // specified kernel/CUfunction when launched with the specified parameters.
+  // specified kernel/GPUFunctionHandle when launched with the specified parameters.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__OCCUPANCY.html#group__CUDA__OCCUPANCY_1gcc6e1094d05cba2cee17fe33ddd04a98
   static port::StatusOr<int> GetMaxOccupiedBlocksPerCore(
-      GPUContext* context, CUfunction kernel, int threads_per_block,
+      GPUContext* context, GPUFunctionHandle kernel, int threads_per_block,
       size_t dynamic_shared_memory_bytes);
 
   // Seam for injecting an error at CUDA initialization time for testing

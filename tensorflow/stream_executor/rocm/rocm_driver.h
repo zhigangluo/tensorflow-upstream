@@ -119,15 +119,15 @@ class ROCMDriver {
   //
   // N.B. these device handles do not have a corresponding destroy function in
   // the ROCM driver API.
-  static port::Status GetDevice(int device_ordinal, hipDevice_t *device);
+  static port::Status GetDevice(int device_ordinal, GPUDeviceHandle *device);
 
   // Given a device handle, returns the name reported by the driver for the
   // device.
-  static bool GetDeviceName(hipDevice_t device, string *name_out);
+  static bool GetDeviceName(GPUDeviceHandle device, string *name_out);
 
   // Given a device to create a context for, returns a context handle into the
   // context outparam, which must not be null.
-  static port::Status CreateContext(int device_ordinal, hipDevice_t device,
+  static port::Status CreateContext(int device_ordinal, GPUDeviceHandle device,
                                     const DeviceOptions& device_options,
                                     GPUContext** context);
   // Destroys the provided context via hipCtxDestroy.
@@ -136,11 +136,11 @@ class ROCMDriver {
   static void DestroyContext(GPUContext* context);
 
   // Queries the runtime for the specified attribute of the specified function.
-  static bool FuncGetAttribute(hipDeviceAttribute_t attribute,
-                               hipFunction_t function, int *attribute_value);
+  static bool FuncGetAttribute(GPUFunctionAttribute attribute,
+                               GPUFunctionHandle function, int *attribute_value);
 
   // Sets the preferred cache configuration for the specified function.
-  static bool FuncSetCacheConfig(hipFunction_t function,
+  static bool FuncSetCacheConfig(GPUFunctionHandle function,
                                  hipFuncCache_t cache_config);
 
   // Gets the preferred shared memory bank configuration for the specified
@@ -156,7 +156,7 @@ class ROCMDriver {
   // Launches a HIP kernel via hipLaunchKernel.
   // TODO(leary) describe the structure of kernel_params and extra in a readable
   // way.
-  static bool LaunchKernel(GPUContext* context, hipFunction_t function,
+  static bool LaunchKernel(GPUContext* context, GPUFunctionHandle function,
                            unsigned int grid_dim_x, unsigned int grid_dim_y,
                            unsigned int grid_dim_z, unsigned int block_dim_x,
                            unsigned int block_dim_y, unsigned int block_dim_z,
@@ -173,66 +173,66 @@ class ROCMDriver {
   // function may be null. No ownership is taken of kernel_name.
   static bool GetModuleFunction(GPUContext* context, hipModule_t module,
                                 const char* kernel_name,
-                                hipFunction_t* function);
+                                GPUFunctionHandle* function);
 
   // Retrieves a named global/constant symbol from a loaded module, and returns
   // a device pointer and size of the symbol on success. symbol_name may not be
   // null. At least one of dptr or bytes should not be null. No ownership is
   // taken of symbol_name.
   static bool GetModuleSymbol(GPUContext* context, hipModule_t module,
-                              const char* symbol_name, hipDeviceptr_t* dptr,
+                              const char* symbol_name, GPUDevicePointer* dptr,
                               size_t* bytes);
 
   // Unloads module from the current context via cuModuleUnload.
   // TODO(leary) the documentation doesn't say what kind of disasters happen
-  // if you try to unload a module while its hipFunction_ts are in use.
+  // if you try to unload a module while its GPUFunctionHandles are in use.
   static void UnloadModule(GPUContext* context, hipModule_t module);
 
   // Performs a synchronous memset of the device memory segment via hipMemsetD8.
   static bool SynchronousMemsetUint8(GPUContext* context,
-                                     hipDeviceptr_t location, uint8 value,
+                                     GPUDevicePointer location, uint8 value,
                                      size_t size);
 
   // Performs a synchronous memset of the device memory segment via hipMemsetD32.
   static bool SynchronousMemsetUint32(GPUContext* context,
-                                      hipDeviceptr_t location, uint32 value,
+                                      GPUDevicePointer location, uint32 value,
                                       size_t uint32_count);
 
   // Performs an asynchronous memset of the device memory segment via
   // hipMemsetD8Async.
   static bool AsynchronousMemsetUint8(GPUContext* context,
-                                      hipDeviceptr_t location, uint8 value,
+                                      GPUDevicePointer location, uint8 value,
                                       size_t uint32_count, GPUStreamHandle stream);
 
   // Performs an asynchronous memset of the device memory segment via
   // hipMemsetD32Async.
   static bool AsynchronousMemsetUint32(GPUContext* context,
-                                       hipDeviceptr_t location, uint32 value,
+                                       GPUDevicePointer location, uint32 value,
                                        size_t uint32_count, GPUStreamHandle stream);
 
   // -- Synchronous memcopies.
 
   static port::Status SynchronousMemcpyD2H(GPUContext* context, void* host_dst,
-                                           hipDeviceptr_t gpu_src, uint64 size);
+                                           GPUDevicePointer gpu_src, uint64 size);
   static port::Status SynchronousMemcpyH2D(GPUContext* context,
-                                           hipDeviceptr_t gpu_dst,
+                                           GPUDevicePointer gpu_dst,
                                            const void* host_src, uint64 size);
   static port::Status SynchronousMemcpyD2D(GPUContext* context,
-                                           hipDeviceptr_t gpu_dst,
-                                           hipDeviceptr_t gpu_src, uint64 size);
+                                           GPUDevicePointer gpu_dst,
+                                           GPUDevicePointer gpu_src, uint64 size);
 
   // -- Asynchronous memcopies.
 
   static bool AsynchronousMemcpyD2H(GPUContext* context, void* host_dst,
-                                    hipDeviceptr_t gpu_src, uint64 size,
+                                    GPUDevicePointer gpu_src, uint64 size,
                                     GPUStreamHandle stream);
   static bool AsynchronousMemcpyH2D(GPUContext* context,
-                                    hipDeviceptr_t gpu_dst,
+                                    GPUDevicePointer gpu_dst,
                                     const void* host_src, uint64 size,
                                     GPUStreamHandle stream);
   static bool AsynchronousMemcpyD2D(GPUContext* context,
-                                    hipDeviceptr_t gpu_dst,
-                                    hipDeviceptr_t gpu_src, uint64 size,
+                                    GPUDevicePointer gpu_dst,
+                                    GPUDevicePointer gpu_src, uint64 size,
                                     GPUStreamHandle stream);
 
   // The ROCM stream callback type signature.
@@ -302,53 +302,53 @@ class ROCMDriver {
 
   // Returns AMDGPU ISA version for the device; i.e 803, 900.
   static port::Status GetAMDGPUISAVersion(int *version,
-                                          hipDevice_t device);
+                                          GPUDeviceHandle device);
 
   // Returns the number of multiprocessors on the device (note that the device
   // may be multi-GPU-per-board).
-  static port::StatusOr<int> GetMultiprocessorCount(hipDevice_t device);
+  static port::StatusOr<int> GetMultiprocessorCount(GPUDeviceHandle device);
 
   // Returns the limit on number of threads that can be resident in a single
   // multiprocessor.
-  static port::StatusOr<int64> GetMaxThreadsPerMultiprocessor(hipDevice_t device);
+  static port::StatusOr<int64> GetMaxThreadsPerMultiprocessor(GPUDeviceHandle device);
 
   // Returns the limit on number of threads which may be resident for a single
   // block (cooperative thread array).
-  static port::StatusOr<int64> GetMaxThreadsPerBlock(hipDevice_t device);
+  static port::StatusOr<int64> GetMaxThreadsPerBlock(GPUDeviceHandle device);
 
   // Returns the amount of shared memory available on a single GPU core (i.e.
   // CU on ROCM devices).
-  static port::StatusOr<int64> GetMaxSharedMemoryPerCore(hipDevice_t device);
+  static port::StatusOr<int64> GetMaxSharedMemoryPerCore(GPUDeviceHandle device);
 
   // Returns the amount of shared memory available for a single block
   // (cooperative thread array).
-  static port::StatusOr<int64> GetMaxSharedMemoryPerBlock(hipDevice_t device);
+  static port::StatusOr<int64> GetMaxSharedMemoryPerBlock(GPUDeviceHandle device);
 
   // Returns the maximum supported number of registers per block.
-  static port::StatusOr<int64> GetMaxRegistersPerBlock(hipDevice_t device);
+  static port::StatusOr<int64> GetMaxRegistersPerBlock(GPUDeviceHandle device);
 
   // Returns the number of threads per warp.
-  static port::StatusOr<int64> GetThreadsPerWarp(hipDevice_t device);
+  static port::StatusOr<int64> GetThreadsPerWarp(GPUDeviceHandle device);
 
   // Queries the grid limits for device with hipDeviceGetAttribute calls.
-  static bool GetGridLimits(int *x, int *y, int *z, hipDevice_t device);
+  static bool GetGridLimits(int *x, int *y, int *z, GPUDeviceHandle device);
 
   // Returns a grab-bag of device properties in a caller-owned device_properties
   // structure for device_ordinal via hipDeviceGetProperties.
-  static bool GetDeviceProperties(hipDeviceProp_t *device_properties,
+  static bool GetDeviceProperties(GPUDeviceProperty *device_properties,
                                   int device_ordinal);
 
   // Gets a specific integer-valued property about the given device.
-  static port::StatusOr<int> GetDeviceAttribute(hipDeviceAttribute_t attribute,
-                                                hipDevice_t device);
+  static port::StatusOr<int> GetDeviceAttribute(GPUDeviceAttribute attribute,
+                                                GPUDeviceHandle device);
 
-  // Returns whether ECC is enabled for the given hipDevice_t via
+  // Returns whether ECC is enabled for the given GPUDeviceHandle via
   // hipDeviceGetattribute with CU_DEVICE_ATTRIBUTE_ECC_ENABLED.
-  static bool IsEccEnabled(hipDevice_t device, bool *result);
+  static bool IsEccEnabled(GPUDeviceHandle device, bool *result);
 
   // Returns the total amount of memory available for allocation by the ROCM
   // context, in bytes, via hipDeviceTotalMem.
-  static bool GetDeviceTotalMemory(hipDevice_t device, uint64 *result);
+  static bool GetDeviceTotalMemory(GPUDeviceHandle device, uint64 *result);
 
   // Returns the free amount of memory and total amount of memory, as reported
   // by hipMemGetInfo.
@@ -357,7 +357,7 @@ class ROCMDriver {
 
   // Returns a PCI bus id string for the device.
   // [domain]:[bus]:[device].[function]
-  static string GetPCIBusID(hipDevice_t device);
+  static string GetPCIBusID(GPUDeviceHandle device);
 
   // -- Context- and device-independent calls.
 
@@ -376,9 +376,9 @@ class ROCMDriver {
   // -- Other calls
 
   // Returns the maximum number of blocks (per multiprocessor) occupied by the
-  // specified kernel/hipFunction_t when launched with the specified parameters.
+  // specified kernel/GPUFunctionHandle when launched with the specified parameters.
   static port::StatusOr<int> GetMaxOccupiedBlocksPerCore(
-      GPUContext* context, hipFunction_t kernel, int threads_per_block,
+      GPUContext* context, GPUFunctionHandle kernel, int threads_per_block,
       size_t dynamic_shared_memory_bytes);
 
   // Seam for injecting an error at CUDA initialization time for testing

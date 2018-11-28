@@ -30,6 +30,11 @@ namespace gpu {
 using GPUStreamHandle = hipStream_t;
 using GPUEventHandle = hipEvent_t;
 using GPUFunctionHandle = hipFunction_t;
+using GPUFunctionAttribute = hipDeviceAttribute_t;  // not a typo!
+using GPUDeviceHandle = hipDevice_t;
+using GPUDevicePointer = hipDeviceptr_t;
+using GPUDeviceAttribute = hipDeviceAttribute_t;
+using GPUDeviceProperty = hipDeviceProp_t;
 
 
 #else // CUDA
@@ -37,6 +42,11 @@ using GPUFunctionHandle = hipFunction_t;
 using GPUStreamHandle = CUstream;
 using GPUEventHandle = CUevent;
 using GPUFunctionHandle = CUfunction;
+using GPUFunctionAttribute = CUfunction_attribute;
+using GPUDeviceHandle = CUdevice;
+using GPUDevicePointer = CUdeviceptr;
+using GPUDeviceAttribute = CUdevice_attribute;
+using GPUDeviceProperty = CUdevprop;
 
 #endif
  

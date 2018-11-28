@@ -75,13 +75,13 @@ class CUDAExecutor : public internal::StreamExecutorInterface {
   int CalculateOccupancy(const DeviceDescription &device_description,
                          uint64 registers_per_thread,
                          uint64 shared_memory_per_block,
-                         const ThreadDim &thread_dims, CUfunction func);
+                         const ThreadDim &thread_dims, GPUFunctionHandle func);
 
   int CompareOccupancy(int *initial_blocks,
                        const DeviceDescription &device_description,
                        uint64 registers_per_thread,
                        uint64 shared_memory_per_block,
-                       const ThreadDim &thread_dims, CUfunction func);
+                       const ThreadDim &thread_dims, GPUFunctionHandle func);
 
   void *Allocate(uint64 size) override;
 
@@ -281,11 +281,11 @@ class CUDAExecutor : public internal::StreamExecutorInterface {
 
   // Keeps track of the set of launched kernels. Currently used to suppress the
   // occupancy check on subsequent launches.
-  std::set<CUfunction> launched_kernels_ GUARDED_BY(launched_kernels_mu_);
+  std::set<GPUFunctionHandle> launched_kernels_ GUARDED_BY(launched_kernels_mu_);
 
   // Handle for the CUDA device being operated on. Immutable
   // post-initialization.
-  CUdevice device_;
+  GPUDeviceHandle device_;
 
   // Handle for session with the library/driver. Immutable post-initialization.
   GPUContext* context_;
