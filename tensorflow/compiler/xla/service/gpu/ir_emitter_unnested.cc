@@ -144,10 +144,12 @@ void UpdateLaunchDimensions(const LaunchDimensions& launch_dims, Thunk* thunk,
 
 }  // namespace
 
-IrEmitterUnnested::IrEmitterUnnested(const HloModuleConfig& hlo_module_config,
-                                     const HloComputation* hlo_computation,
-                                     IrEmitterContext* ir_emitter_context)
-    : IrEmitter(hlo_module_config, ir_emitter_context, /*is_nested=*/false),
+IrEmitterUnnested::IrEmitterUnnested(
+    const HloModuleConfig& hlo_module_config,
+    const HloComputation* hlo_computation, IrEmitterContext* ir_emitter_context,
+    TargetMachineFeatures* target_machine_features)
+    : IrEmitter(hlo_module_config, ir_emitter_context, /*is_nested=*/false,
+                target_machine_features),
       hlo_computation_(hlo_computation) {
   // Initialize thunk_sequence_ to an empty list of thunks.
   thunk_sequence_.reset(new ThunkSequence());
@@ -2883,15 +2885,13 @@ namespace {
 // thread lives within a square tile of size tile_size (so thread blocks are of
 // size tile_size * tile_size).
 std::tuple<llvm::Value*, llvm::Value*> CalculateYXCoordinateWithinTile(
-    llvm::IRBuilder<>* builder, llvm::Value* tile_size,
-    int64 threads_per_tile) {
+    llvm::IRBuilder<>* builder, llvm::Value* tile_size, int64 threads_per_tile,
+    TargetMachineFeatures& target_machine_features) {
   // Calculate the starting element coordinate within a tile for the current
   // thread, (y, x) from thread_id.
-#if TENSORFLOW_USE_ROCM
-  llvm::Intrinsic::ID tid_intrinsic = llvm::Intrinsic::amdgcn_workitem_id_x;
-#else
-  llvm::Intrinsic::ID tid_intrinsic = llvm::Intrinsic::nvvm_read_ptx_sreg_tid_x;
-#endif
+  llvm::Intrinsic::ID tid_intrinsic =
+      target_machine_features.simt_intrinsic("__thread_id_x");
+
   llvm::Value* thread_id =
       llvm_ir::EmitCallToIntrinsic(tid_intrinsic, {}, {}, builder);
   llvm_ir::AddRangeMetadata(0, threads_per_tile,
@@ -2906,14 +2906,10 @@ std::tuple<llvm::Value*, llvm::Value*> CalculateYXCoordinateWithinTile(
 // Reads block_idx.x, casts it to type index_ty, and adds the assumption that
 // it's in the range [0, num_blocks].
 llvm::Value* GetBlockIdx(llvm::IRBuilder<>* builder, llvm::Type* index_ty,
-                         int64 num_blocks) {
-#if TENSORFLOW_USE_ROCM
+                         int64 num_blocks,
+                         TargetMachineFeatures& target_machine_features) {
   llvm::Intrinsic::ID groupid_intrinsic =
-      llvm::Intrinsic::amdgcn_workgroup_id_x;
-#else
-  llvm::Intrinsic::ID groupid_intrinsic =
-      llvm::Intrinsic::nvvm_read_ptx_sreg_ctaid_x;
-#endif
+      target_machine_features.simt_intrinsic("__block_id_x");
   llvm::Value* block_id =
       llvm_ir::EmitCallToIntrinsic(groupid_intrinsic, {}, {}, builder);
   llvm_ir::AddRangeMetadata(0, num_blocks,
@@ -3086,11 +3082,12 @@ LaunchDimensions IrEmitterUnnested::EmitHlo021Tile(
   llvm::Value* x;
   llvm::Value* y;
   std::tie(y, x) = CalculateYXCoordinateWithinTile(
-      &b_, index_typed_constant(kTileSize), kThreadsPerTile);
+      &b_, index_typed_constant(kTileSize), kThreadsPerTile,
+      GetTargetMachineFeatures());
 
   // Calculate the index for the current output tile from block_id.
   const IrArray::Index output_tile_index(
-      GetBlockIdx(&b_, index_ty, num_tiles),
+      GetBlockIdx(&b_, index_ty, num_tiles, GetTargetMachineFeatures()),
       ShapeUtil::MakeShapeWithDescendingLayout(PRED /*arbitrary*/,
                                                output_dims_in_tiles),
       &b_);
@@ -3162,11 +3159,8 @@ LaunchDimensions IrEmitterUnnested::EmitHlo021Tile(
   // Wait for all threads to reach this point, lest we copy a value from tile to
   // output before the other thread copies it from input to tile.
   // This is `__syncthreads` in CUDA.
-#if TENSORFLOW_USE_ROCM
-  llvm::Intrinsic::ID barrier_intrinsic_id = llvm::Intrinsic::amdgcn_s_barrier;
-#else
-  llvm::Intrinsic::ID barrier_intrinsic_id = llvm::Intrinsic::nvvm_barrier0;
-#endif
+  llvm::Intrinsic::ID barrier_intrinsic_id =
+      GetTargetMachineFeatures().simt_intrinsic("barrier");
   llvm_ir::EmitCallToIntrinsic(barrier_intrinsic_id, {}, {}, &b_);
 
   llvm_ir::TiledParameterInfo tiled_param_info(param_shmem_buffers, y, x);

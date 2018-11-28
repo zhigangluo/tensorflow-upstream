@@ -492,7 +492,7 @@ ROCMDriver::DeviceGetSharedMemConfig(int device_ordinal) {
   uint32_t value32 = (valueC << 24) | (valueC << 16) | (valueC << 8) | (valueC) ;
   assert (value32 == value); // if mismatch this indicates case where hipMemsetAsyc can't emulate hipMemSetD32
   hipError_t res =
-      hipMemsetAsync(pointer, value, uint32_count*4, stream);
+        hipMemsetAsync(pointer, value, uint32_count*4, stream);
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to enqueue async memset operation: " << ToString(res);
     return false;
