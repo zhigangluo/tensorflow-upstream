@@ -13,25 +13,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_TYPES_H_
-#define TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_TYPES_H_
-
-#include "tensorflow/stream_executor/gpu/gpu_types.h"
-#include "tensorflow/stream_executor/stream_executor_internal.h"
-#include "cuda/include/cuda.h"
+#include "tensorflow/stream_executor/cuda/cuda_types.h"
 
 namespace stream_executor {
 namespace gpu {
 
-CUstream AsCUstream(GPUStreamHandle hnd);
+CUstream AsCUstream(GPUStreamHandle hnd) {
+  return reinterpret_cast<CUstream>(hnd);
+}
 
-CUstream* AsCUstreamPtr(GPUStreamHandle* hndPtr);
+CUstream* AsCUstreamPtr(GPUStreamHandle* hndPtr) {
+  return reinterpret_cast<CUstream*>(hndPtr);
+}
 
-// Extracts a CUstream from a CUDAStream-backed Stream object.
-// (declared here - defined in cuda_stream.cc) 
-CUstream AsCUstream(Stream *stream);
- 
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_TYPES_H_

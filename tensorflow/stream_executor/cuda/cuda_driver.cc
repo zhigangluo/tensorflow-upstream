@@ -815,7 +815,9 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                 StreamCallback callback,
                                                 void *data) {
   // Note: flags param is required to be zero according to CUDA 6.0.
-  CUresult res = cuStreamAddCallback(AsCUstream(stream), callback, data, 0 /* = flags */);
+
+  auto ugly_hack_callback = reinterpret_cast<void (*)(CUstream_st*, cudaError_enum, void*)>(callback);
+  CUresult res = cuStreamAddCallback(AsCUstream(stream), ugly_hack_callback, data, 0 /* = flags */);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "unable to add host callback: " << ToString(res);
     return false;
