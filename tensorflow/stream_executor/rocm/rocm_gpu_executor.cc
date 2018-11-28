@@ -59,10 +59,6 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-static hipFunction_t AsHipFunction(GPUFunctionHandle hnd) {
-  return reinterpret_cast<hipFunction_t>(hnd);
-}
-
 // Returns the current kernel cache configuration preference as a
 // hipFuncCache_t.
 hipFuncCache_t AsROCMCacheConfig(KernelCacheConfig config) {
@@ -303,7 +299,7 @@ bool ROCMExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
   CHECK_EQ(kernel.Arity(), args.number_of_arguments());
   GPUStreamHandle hipstream = AsROCMStreamValue(stream);
   const GPUKernel* rocm_kernel = AsGPUKernel(&kernel);
-  hipFunction_t hipfunc = AsHipFunction(rocm_kernel->GetFunctionHandle());
+  hipFunction_t hipfunc = rocm_kernel->GetFunctionHandle();
 
   // Only perform/print the occupancy check once.  Even just checking to see
   // whether we've done an occupancy check on this kernel before isn't free

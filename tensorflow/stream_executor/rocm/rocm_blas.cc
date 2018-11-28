@@ -16,7 +16,6 @@ limitations under the License.
 #include "rocm/include/rocblas.h"
 
 #include "tensorflow/stream_executor/rocm/rocm_blas.h"
-#include "tensorflow/stream_executor/rocm/rocm_types.h"
 
 #define EIGEN_USE_GPU
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
@@ -298,7 +297,7 @@ bool ROCMBlas::SetStream(Stream *stream) {
   CHECK(AsROCMStreamValue(stream) != nullptr);
   CHECK(blas_ != nullptr);
   rocblas_status ret =
-      wrap::rocblas_set_stream(parent_, blas_, AsHipStream(stream));
+    wrap::rocblas_set_stream(parent_, blas_, AsROCMStreamValue(stream));
   if (ret != rocblas_status_success) {
     LOG(ERROR) << "failed to set stream for rocBLAS calls: " << ToString(ret);
     return false;

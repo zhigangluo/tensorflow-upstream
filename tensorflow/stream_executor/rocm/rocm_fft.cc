@@ -14,7 +14,6 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/stream_executor/rocm/rocm_fft.h"
-#include "tensorflow/stream_executor/rocm/rocm_types.h"
 
 #include <complex>
 
@@ -108,7 +107,7 @@ hipfftType ROCMFftType(fft::Type type) {
 
 // Associates the given stream with the given rocFFT plan.
 bool SetStream(ROCMExecutor *parent, hipfftHandle plan, Stream *stream) {
-  auto ret = wrap::hipfftSetStream(parent, plan, AsHipStream(stream));
+  auto ret = wrap::hipfftSetStream(parent, plan, AsROCMStreamValue(stream));
   if (ret != HIPFFT_SUCCESS) {
     LOG(ERROR) << "failed to run rocFFT routine hipfftSetStream: " << ret;
     return false;

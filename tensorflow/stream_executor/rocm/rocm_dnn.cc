@@ -14,7 +14,6 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/stream_executor/rocm/rocm_dnn.h"
-#include "tensorflow/stream_executor/rocm/rocm_types.h"
 
 #include <functional>
 #include <memory>
@@ -2584,7 +2583,7 @@ bool MIOpenSupport::DoConvolveImpl(
 
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsHipStream(stream));
+                                     AsROCMStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "failed to set stream for miopen handle: " << ToString(status);
   }
@@ -2828,7 +2827,7 @@ bool MIOpenSupport::DoBatchNormalizationForwardImpl(
     std::function<void()> inv_var_to_var) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsHipStream(stream));
+				      AsROCMStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -2910,7 +2909,7 @@ bool MIOpenSupport::DoBatchNormalizationBackwardImpl(
     DeviceMemory<U>* offset_backprop) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsHipStream(stream));
+                                     AsROCMStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -3128,7 +3127,7 @@ bool MIOpenSupport::DoConvolveBackwardDataImpl(
     dnn::ProfileResult* output_profile_result) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsHipStream(stream));
+                                     AsROCMStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "failed to set stream for miopen handle: " << ToString(status);
   }
@@ -3353,7 +3352,7 @@ bool MIOpenSupport::DoConvolveBackwardFilterImpl(
     dnn::ProfileResult* output_profile_result) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsHipStream(stream));
+                                     AsROCMStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "failed to set stream for miopen handle: " << ToString(status);
   }
@@ -3573,7 +3572,7 @@ bool MIOpenSupport::DoConvolveBackwardBiasImpl(
     DeviceMemory<T>* backward_bias_data) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsHipStream(stream));
+                                     AsROCMStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "failed to set stream for miopen handle: " << ToString(status);
   }
@@ -3794,7 +3793,7 @@ bool MIOpenSupport::DoBiasAdd(Stream* stream,
 
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsHipStream(stream));
+                                     AsROCMStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -3848,7 +3847,7 @@ bool MIOpenSupport::DoPoolForward(
     ScratchAllocator* workspace_allocator) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsHipStream(stream));
+                                     AsROCMStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -3885,7 +3884,7 @@ bool MIOpenSupport::DoPoolForward(
     ScratchAllocator* workspace_allocator) {
 
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsHipStream(stream));
+                                     AsROCMStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -3937,7 +3936,7 @@ bool MIOpenSupport::DoPoolBackward(
     ScratchAllocator* workspace_allocator) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsHipStream(stream));
+                                     AsROCMStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4038,7 +4037,7 @@ bool MIOpenSupport::DoPoolBackward(
 
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsHipStream(stream));
+                                     AsROCMStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4151,7 +4150,7 @@ bool MIOpenSupport::DoNormalizeWithDimensions(
   // Launch the normalization.
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsHipStream(stream));
+                                     AsROCMStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4195,7 +4194,7 @@ bool MIOpenSupport::DoNormalizeBackwardWithDimensions(
 
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsHipStream(stream));
+                                     AsROCMStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;

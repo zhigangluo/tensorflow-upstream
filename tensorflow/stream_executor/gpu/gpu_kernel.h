@@ -18,11 +18,10 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/kernel_cache_config.h"
 #include "tensorflow/stream_executor/stream_executor_internal.h"
+#include "tensorflow/stream_executor/gpu/gpu_types.h"
 
 namespace stream_executor {
 namespace gpu {
-
-using GPUFunctionHandle = void*;
 
 // Wraps a CUfunction to implement the platform-independent KernelInterface.
 class GPUKernel : public internal::KernelInterface {

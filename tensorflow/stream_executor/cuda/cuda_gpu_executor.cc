@@ -69,10 +69,6 @@ bool FLAGS_prefer_cubin_to_ptx = true;
 namespace stream_executor {
 namespace gpu {
 
-static CUfunction AsCUfunction(GPUFunctionHandle hnd) {
-  return reinterpret_cast<CUfunction>(hnd);
-}
-
 // Returns the current kernel cache configuration preference as a CUfunc_cache.
 CUfunc_cache AsCUDACacheConfig(KernelCacheConfig config) {
   switch (config) {
@@ -411,14 +407,14 @@ bool CUDAExecutor::GetKernelMetadata(GPUKernel* cuda_kernel,
   int value;
   if (!CUDADriver::FuncGetAttribute(
           CU_FUNC_ATTRIBUTE_NUM_REGS,
-          AsCUfunction(cuda_kernel->GetFunctionHandle()), &value)) {
+          cuda_kernel->GetFunctionHandle(), &value)) {
     return false;
   }
   kernel_metadata->set_registers_per_thread(value);
 
   if (!CUDADriver::FuncGetAttribute(
           CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES,
-          AsCUfunction(cuda_kernel->GetFunctionHandle()), &value)) {
+          cuda_kernel->GetFunctionHandle(), &value)) {
     return false;
   }
   kernel_metadata->set_shared_memory_bytes(value);
@@ -432,7 +428,7 @@ bool CUDAExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
   CHECK_EQ(kernel.Arity(), args.number_of_arguments());
   GPUStreamHandle custream = AsCUDAStreamValue(stream);
   const GPUKernel* cuda_kernel = AsGPUKernel(&kernel);
-  CUfunction cufunc = AsCUfunction(cuda_kernel->GetFunctionHandle());
+  CUfunction cufunc = cuda_kernel->GetFunctionHandle();
 
   // Only perform/print the occupancy check once.  Even just checking to see
   // whether we've done an occupancy check on this kernel before isn't free
@@ -495,7 +491,7 @@ void CUDAExecutor::VlogOccupancyInfo(const KernelBase &kernel,
       kernel.parent()->GetDeviceDescription();
 
   const GPUKernel* cuda_kernel = AsGPUKernel(&kernel);
-  CUfunction cufunc = AsCUfunction(cuda_kernel->GetFunctionHandle());
+  CUfunction cufunc = cuda_kernel->GetFunctionHandle();
 
   int blocks_per_sm = CalculateOccupancy(device_description, regs_per_thread,
                                          smem_per_block, thread_dims, cufunc);

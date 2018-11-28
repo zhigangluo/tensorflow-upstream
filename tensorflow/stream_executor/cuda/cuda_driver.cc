@@ -662,7 +662,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
           << " bdz: " << block_dim_z;
   CUresult res = cuLaunchKernel(function, grid_dim_x, grid_dim_y, grid_dim_z,
                                 block_dim_x, block_dim_y, block_dim_z,
-                                shared_mem_bytes, AsCUstream(stream), kernel_params, extra);
+                                shared_mem_bytes, stream, kernel_params, extra);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "failed to launch CUDA kernel: " << function
                << "; result: " << ToString(res);
@@ -786,7 +786,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                       size_t uint32_count,
                                                       GPUStreamHandle stream) {
   ScopedActivateContext activation(context);
-  CUresult res = cuMemsetD8Async(location, value, uint32_count, AsCUstream(stream));
+  CUresult res = cuMemsetD8Async(location, value, uint32_count, stream);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "failed to enqueue async memset operation: " << ToString(res);
     return false;
@@ -801,7 +801,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                        size_t uint32_count,
                                                        GPUStreamHandle stream) {
   ScopedActivateContext activation(context);
-  CUresult res = cuMemsetD32Async(location, value, uint32_count, AsCUstream(stream));
+  CUresult res = cuMemsetD32Async(location, value, uint32_count, stream);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "failed to enqueue async memset operation: " << ToString(res);
     return false;
@@ -816,8 +816,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                 void *data) {
   // Note: flags param is required to be zero according to CUDA 6.0.
 
-  auto ugly_hack_callback = reinterpret_cast<void (*)(CUstream_st*, cudaError_enum, void*)>(callback);
-  CUresult res = cuStreamAddCallback(AsCUstream(stream), ugly_hack_callback, data, 0 /* = flags */);
+  CUresult res = cuStreamAddCallback(stream, callback, data, 0 /* = flags */);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "unable to add host callback: " << ToString(res);
     return false;
@@ -877,14 +876,14 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
   // up synchronization with respect to memsets and any other things that have
   // to occur on the default stream?
   ScopedActivateContext activated{context};
-  CUresult res = cuStreamCreate(AsCUstreamPtr(stream), 0);
+  CUresult res = cuStreamCreate(stream, 0);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "could not allocate CUDA stream for context " << context
                << ": " << ToString(res);
     return false;
   }
 
-  VLOG(2) << "successfully created stream " << *AsCUstreamPtr(stream) << " for context "
+  VLOG(2) << "successfully created stream " << *stream << " for context "
           << context << " on thread";
   return true;
 }
@@ -896,12 +895,12 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
   }
 
   ScopedActivateContext activated{context};
-  CUresult res = cuStreamDestroy(*AsCUstreamPtr(stream));
+  CUresult res = cuStreamDestroy(*stream);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "failed to destroy CUDA stream for context " << context
                << ": " << ToString(res);
   } else {
-    VLOG(2) << "successfully destroyed stream " << *AsCUstreamPtr(stream) << " for context "
+    VLOG(2) << "successfully destroyed stream " << *stream << " for context "
             << context;
     *stream = nullptr;
   }
@@ -1025,7 +1024,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
   }
 
   ScopedActivateContext activated{context};
-  CUresult res = cuEventDestroy(*AsCUeventPtr(event));
+  CUresult res = cuEventDestroy(*event);
   *event = nullptr;
 
   switch (res) {
@@ -1049,7 +1048,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                   GPUEventHandle event,
                                                   GPUStreamHandle stream) {
   ScopedActivateContext activated{context};
-  CUresult res = cuEventRecord(AsCUevent(event), AsCUstream(stream));
+  CUresult res = cuEventRecord(event, stream);
   switch (res) {
     case CUDA_SUCCESS:
       return port::Status::OK();
@@ -1070,7 +1069,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
 /* static */ port::StatusOr<CUresult> CUDADriver::QueryEvent(
     GPUContext *context, GPUEventHandle event) {
   ScopedActivateContext activated{context};
-  CUresult res = cuEventQuery(AsCUevent(event));
+  CUresult res = cuEventQuery(event);
   if (res != CUDA_SUCCESS && res != CUDA_ERROR_NOT_READY) {
     return port::Status(
         port::error::INTERNAL,
@@ -1086,12 +1085,12 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
   ScopedActivateContext activated{context};
   // The stop event must have completed in order for cuEventElapsedTime to
   // work.
-  CUresult res = cuEventSynchronize(AsCUevent(stop));
+  CUresult res = cuEventSynchronize(stop);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "failed to synchronize the stop event: " << ToString(res);
     return false;
   }
-  res = cuEventElapsedTime(elapsed_milliseconds, AsCUevent(start), AsCUevent(stop));
+  res = cuEventElapsedTime(elapsed_milliseconds, start, stop);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "failed to get elapsed time between events: "
                << ToString(res);
@@ -1105,7 +1104,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                 GPUStreamHandle stream,
                                                 GPUEventHandle event) {
   ScopedActivateContext activation(context);
-  CUresult res = cuStreamWaitEvent(AsCUstream(stream), AsCUevent(event), 0 /* = flags */);
+  CUresult res = cuStreamWaitEvent(stream, event, 0 /* = flags */);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "could not wait stream on event: " << ToString(res);
     return false;
@@ -1130,14 +1129,14 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                         GPUStreamHandle stream) {
   ScopedActivateContext activated{context};
   CHECK(stream != nullptr);
-  CUresult res = cuStreamSynchronize(AsCUstream(stream));
+  CUresult res = cuStreamSynchronize(stream);
   if (res != CUDA_SUCCESS) {
     port::Status status = port::InternalError(
         absl::StrCat("could not synchronize on CUDA stream: ", ToString(res)));
     LOG(ERROR) << status << " :: " << port::CurrentStackTrace();
     return status;
   }
-  VLOG(2) << "successfully synchronized stream " << AsCUstream(stream) << " on context "
+  VLOG(2) << "successfully synchronized stream " << stream << " on context "
           << context;
   return port::Status::OK();
 }
@@ -1146,7 +1145,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
                                            GPUStreamHandle stream) {
   ScopedActivateContext activated{context};
   CHECK(stream != nullptr);
-  CUresult res = cuStreamQuery(AsCUstream(stream));
+  CUresult res = cuStreamQuery(stream);
   if (res == CUDA_SUCCESS) {
     return true;
   }
@@ -1215,7 +1214,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                     uint64 size,
                                                     GPUStreamHandle stream) {
   ScopedActivateContext activation(context);
-  CUresult res = cuMemcpyDtoHAsync(host_dst, gpu_src, size, AsCUstream(stream));
+  CUresult res = cuMemcpyDtoHAsync(host_dst, gpu_src, size, stream);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << port::Printf(
         "failed to enqueue async memcpy from device to host: %s; host dst: %p; "
@@ -1226,7 +1225,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
   }
   VLOG(2) << "successfully enqueued async memcpy d2h of " << size
           << " bytes from " << absl::bit_cast<void *>(gpu_src) << " to "
-          << host_dst << " on stream " << AsCUstream(stream);
+          << host_dst << " on stream " << stream;
   return true;
 }
 
@@ -1236,7 +1235,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                     uint64 size,
                                                     GPUStreamHandle stream) {
   ScopedActivateContext activation(context);
-  CUresult res = cuMemcpyHtoDAsync(gpu_dst, host_src, size, AsCUstream(stream));
+  CUresult res = cuMemcpyHtoDAsync(gpu_dst, host_src, size, stream);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << port::Printf(
         "failed to enqueue async memcpy from host to device: %s; GPU dst: %p; "
@@ -1246,7 +1245,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
     return false;
   }
   VLOG(2) << "successfully enqueued async memcpy h2d of " << size << " bytes"
-          << " on stream " << AsCUstream(stream);
+          << " on stream " << stream;
   return true;
 }
 
@@ -1256,7 +1255,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
                                                     uint64 size,
                                                     GPUStreamHandle stream) {
   ScopedActivateContext activation(context);
-  CUresult result = cuMemcpyDtoDAsync(gpu_dst, gpu_src, size, AsCUstream(stream));
+  CUresult result = cuMemcpyDtoDAsync(gpu_dst, gpu_src, size, stream);
   if (result != CUDA_SUCCESS) {
     LOG(ERROR) << port::Printf(
         "failed to enqueue async memcpy from device to device: %s"
@@ -1293,7 +1292,7 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
   }
 
   ScopedActivateContext activated{context};
-  CUresult res = cuEventCreate(AsCUeventPtr(event), cuflags);
+  CUresult res = cuEventCreate(event, cuflags);
 
   if (res == CUDA_SUCCESS) {
     return port::Status::OK();

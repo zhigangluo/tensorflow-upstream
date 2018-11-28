@@ -14,7 +14,6 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/stream_executor/cuda/cuda_stream.h"
-#include "tensorflow/stream_executor/cuda/cuda_types.h"
 
 #include "tensorflow/stream_executor/cuda/cuda_gpu_executor.h"
 #include "tensorflow/stream_executor/lib/status.h"
@@ -58,9 +57,5 @@ GPUStreamHandle AsCUDAStreamValue(Stream *stream) {
   return AsCUDAStream(stream)->cuda_stream();
 }
 
-CUstream AsCUstream(Stream *stream) {
-  DCHECK(stream != nullptr);
-  return AsCUstream(AsCUDAStreamValue(stream));
-}
 }  // namespace gpu
 }  // namespace stream_executor

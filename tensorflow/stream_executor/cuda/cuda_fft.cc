@@ -14,7 +14,6 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/stream_executor/cuda/cuda_fft.h"
-#include "tensorflow/stream_executor/cuda/cuda_types.h"
 
 #include <complex>
 
@@ -98,7 +97,7 @@ cufftType CUDAFftType(fft::Type type) {
 
 // Associates the given stream with the given cuFFT plan.
 bool SetStream(CUDAExecutor *parent, cufftHandle plan, Stream *stream) {
-  auto ret = wrap::cufftSetStream(parent, plan, AsCUstream(stream));
+  auto ret = wrap::cufftSetStream(parent, plan, AsCUDAStreamValue(stream));
   if (ret != CUFFT_SUCCESS) {
     LOG(ERROR) << "failed to run cuFFT routine cufftSetStream: " << ret;
     return false;

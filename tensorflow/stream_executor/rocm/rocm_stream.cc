@@ -14,7 +14,6 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/stream_executor/rocm/rocm_stream.h"
-#include "tensorflow/stream_executor/rocm/rocm_types.h"
 
 #include "tensorflow/stream_executor/rocm/rocm_gpu_executor.h"
 #include "tensorflow/stream_executor/lib/status.h"
@@ -58,10 +57,5 @@ GPUStreamHandle AsROCMStreamValue(Stream *stream) {
   return AsROCMStream(stream)->rocm_stream();
 }
 
-hipStream_t AsHipStream(Stream *stream) {
-  DCHECK(stream != nullptr);
-  return AsHipStream(AsROCMStreamValue(stream));
-}
-  
 }  // namespace gpu
 }  // namespace stream_executor

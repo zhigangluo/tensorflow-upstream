@@ -16,16 +16,29 @@ limitations under the License.
 #ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_TYPES_H_
 #define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_TYPES_H_
 
+#if TENSORFLOW_USE_ROCM
+#include "rocm/include/hip/hip_runtime.h"
+#else // CUDA
+#include "cuda/include/cuda.h"
+#endif
 
 namespace stream_executor {
 namespace gpu {
 
-// hipStream_t / CUstream   
-using GPUStreamHandle = void*;
+#if TENSORFLOW_USE_ROCM
 
-// hipEvent_t / CUevent   
-using GPUEventHandle = void*;
+using GPUStreamHandle = hipStream_t;
+using GPUEventHandle = hipEvent_t;
+using GPUFunctionHandle = hipFunction_t;
 
+
+#else // CUDA
+
+using GPUStreamHandle = CUstream;
+using GPUEventHandle = CUevent;
+using GPUFunctionHandle = CUfunction;
+
+#endif
  
 }  // namespace gpu
 }  // namespace stream_executor
