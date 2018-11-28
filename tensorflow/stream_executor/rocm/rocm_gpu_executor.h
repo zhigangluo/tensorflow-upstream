@@ -223,7 +223,7 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
   // data: User-provided callback provided to HostCallback() above, captured
   //       as a std::function<void()>. Allocated/initialized inside
   //       HostCallback() and owned and deleted by this call.
-  static void InternalHostCallback(GPUStreamHandle stream, hipError_t status,
+  static void InternalHostCallback(GPUStreamHandle stream, GPUStatus status,
                                    void *data);
 
   // Collects metadata for the specified kernel.
@@ -235,25 +235,25 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
   void VlogOccupancyInfo(const KernelBase &kernel, const ThreadDim &thread_dims,
                          const BlockDim &block_dims);
 
-  bool LoadModuleFromHsaco(const char* hsaco, hipModule_t* module)
+  bool LoadModuleFromHsaco(const char* hsaco, GPUModuleHandle* module)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
   // Guards the on-disk-module mapping.
   mutex disk_modules_mu_;
 
-  // Mapping from filename to hipModule_t, if it was already retrieved.
-  // Multiple GPUFunctionHandle are usually obtained from a single hipModule_t so we
+  // Mapping from filename to GPUModuleHandle, if it was already retrieved.
+  // Multiple GPUFunctionHandle are usually obtained from a single GPUModuleHandle so we
   // attempt to hit in this mapping first, before retrieving it.
-  std::map<string, hipModule_t> disk_modules_ GUARDED_BY(disk_modules_mu_);
+  std::map<string, GPUModuleHandle> disk_modules_ GUARDED_BY(disk_modules_mu_);
 
   // Guards the in-memory-module mapping.
   mutex in_memory_modules_mu_;
 
-  std::map<const char *, hipModule_t> in_memory_modules_
+  std::map<const char *, GPUModuleHandle> in_memory_modules_
       GUARDED_BY(in_memory_modules_mu_);
 
   // HSACO Binary -> {Hip module, reference count}.
-  std::unordered_map<const void*, std::pair<hipModule_t, uint64>>
+  std::unordered_map<const void*, std::pair<GPUModuleHandle, uint64>>
       gpu_binary_to_module_ GUARDED_BY(in_memory_modules_mu_);
 
   // Guards the launched kernel set.

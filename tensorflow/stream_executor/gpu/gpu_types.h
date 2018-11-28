@@ -35,8 +35,11 @@ using GPUDeviceHandle = hipDevice_t;
 using GPUDevicePointer = hipDeviceptr_t;
 using GPUDeviceAttribute = hipDeviceAttribute_t;
 using GPUDeviceProperty = hipDeviceProp_t;
-
-
+using GPUModuleHandle = hipModule_t;
+using GPUStatus = hipError_t;
+using GPUFuncCachePreference = hipFuncCache_t;
+using GPUSharedMemConfig = hipSharedMemConfig;
+ 
 #else // CUDA
 
 using GPUStreamHandle = CUstream;
@@ -47,6 +50,10 @@ using GPUDeviceHandle = CUdevice;
 using GPUDevicePointer = CUdeviceptr;
 using GPUDeviceAttribute = CUdevice_attribute;
 using GPUDeviceProperty = CUdevprop;
+using GPUModuleHandle = CUmodule;
+using GPUStatus = CUresult;
+using GPUFuncCachePreference = CUfunc_cache;
+using GPUSharedMemConfig = CUsharedconfig;
 
 #endif
  

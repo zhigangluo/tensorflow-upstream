@@ -141,17 +141,17 @@ class ROCMDriver {
 
   // Sets the preferred cache configuration for the specified function.
   static bool FuncSetCacheConfig(GPUFunctionHandle function,
-                                 hipFuncCache_t cache_config);
+                                 GPUFuncCachePreference cache_config);
 
   // Gets the preferred shared memory bank configuration for the specified
   // CONTEXT (not function!), either default or four- or eight-byte bank size.
-  static port::StatusOr<hipSharedMemConfig> ContextGetSharedMemConfig(
+  static port::StatusOr<GPUSharedMemConfig> ContextGetSharedMemConfig(
       GPUContext* context);
 
   // Sets the preferred shared memory bank configuration for the specified
   // CONTEXT (not function!), either default or four- or eight-byte bank size.
   static port::Status ContextSetSharedMemConfig(
-      GPUContext* context, hipSharedMemConfig shared_mem_config);
+      GPUContext* context, GPUSharedMemConfig shared_mem_config);
 
   // Launches a HIP kernel via hipLaunchKernel.
   // TODO(leary) describe the structure of kernel_params and extra in a readable
@@ -166,12 +166,12 @@ class ROCMDriver {
   // Loads HSACO with the ROCM runtime and stores the resulting handle in
   // "module". Any error logs that are produced are logged internally.
   static bool LoadHsaco(GPUContext* context, const char* hsaco_contents,
-                        hipModule_t* module);
+                        GPUModuleHandle* module);
 
   // Retrieves a named kernel from a loaded module, and places the resulting
   // handle into function (outparam) on success. Neither kernel_name nor
   // function may be null. No ownership is taken of kernel_name.
-  static bool GetModuleFunction(GPUContext* context, hipModule_t module,
+  static bool GetModuleFunction(GPUContext* context, GPUModuleHandle module,
                                 const char* kernel_name,
                                 GPUFunctionHandle* function);
 
@@ -179,14 +179,14 @@ class ROCMDriver {
   // a device pointer and size of the symbol on success. symbol_name may not be
   // null. At least one of dptr or bytes should not be null. No ownership is
   // taken of symbol_name.
-  static bool GetModuleSymbol(GPUContext* context, hipModule_t module,
+  static bool GetModuleSymbol(GPUContext* context, GPUModuleHandle module,
                               const char* symbol_name, GPUDevicePointer* dptr,
                               size_t* bytes);
 
   // Unloads module from the current context via cuModuleUnload.
   // TODO(leary) the documentation doesn't say what kind of disasters happen
   // if you try to unload a module while its GPUFunctionHandles are in use.
-  static void UnloadModule(GPUContext* context, hipModule_t module);
+  static void UnloadModule(GPUContext* context, GPUModuleHandle module);
 
   // Performs a synchronous memset of the device memory segment via hipMemsetD8.
   static bool SynchronousMemsetUint8(GPUContext* context,
@@ -243,7 +243,7 @@ class ROCMDriver {
   // * Callbacks must not make any ROCM API calls.
   // * Callbacks from independent streams execute in an undefined order and may
   //   be serialized.
-  typedef void (*StreamCallback)(GPUStreamHandle stream, hipError_t status, void *data);
+  typedef void (*StreamCallback)(GPUStreamHandle stream, GPUStatus status, void *data);
 
   // Enqueues a callback operation into stream.
   // See StreamCallback above ROCM documentation for additional
@@ -295,7 +295,7 @@ class ROCMDriver {
 
   // Polls (without blocking) to determine the status of an event - pending or
   // complete (or an error status).
-  static port::StatusOr<hipError_t> QueryEvent(GPUContext* context,
+  static port::StatusOr<GPUStatus> QueryEvent(GPUContext* context,
                                                GPUEventHandle event);
 
   // -- Device-specific calls.

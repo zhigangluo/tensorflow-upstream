@@ -244,7 +244,7 @@ class CUDAExecutor : public internal::StreamExecutorInterface {
   // data: User-provided callback provided to HostCallback() above, captured
   //       as a std::function<void()>. Allocated/initialized inside
   //       HostCallback() and owned and deleted by this call.
-  static void InternalHostCallback(GPUStreamHandle stream, CUresult status,
+  static void InternalHostCallback(GPUStreamHandle stream, GPUStatus status,
                                    void *data);
 
   // Collects metadata for the specified kernel.
@@ -256,11 +256,11 @@ class CUDAExecutor : public internal::StreamExecutorInterface {
   void VlogOccupancyInfo(const KernelBase &kernel, const ThreadDim &thread_dims,
                          const BlockDim &block_dims);
 
-  bool LoadModuleFromCuBin(const char *cubin, CUmodule *module)
+  bool LoadModuleFromCuBin(const char *cubin, GPUModuleHandle *module)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
   // Loads the PTX text `ptx` as a CUDA module.  `ptx` must be null terminated.
-  bool LoadModuleFromPtx(const char *ptx, CUmodule *module)
+  bool LoadModuleFromPtx(const char *ptx, GPUModuleHandle *module)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
   bool UnloadGpuBinary(const void *gpu_binary)
@@ -273,7 +273,7 @@ class CUDAExecutor : public internal::StreamExecutorInterface {
   std::unordered_map<const KernelBase *, const void *> kernel_to_gpu_binary_
       GUARDED_BY(in_memory_modules_mu_);
   // GPU binary (PTX or CUBIN) -> {CUDA module, reference count}.
-  std::unordered_map<const void *, std::pair<CUmodule, uint64>>
+  std::unordered_map<const void *, std::pair<GPUModuleHandle, uint64>>
       gpu_binary_to_module_ GUARDED_BY(in_memory_modules_mu_);
 
   // Guards the launched kernel set.

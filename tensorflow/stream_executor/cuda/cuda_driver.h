@@ -174,19 +174,19 @@ class CUDADriver {
   // Sets the preferred cache configuration for the specified function.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EXEC.html#group__CUDA__EXEC_1g40f8c11e81def95dc0072a375f965681
   static bool FuncSetCacheConfig(GPUFunctionHandle function,
-                                 CUfunc_cache cache_config);
+                                 GPUFuncCachePreference cache_config);
 
   // Gets the preferred shared memory bank configuration for the specified
   // CONTEXT (not function!), either default or four- or eight-byte bank size.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__CTX.html#group__CUDA__CTX_1g17153a1b8b8c756f7ab8505686a4ad74
-  static port::StatusOr<CUsharedconfig> ContextGetSharedMemConfig(
+  static port::StatusOr<GPUSharedMemConfig> ContextGetSharedMemConfig(
       GPUContext* context);
 
   // Sets the preferred shared memory bank configuration for the specified
   // CONTEXT (not function!), either default or four- or eight-byte bank size.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__CTX.html#group__CUDA__CTX_1g2574235fa643f8f251bf7bc28fac3692
   static port::Status ContextSetSharedMemConfig(
-      GPUContext* context, CUsharedconfig shared_mem_config);
+      GPUContext* context, GPUSharedMemConfig shared_mem_config);
 
   // Launches a CUDA kernel via cuLaunchKernel.
   // TODO(leary) describe the structure of kernel_params and extra in a readable
@@ -202,24 +202,24 @@ class CUDADriver {
   // Loads ptx_contents with the CUDA driver's PTX JIT and stores the resulting
   // handle in "module". Any error logs that are produced are logged internally.
   static bool LoadPtx(GPUContext* context, const char *ptx_contents,
-                      CUmodule *module);
+                      GPUModuleHandle *module);
 
   // Loads cubin_bytes with the CUDA driver's blob loading interface and stores
   // the resulting handle in "module".
   static port::Status LoadCubin(GPUContext* context, const char *cubin_bytes,
-                                CUmodule *module);
+                                GPUModuleHandle *module);
 
   // Retrieves a named kernel from a loaded module, and places the resulting
   // handle into function (outparam) on success. Neither kernel_name nor
   // function may be null. No ownership is taken of kernel_name.
-  static bool GetModuleFunction(GPUContext* context, CUmodule module,
+  static bool GetModuleFunction(GPUContext* context, GPUModuleHandle module,
                                 const char *kernel_name, GPUFunctionHandle *function);
 
   // Retrieves a named global/constant symbol from a loaded module, and returns
   // a device pointer and size of the symbol on success. symbol_name may not be
   // null. At least one of dptr or bytes should not be null. No ownership is
   // taken of symbol_name.
-  static bool GetModuleSymbol(GPUContext* context, CUmodule module,
+  static bool GetModuleSymbol(GPUContext* context, GPUModuleHandle module,
                               const char *symbol_name, GPUDevicePointer *dptr,
                               size_t *bytes);
 
@@ -227,7 +227,7 @@ class CUDADriver {
   // TODO(leary) the documentation doesn't say what kind of disasters happen
   // if you try to unload a module while its CUfunctions are in use.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MODULE.html#group__CUDA__MODULE_1g8ea3d716524369de3763104ced4ea57b
-  static void UnloadModule(GPUContext* context, CUmodule module);
+  static void UnloadModule(GPUContext* context, GPUModuleHandle module);
 
   // Performs a synchronous memset of the device memory segment via cuMemsetD8.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html#group__CUDA__MEM_1g6e582bf866e9e2fb014297bfaf354d7b
@@ -288,7 +288,7 @@ class CUDADriver {
   // * Callbacks from independent streams execute in an undefined order and may
   //   be serialized.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__STREAM.html#group__CUDA__STREAM_1g613d97a277d7640f4cb1c03bd51c2483
-  typedef void (*StreamCallback)(GPUStreamHandle stream, CUresult status, void *data);
+  typedef void (*StreamCallback)(GPUStreamHandle stream, GPUStatus status, void *data);
 
   // Enqueues a callback operation into stream.
   // See StreamCallback above and the NVIDIA documentation for additional
@@ -348,7 +348,7 @@ class CUDADriver {
   // Polls (without blocking) to determine the status of an event - pending or
   // complete (or an error status).
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EVENT.html#group__CUDA__EVENT_1g6f0704d755066b0ee705749ae911deef
-  static port::StatusOr<CUresult> QueryEvent(GPUContext* context,
+  static port::StatusOr<GPUStatus> QueryEvent(GPUContext* context,
                                              GPUEventHandle event);
 
   // -- Device-specific calls.
