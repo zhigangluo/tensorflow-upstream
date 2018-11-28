@@ -35,6 +35,7 @@ std::unique_ptr<HloModule> GpuCodegenTest::CreateNewModuleWithFTZ(bool ftz) {
   return absl::make_unique<HloModule>(TestName(), config);
 }
 
+#if GOOGLE_CUDA
 void GpuCodegenTest::CompileAndVerifyPtx(std::unique_ptr<HloModule> hlo_module,
                                          const string& pattern) {
   std::unique_ptr<Executable> executable =
@@ -44,6 +45,7 @@ void GpuCodegenTest::CompileAndVerifyPtx(std::unique_ptr<HloModule> hlo_module,
   ASSERT_TRUE(filecheck_result.ok());
   EXPECT_TRUE(filecheck_result.ValueOrDie());
 }
+#endif 
 
 }  // namespace gpu
 }  // namespace xla
