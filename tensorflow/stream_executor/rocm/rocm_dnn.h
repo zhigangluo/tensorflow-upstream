@@ -29,7 +29,7 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-class ROCMExecutor;
+class GPUExecutor;
 class MIOpenRnnDescriptor;
 class MIOpenRnnSequenceTensorDescriptor;
 class MIOpenRnnStateTensorDescriptor;
@@ -40,7 +40,7 @@ extern const PluginId kMIOpenPlugin;
 // functions, see dnn.h.
 class MIOpenSupport : public dnn::DnnSupport {
  public:
-  explicit MIOpenSupport(ROCMExecutor* parent);
+  explicit MIOpenSupport(GPUExecutor* parent);
   ~MIOpenSupport() override;
 
   port::Status Init() override;
@@ -717,12 +717,12 @@ class MIOpenSupport : public dnn::DnnSupport {
       DeviceMemory<float>* offset_backprop_data,
       dnn::ProfileResult* output_profile_result) override;
 
-  ROCMExecutor* GetParentExecutor() { return parent_; }
+  GPUExecutor* GetParentExecutor() { return parent_; }
 
  private:
   mutex dnn_handle_mutex_;
 
-  ROCMExecutor* parent_;  // Parent executor object. Not owned.
+  GPUExecutor* parent_;  // Parent executor object. Not owned.
 
   // miopen library handle. miopenHandle_t type is not present in this header to
   // prevent third-party library header inclusions from leaking outside the

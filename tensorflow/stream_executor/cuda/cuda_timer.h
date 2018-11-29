@@ -26,7 +26,7 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-class CUDAExecutor;
+class GPUExecutor;
 class CUDAStream;
 
 // Wraps a pair of GPUEventHandles in order to satisfy the platform-independent
@@ -34,7 +34,7 @@ class CUDAStream;
 // recorded in a stream.
 class CUDATimer : public internal::TimerInterface {
  public:
-  explicit CUDATimer(CUDAExecutor *parent)
+  explicit CUDATimer(GPUExecutor *parent)
       : parent_(parent), start_event_(nullptr), stop_event_(nullptr) {}
 
   // Note: teardown needs to be explicitly handled in this API by a call to
@@ -70,7 +70,7 @@ class CUDATimer : public internal::TimerInterface {
   uint64 Nanoseconds() const override { return GetElapsedMilliseconds() * 1e6; }
 
  private:
-  CUDAExecutor *parent_;
+  GPUExecutor *parent_;
   GPUEventHandle start_event_;  // Event recorded to indicate the "start" timestamp
                          // executing in a stream.
   GPUEventHandle stop_event_;   // Event recorded to indicate the "stop" timestamp

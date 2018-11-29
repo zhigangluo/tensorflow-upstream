@@ -64,7 +64,7 @@ namespace wrap {
 #define PERFTOOLS_GPUTOOLS_HIPRAND_WRAP(__name)                      \
   struct WrapperShim__##__name {                                    \
     template <typename... Args>                                     \
-    hiprandStatus_t operator()(ROCMExecutor *parent, Args... args) { \
+    hiprandStatus_t operator()(GPUExecutor *parent, Args... args) { \
       gpu::ScopedActivateExecutorContext sac{parent};              \
       return ::__name(args...);                                     \
     }                                                               \
@@ -105,7 +105,7 @@ string TypeString<std::complex<double>>() {
   return "std::complex<double>";
 }
 
-ROCMRng::ROCMRng(ROCMExecutor *parent) : parent_(parent), rng_(nullptr) {}
+ROCMRng::ROCMRng(GPUExecutor *parent) : parent_(parent), rng_(nullptr) {}
 
 ROCMRng::~ROCMRng() {
   if (rng_ != nullptr) {
@@ -281,8 +281,8 @@ REGISTER_MODULE_INITIALIZER(register_hiprand, {
               se::gpu::kROCmPlatformId, se::gpu::kHipRandPlugin, "hipRAND",
               [](se::internal::StreamExecutorInterface
                      *parent) -> se::rng::RngSupport * {
-                se::gpu::ROCMExecutor *rocm_executor =
-                    dynamic_cast<se::gpu::ROCMExecutor *>(parent);
+                se::gpu::GPUExecutor *rocm_executor =
+                    dynamic_cast<se::gpu::GPUExecutor *>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
                       << "Attempting to initialize an instance of the hipRAND "

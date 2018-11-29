@@ -32,7 +32,7 @@ class GPUKernel : public internal::KernelInterface {
         preferred_cache_config_(KernelCacheConfig::kNoPreference) {}
 
   // Note that the function is unloaded when the module is unloaded, and the
-  // module that the function is contained in is owned by the CUDAExecutor.
+  // module that the function is contained in is owned by the GPUExecutor.
   ~GPUKernel() override {}
 
   // As arity cannot be reflected upon using the GPU API, the arity is

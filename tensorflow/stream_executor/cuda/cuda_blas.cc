@@ -80,7 +80,7 @@ namespace wrap {
   struct WrapperShim__##__name {                                    \
     static const char *kName;                                       \
     template <typename... Args>                                     \
-    cublasStatus_t operator()(CUDAExecutor *parent, Args... args) { \
+    cublasStatus_t operator()(GPUExecutor *parent, Args... args) { \
       gpu::ScopedActivateExecutorContext sac{parent};              \
       return ::__name(args...);                                     \
     }                                                               \
@@ -355,7 +355,7 @@ class ScopedCublasPointerMode {
   //
   // Parameters:
   //  handle: The cublas library handle to act upon in setting the pointer mode.
-  explicit ScopedCublasPointerMode(CUDAExecutor *parent, cublasHandle_t handle)
+  explicit ScopedCublasPointerMode(GPUExecutor *parent, cublasHandle_t handle)
       : parent_(parent), handle_(handle), ok_(false) {}
 
   // Attempts the switch to the requested scoped pointer mode, new_mode.
@@ -393,7 +393,7 @@ class ScopedCublasPointerMode {
   }
 
  private:
-  CUDAExecutor *parent_;   // Executor establishing this pointer mode for.
+  GPUExecutor *parent_;   // Executor establishing this pointer mode for.
   cublasHandle_t handle_;  // Handle to the cuBLAS instance of interest.
   cublasPointerMode_t old_mode_;  // Prior cuBLAS pointer mode, to be restored.
   bool ok_;                       // Whether the change was successful.
@@ -416,7 +416,7 @@ class ScopedCublasMathMode {
   //
   // Parameters:
   //  handle: The cublas library handle to act upon in setting the math mode.
-  explicit ScopedCublasMathMode(CUDAExecutor *parent, cublasHandle_t handle)
+  explicit ScopedCublasMathMode(GPUExecutor *parent, cublasHandle_t handle)
       : parent_(parent), handle_(handle), ok_(false) {}
 
   // Attempts the switch to the requested scoped math mode, new_mode.
@@ -451,7 +451,7 @@ class ScopedCublasMathMode {
   }
 
  private:
-  CUDAExecutor *parent_;   // Executor establishing this math mode for.
+  GPUExecutor *parent_;   // Executor establishing this math mode for.
   cublasHandle_t handle_;  // Handle to the cuBLAS instance of interest.
   cublasMath_t old_mode_;  // Prior cuBLAS math mode, to be restored.
   bool ok_;                // Whether the change was successful.
@@ -468,7 +468,7 @@ bool CUDABlas::Init() {
   return true;
 }
 
-CUDABlas::CUDABlas(gpu::CUDAExecutor *parent)
+CUDABlas::CUDABlas(gpu::GPUExecutor *parent)
     : parent_(CHECK_NOTNULL(parent)), blas_(nullptr) {}
 
 CUDABlas::~CUDABlas() {
@@ -3082,8 +3082,8 @@ void initialize_cublas() {
       PluginRegistry::Instance()->RegisterFactory<PluginRegistry::BlasFactory>(
           gpu::kCudaPlatformId, gpu::kCuBlasPlugin, "cuBLAS",
           [](internal::StreamExecutorInterface *parent) -> blas::BlasSupport * {
-            gpu::CUDAExecutor *cuda_executor =
-                dynamic_cast<gpu::CUDAExecutor *>(parent);
+            gpu::GPUExecutor *cuda_executor =
+                dynamic_cast<gpu::GPUExecutor *>(parent);
             if (cuda_executor == nullptr) {
               LOG(ERROR)
                   << "Attempting to initialize an instance of the cuBLAS "

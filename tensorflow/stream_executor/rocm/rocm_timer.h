@@ -26,7 +26,7 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-class ROCMExecutor;
+class GPUExecutor;
 class ROCMStream;
 
 // Wraps a pair of GPUEventHandles in order to satisfy the platform-independent
@@ -34,7 +34,7 @@ class ROCMStream;
 // recorded in a stream.
 class ROCMTimer : public internal::TimerInterface {
  public:
-  explicit ROCMTimer(ROCMExecutor *parent)
+  explicit ROCMTimer(GPUExecutor *parent)
       : parent_(parent), start_event_(nullptr), stop_event_(nullptr) {}
 
   // Note: teardown is explicitly handled in this API by a call to
@@ -69,7 +69,7 @@ class ROCMTimer : public internal::TimerInterface {
   uint64 Nanoseconds() const override { return GetElapsedMilliseconds() * 1e6; }
 
  private:
-  ROCMExecutor *parent_;
+  GPUExecutor *parent_;
   GPUEventHandle start_event_;  // Event recorded to indicate the "start" timestamp
                          // executing in a stream.
   GPUEventHandle stop_event_;   // Event recorded to indicate the "stop" timestamp

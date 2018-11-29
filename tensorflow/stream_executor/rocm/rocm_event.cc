@@ -22,7 +22,7 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-ROCMEvent::ROCMEvent(ROCMExecutor* parent)
+ROCMEvent::ROCMEvent(GPUExecutor* parent)
     : parent_(parent), rocm_event_(nullptr) {}
 
 ROCMEvent::~ROCMEvent() {}

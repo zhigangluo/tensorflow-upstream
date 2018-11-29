@@ -41,11 +41,11 @@ namespace gpu {
 
 // ROCM-platform implementation of the platform-agnostic
 // StreamExecutorInferface.
-class ROCMExecutor : public internal::StreamExecutorInterface {
+class GPUExecutor : public internal::StreamExecutorInterface {
  public:
   // sub_platform indicates the subplatform used in this executor; it must
   // be a ROCM type.
-  explicit ROCMExecutor(const PluginConfig &plugin_config)
+  explicit GPUExecutor(const PluginConfig &plugin_config)
       : device_(0),
         context_(nullptr),
         device_ordinal_(0),
@@ -55,7 +55,7 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
   // See the corresponding StreamExecutor methods for method comments on the
   // following overrides.
 
-  ~ROCMExecutor() override;
+  ~GPUExecutor() override;
 
   port::Status Init(int device_ordinal, DeviceOptions device_options) override;
 
@@ -280,7 +280,7 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
   // The plugin configuration associated with this instance.
   PluginConfig plugin_config_;
 
-  SE_DISALLOW_COPY_AND_ASSIGN(ROCMExecutor);
+  SE_DISALLOW_COPY_AND_ASSIGN(GPUExecutor);
 };
 
 }  // namespace gpu

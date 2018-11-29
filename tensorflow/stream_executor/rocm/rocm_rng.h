@@ -33,7 +33,7 @@ namespace gpu {
 // Opaque and unique identifier for the hipRAND plugin.
 extern const PluginId kHipRandPlugin;
 
-class ROCMExecutor;
+class GPUExecutor;
 
 // ROCM-platform implementation of the random number generation support
 // interface.
@@ -41,7 +41,7 @@ class ROCMExecutor;
 // Thread-safe post-initialization.
 class ROCMRng : public rng::RngSupport {
  public:
-  explicit ROCMRng(ROCMExecutor *parent);
+  explicit ROCMRng(GPUExecutor *parent);
 
   // Retrieves a hiprng library generator handle. This is necessary for
   // enqueuing random number generation work onto the device.
@@ -84,9 +84,9 @@ class ROCMRng : public rng::RngSupport {
   // mutex that guards the hipRAND handle for this device.
   mutex mu_;
 
-  // ROCMExecutor which instantiated this ROCMRng.
+  // GPUExecutor which instantiated this ROCMRng.
   // Immutable post-initialization.
-  ROCMExecutor *parent_;
+  GPUExecutor *parent_;
 
   // hipRAND library handle on the device.
   hiprandGenerator_t rng_ GUARDED_BY(mu_);

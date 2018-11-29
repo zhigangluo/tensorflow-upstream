@@ -26,7 +26,7 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-class ROCMExecutor;
+class GPUExecutor;
 
 // Wraps a GPUStreamHandle in order to satisfy the platform-independent
 // StreamInterface.
@@ -34,7 +34,7 @@ class ROCMExecutor;
 // Thread-safe post-initialization.
 class ROCMStream : public internal::StreamInterface {
  public:
-  explicit ROCMStream(ROCMExecutor *parent)
+  explicit ROCMStream(GPUExecutor *parent)
       : parent_(parent), rocm_stream_(nullptr), completed_event_(nullptr) {}
 
   // Note: teardown is handled by a parent's call to DeallocateStream.
@@ -70,10 +70,10 @@ class ROCMStream : public internal::StreamInterface {
     return const_cast<GPUStreamHandle>(rocm_stream_);
   }
 
-  ROCMExecutor *parent() const { return parent_; }
+  GPUExecutor *parent() const { return parent_; }
 
  private:
-  ROCMExecutor *parent_;  // Executor that spawned this stream.
+  GPUExecutor *parent_;  // Executor that spawned this stream.
   GPUStreamHandle rocm_stream_;  // Wrapped ROCM stream handle.
 
   // Event that indicates this stream has completed.

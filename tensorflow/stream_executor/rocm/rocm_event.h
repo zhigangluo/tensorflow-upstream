@@ -28,7 +28,7 @@ namespace gpu {
 // interface.
 class ROCMEvent : public internal::EventInterface {
  public:
-  explicit ROCMEvent(ROCMExecutor* parent);
+  explicit ROCMEvent(GPUExecutor* parent);
 
   ~ROCMEvent() override;
 
@@ -50,7 +50,7 @@ class ROCMEvent : public internal::EventInterface {
 
  private:
   // The Executor used to which this object and GPUEventHandle are bound.
-  ROCMExecutor* parent_;
+  GPUExecutor* parent_;
 
   // The underlying ROCM event element.
   GPUEventHandle rocm_event_;

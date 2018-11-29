@@ -53,7 +53,7 @@ namespace wrap {
   struct WrapperShim__##__name {                                    \
     static const char *kName;                                       \
     template <typename... Args>                                     \
-    rocblas_status operator()(ROCMExecutor *parent, Args... args) { \
+    rocblas_status operator()(GPUExecutor *parent, Args... args) { \
       gpu::ScopedActivateExecutorContext sac{parent};              \
       return ::__name(args...);                                     \
     }                                                               \
@@ -283,7 +283,7 @@ bool ROCMBlas::Init() {
   return true;
 }
 
-ROCMBlas::ROCMBlas(gpu::ROCMExecutor *parent)
+ROCMBlas::ROCMBlas(gpu::GPUExecutor *parent)
     : parent_(CHECK_NOTNULL(parent)), blas_(nullptr) {}
 
 ROCMBlas::~ROCMBlas() {
@@ -2310,8 +2310,8 @@ void initialize_rocblas() {
               gpu::kROCmPlatformId, gpu::kRocBlasPlugin, "rocBLAS",
               [](internal::StreamExecutorInterface
                      *parent) -> blas::BlasSupport * {
-                gpu::ROCMExecutor *rocm_executor =
-                    dynamic_cast<gpu::ROCMExecutor *>(parent);
+                gpu::GPUExecutor *rocm_executor =
+                    dynamic_cast<gpu::GPUExecutor *>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
                       << "Attempting to initialize an instance of the rocBLAS "

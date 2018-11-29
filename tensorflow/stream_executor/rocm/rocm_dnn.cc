@@ -122,7 +122,7 @@ static port::ThreadPool* GetROCmThreadpool() {
 #define PERFTOOLS_GPUTOOLS_MIOPEN_WRAP(__name)                      \
   struct WrapperShim__##__name {                                   \
     template <typename... Args>                                    \
-    miopenStatus_t operator()(ROCMExecutor* parent, Args... args) { \
+    miopenStatus_t operator()(GPUExecutor* parent, Args... args) { \
       gpu::ScopedActivateExecutorContext sac{parent};             \
       miopenStatus_t retval = ::__name(args...);                    \
       return retval;                                               \
@@ -284,7 +284,7 @@ class CachedFusionPlans {
   //   create a new fusion plan descriptor,
   //   associate it with the given hash value in the cache
   //   return false (+ newly created fusion plan via given pointer)
-  static bool FindOrCreate(uint64 hash, ROCMExecutor* parent,
+  static bool FindOrCreate(uint64 hash, GPUExecutor* parent,
                            miopenFusionPlanDescriptor_t* fusion_plan,
                            miopenFusionDirection_t fusion_direction,
                            miopenTensorDescriptor_t input_descriptor) {
@@ -311,7 +311,7 @@ class CachedFusionPlans {
   }
 
   // need to figure out the right place to call this routine
-  static void Clear(ROCMExecutor* parent) {
+  static void Clear(GPUExecutor* parent) {
     mutex_lock lock{cachedPlansMutex};
 
     for (auto it : cachedPlans) {
@@ -414,7 +414,7 @@ miopenConvBwdWeightsAlgorithm_t ToConvBackwardFilterAlgo(
 
 }  // namespace
 
-MIOpenSupport::MIOpenSupport(ROCMExecutor* parent)
+MIOpenSupport::MIOpenSupport(GPUExecutor* parent)
     : parent_(parent), dnn_handle_(nullptr) {}
 
 MIOpenSupport::~MIOpenSupport() {
@@ -458,7 +458,7 @@ MIOpenSupport::GetVersion() {
 // Turns a BatchDescriptor structure into a miopen tensor handle within a scope.
 class ScopedTensorDescriptor {
  public:
-  ScopedTensorDescriptor(ROCMExecutor* parent,
+  ScopedTensorDescriptor(GPUExecutor* parent,
                          const BatchDescriptor& batch_descriptor,
                          miopenDataType_t elem_type)
       : parent_(parent), handle_(nullptr) {
@@ -516,7 +516,7 @@ class ScopedTensorDescriptor {
   miopenTensorDescriptor_t handle() const { return handle_; }
 
  private:
-  ROCMExecutor* parent_;            // Parent executor. Not owned.
+  GPUExecutor* parent_;            // Parent executor. Not owned.
   miopenTensorDescriptor_t handle_;  // Owned.
 
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedTensorDescriptor);
@@ -525,7 +525,7 @@ class ScopedTensorDescriptor {
 // Turns a FilterDescriptor structure into a miopen filter handle within a scope.
 class ScopedFilterDescriptor {
  public:
-  ScopedFilterDescriptor(ROCMExecutor* parent,
+  ScopedFilterDescriptor(GPUExecutor* parent,
                          const FilterDescriptor& filter_descriptor,
                          const BatchDescriptor& batch_descriptor,
                          miopenDataType_t elem_type)
@@ -569,7 +569,7 @@ class ScopedFilterDescriptor {
 
  private:
   // Parent executor object. Not owned.
-  ROCMExecutor* parent_;
+  GPUExecutor* parent_;
 
   // miopen filter descriptor this object creates. Owned.
   miopenTensorDescriptor_t handle_;
@@ -582,7 +582,7 @@ class ScopedFilterDescriptor {
 class ScopedConvolutionDescriptor {
  public:
   ScopedConvolutionDescriptor(
-      ROCMExecutor* parent, const ConvolutionDescriptor& convolution_descriptor,
+      GPUExecutor* parent, const ConvolutionDescriptor& convolution_descriptor,
       miopenDataType_t data_type)
       : parent_(parent), handle_(nullptr) {
     miopenStatus_t status =
@@ -629,7 +629,7 @@ class ScopedConvolutionDescriptor {
   miopenConvolutionDescriptor_t handle() const { return handle_; }
 
  private:
-  ROCMExecutor* parent_;                 // Parent executor. Not owned.
+  GPUExecutor* parent_;                 // Parent executor. Not owned.
   miopenConvolutionDescriptor_t handle_;  // Owned.
 
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedConvolutionDescriptor);
@@ -639,7 +639,7 @@ class ScopedConvolutionDescriptor {
 // within a scope.
 class ScopedPoolingDescriptor {
  public:
-  ScopedPoolingDescriptor(ROCMExecutor* parent,
+  ScopedPoolingDescriptor(GPUExecutor* parent,
                           const PoolingDescriptor& pooling_descriptor)
       : parent_(parent), handle_(nullptr) {
     miopenStatus_t status =
@@ -692,7 +692,7 @@ class ScopedPoolingDescriptor {
   miopenPoolingDescriptor_t handle() const { return handle_; }
 
  private:
-  ROCMExecutor* parent_;             // Parent executor. Not owned.
+  GPUExecutor* parent_;             // Parent executor. Not owned.
   miopenPoolingDescriptor_t handle_;  // Owned.
 
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedPoolingDescriptor);
@@ -701,7 +701,7 @@ class ScopedPoolingDescriptor {
 // Turns a NormalizeDescriptor structure into a miopen LRN descriptor handle.
 class ScopedNormalizeDescriptor {
  public:
-  ScopedNormalizeDescriptor(ROCMExecutor* parent,
+  ScopedNormalizeDescriptor(GPUExecutor* parent,
                             const NormalizeDescriptor& normalize_descriptor)
       : parent_(parent), handle_(nullptr) {
     miopenStatus_t status = wrap::miopenCreateLRNDescriptor(parent_, &handle_);
@@ -749,7 +749,7 @@ class ScopedNormalizeDescriptor {
   miopenLRNDescriptor_t handle() const { return handle_; }
 
  private:
-  ROCMExecutor* parent_;         // Parent executor. Not owned.
+  GPUExecutor* parent_;         // Parent executor. Not owned.
   miopenLRNDescriptor_t handle_;  // Owned.
 
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedNormalizeDescriptor);
@@ -759,7 +759,7 @@ class ScopedNormalizeDescriptor {
 // around it
 class ScopedActivationDescriptor {
  public:
-  ScopedActivationDescriptor(ROCMExecutor* parent,
+  ScopedActivationDescriptor(GPUExecutor* parent,
                              dnn::ActivationMode activation_mode)
       : parent_(parent),
         handle_(nullptr),
@@ -835,7 +835,7 @@ class ScopedActivationDescriptor {
   }
 
  private:
-  ROCMExecutor* parent_;                 // Parent executor. Not owned.
+  GPUExecutor* parent_;                 // Parent executor. Not owned.
   miopenActivationDescriptor_t handle_;  // Owned.
 
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedActivationDescriptor);
@@ -855,7 +855,7 @@ class ScopedActivationDescriptor {
 // base class for all fusion plan implementations to derive from
 class ScopedFusionPlanBase {
  public:
-  ScopedFusionPlanBase(ROCMExecutor* parent, miopenHandle_t miopen_handle,
+  ScopedFusionPlanBase(GPUExecutor* parent, miopenHandle_t miopen_handle,
                        const miopenFusionDirection_t fuse_direction,
                        const miopenTensorDescriptor_t input_descriptor)
       : parent_(parent),
@@ -1055,7 +1055,7 @@ class ScopedFusionPlanBase {
     return status;
   }
 
-  ROCMExecutor* parent_;
+  GPUExecutor* parent_;
   miopenHandle_t miopen_handle_;
   miopenFusionPlanDescriptor_t fusion_plan_;
   miopenOperatorArgs_t fusion_args_;  // Owned.
@@ -1068,7 +1068,7 @@ class ScopedFusionPlanBase {
 class ScopedFusionPlanConvolutionBiasActivation : public ScopedFusionPlanBase {
  public:
   ScopedFusionPlanConvolutionBiasActivation(
-      ROCMExecutor* parent, miopenHandle_t miopen_handle,
+      GPUExecutor* parent, miopenHandle_t miopen_handle,
       miopenTensorDescriptor_t input_descriptor,
       miopenTensorDescriptor_t filter_descriptor,
       miopenConvolutionDescriptor_t conv_descriptor,
@@ -1186,7 +1186,7 @@ class ScopedFusionPlanBatchNormActivationInference
     : public ScopedFusionPlanBase {
  public:
   ScopedFusionPlanBatchNormActivationInference(
-      ROCMExecutor* parent, miopenHandle_t miopen_handle,
+      GPUExecutor* parent, miopenHandle_t miopen_handle,
       miopenTensorDescriptor_t input_descriptor,
       miopenTensorDescriptor_t scale_offset_mean_variance_descriptor,
       ScopedActivationDescriptor& activation_descriptor)
@@ -1289,7 +1289,7 @@ class ScopedFusionPlanBatchNormActivationInference
 class ScopedFusionPlanBatchNormActivationForward : public ScopedFusionPlanBase {
  public:
   ScopedFusionPlanBatchNormActivationForward(
-      ROCMExecutor* parent, miopenHandle_t miopen_handle,
+      GPUExecutor* parent, miopenHandle_t miopen_handle,
       miopenTensorDescriptor_t input_descriptor,
       miopenTensorDescriptor_t scale_offset_mean_variance_descriptor,
       ScopedActivationDescriptor& activation_descriptor)
@@ -1393,7 +1393,7 @@ class ScopedFusionPlanBatchNormActivationBackward
     : public ScopedFusionPlanBase {
  public:
   ScopedFusionPlanBatchNormActivationBackward(
-      ROCMExecutor* parent, miopenHandle_t miopen_handle,
+      GPUExecutor* parent, miopenHandle_t miopen_handle,
       miopenTensorDescriptor_t input_descriptor,
       miopenTensorDescriptor_t scale_offset_mean_variance_descriptor,
       ScopedActivationDescriptor& activation_descriptor)
@@ -1589,7 +1589,7 @@ class MIOpenRnnParamsDescriptor : public MIOpenDescriptorCommon<void> {
  public:
   typedef dnn::RnnDescriptor::ParamsRegion ParamsRegion;
   typedef dnn::RnnDescriptor::ParamsRegions ParamsRegions;
-  MIOpenRnnParamsDescriptor(ROCMExecutor* parent, miopenHandle_t miopen_handle,
+  MIOpenRnnParamsDescriptor(GPUExecutor* parent, miopenHandle_t miopen_handle,
                            const MIOpenRnnDescriptor& rnn_desc);
   ~MIOpenRnnParamsDescriptor() {
     miopenStatus_t status = wrap::miopenDestroyTensorDescriptor(parent_, handle_);
@@ -1611,7 +1611,7 @@ class MIOpenRnnParamsDescriptor : public MIOpenDescriptorCommon<void> {
 
  private:
   int GetRegionCountPerLayer() const;
-  ROCMExecutor* parent_;
+  GPUExecutor* parent_;
   miopenTensorDescriptor_t handle_;
   const MIOpenRnnDescriptor * rnn_desc_;
   int64 params_size_in_bytes_;
@@ -1623,7 +1623,7 @@ class MIOpenRnnParamsDescriptor : public MIOpenDescriptorCommon<void> {
 
 class MIOpenRnnDescriptor : public MIOpenDescriptorCommon<dnn::RnnDescriptor> {
  public:
-  MIOpenRnnDescriptor(ROCMExecutor* parent, miopenHandle_t miopen_handle,
+  MIOpenRnnDescriptor(GPUExecutor* parent, miopenHandle_t miopen_handle,
                      int num_layers, int hidden_size, int input_size,
                      miopenRNNInputMode_t input_mode,
                      miopenRNNDirectionMode_t direction_mode,
@@ -1693,7 +1693,7 @@ class MIOpenRnnDescriptor : public MIOpenDescriptorCommon<dnn::RnnDescriptor> {
   }
 
  private:
-  ROCMExecutor* parent_;
+  GPUExecutor* parent_;
   miopenRNNDescriptor_t rnn_desc_;
   int num_layers_;
   int hidden_size_;
@@ -1729,7 +1729,7 @@ int MIOpenRnnParamsDescriptor::GetRegionCountPerLayer() const {
 class MIOpenRnnSequenceTensorDescriptor
     : public MIOpenDescriptorCommon<dnn::RnnSequenceTensorDescriptor> {
  public:
-  MIOpenRnnSequenceTensorDescriptor(ROCMExecutor* parent, int seq_length,
+  MIOpenRnnSequenceTensorDescriptor(GPUExecutor* parent, int seq_length,
                                    int batch_size, int data_size,
                                    miopenDataType_t data_type)
       : parent_(parent),
@@ -1776,7 +1776,7 @@ class MIOpenRnnSequenceTensorDescriptor
   int data_size() const { return data_size_; }
 
  private:
-  ROCMExecutor* parent_;
+  GPUExecutor* parent_;
   int seq_length_;
   int batch_size_;
   int data_size_;
@@ -1789,7 +1789,7 @@ class MIOpenRnnSequenceTensorDescriptor
 class MIOpenRnnStateTensorDescriptor
     : public MIOpenDescriptorCommon<dnn::RnnStateTensorDescriptor> {
  public:
-  MIOpenRnnStateTensorDescriptor(ROCMExecutor* parent, int num_layers,
+  MIOpenRnnStateTensorDescriptor(GPUExecutor* parent, int num_layers,
                                 int batch_size, int data_size,
                                 miopenDataType_t data_type)
       : parent_(parent),
@@ -1825,7 +1825,7 @@ class MIOpenRnnStateTensorDescriptor
   int data_size() const { return data_size_; }
 
  private:
-  ROCMExecutor* parent_;
+  GPUExecutor* parent_;
   miopenTensorDescriptor_t handle_;
   int num_layers_;
   int batch_size_;
@@ -1907,7 +1907,7 @@ bool ExtractAndCheckRnnForward(
   return true;
 }
 
-bool CheckRNNParameterSize(ROCMExecutor* parent, miopenHandle_t miopen_handle,
+bool CheckRNNParameterSize(GPUExecutor* parent, miopenHandle_t miopen_handle,
                            const MIOpenRnnDescriptor& rnn_desc,
                            const MIOpenRnnSequenceTensorDescriptor& input_desc) {
   size_t params_size_in_bytes = 0;
@@ -1923,7 +1923,7 @@ bool CheckRNNParameterSize(ROCMExecutor* parent, miopenHandle_t miopen_handle,
          rnn_desc.ParamsSizeInBytes();
 }
 
-bool CreateRnnWorkspace(Stream* stream, ROCMExecutor* parent,
+bool CreateRnnWorkspace(Stream* stream, GPUExecutor* parent,
                         miopenHandle_t miopen_handle,
                         const MIOpenRnnDescriptor& rnn_desc,
                         const MIOpenRnnSequenceTensorDescriptor& input_desc,
@@ -2194,7 +2194,7 @@ bool MIOpenSupport::DoRnnBackwardImpl(
 }
 
 MIOpenRnnParamsDescriptor::MIOpenRnnParamsDescriptor(
-    ROCMExecutor* parent, miopenHandle_t miopen_handle,
+    GPUExecutor* parent, miopenHandle_t miopen_handle,
     const MIOpenRnnDescriptor& rnn_desc)
     : parent_(parent),
       handle_(nullptr),
@@ -4878,8 +4878,8 @@ void initialize_miopen() {
               gpu::kROCmPlatformId, gpu::kMIOpenPlugin, "MIOpen",
               [](internal::StreamExecutorInterface*
                      parent) -> dnn::DnnSupport* {
-                gpu::ROCMExecutor* rocm_executor =
-                    dynamic_cast<gpu::ROCMExecutor*>(parent);
+                gpu::GPUExecutor* rocm_executor =
+                    dynamic_cast<gpu::GPUExecutor*>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
                       << "Attempting to initialize an instance of the MIOpen "

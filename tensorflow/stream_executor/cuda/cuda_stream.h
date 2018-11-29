@@ -26,7 +26,7 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-class CUDAExecutor;
+class GPUExecutor;
 
 // Wraps a GPUStreamHandle in order to satisfy the platform-independent
 // StreamInterface.
@@ -34,7 +34,7 @@ class CUDAExecutor;
 // Thread-safe post-initialization.
 class CUDAStream : public internal::StreamInterface {
  public:
-  explicit CUDAStream(CUDAExecutor *parent)
+  explicit CUDAStream(GPUExecutor *parent)
       : parent_(parent), cuda_stream_(nullptr), completed_event_(nullptr) {}
 
   // Note: teardown is handled by a parent's call to DeallocateStream.
@@ -70,10 +70,10 @@ class CUDAStream : public internal::StreamInterface {
     return const_cast<GPUStreamHandle>(cuda_stream_);
   }
 
-  CUDAExecutor *parent() const { return parent_; }
+  GPUExecutor *parent() const { return parent_; }
 
  private:
-  CUDAExecutor *parent_;  // Executor that spawned this stream.
+  GPUExecutor *parent_;  // Executor that spawned this stream.
   GPUStreamHandle cuda_stream_;  // Wrapped CUDA stream handle.
 
   // Event that indicates this stream has completed.

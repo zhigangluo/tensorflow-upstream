@@ -31,14 +31,14 @@ class StreamExecutor;
 
 namespace gpu {
 
-class ROCMExecutor;
+class GPUExecutor;
 class ScopedActivateContext;
 
 // Activates a ROCM context within an enclosing scope.
 class ScopedActivateExecutorContext {
  public:
   // Form that takes a ROCM executor implementation.
-  explicit ScopedActivateExecutorContext(ROCMExecutor* rocm_exec);
+  explicit ScopedActivateExecutorContext(GPUExecutor* rocm_exec);
 
   // Form that takes a pImpl executor and extracts a ROCM implementation --
   // fatal failure if it is not ROCM inside.

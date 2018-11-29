@@ -46,7 +46,7 @@ namespace wrap {
 #define PERFTOOLS_GPUTOOLS_HIPFFT_WRAP(__name)                    \
   struct WrapperShim__##__name {                                  \
     template <typename... Args>                                   \
-    hipfftResult operator()(ROCMExecutor *parent, Args... args) { \
+    hipfftResult operator()(GPUExecutor *parent, Args... args) { \
       gpu::ScopedActivateExecutorContext sac{parent};            \
       return ::__name(args...);                                   \
     }                                                             \
@@ -106,7 +106,7 @@ hipfftType ROCMFftType(fft::Type type) {
 }
 
 // Associates the given stream with the given rocFFT plan.
-bool SetStream(ROCMExecutor *parent, hipfftHandle plan, Stream *stream) {
+bool SetStream(GPUExecutor *parent, hipfftHandle plan, Stream *stream) {
   auto ret = wrap::hipfftSetStream(parent, plan, AsROCMStreamValue(stream));
   if (ret != HIPFFT_SUCCESS) {
     LOG(ERROR) << "failed to run rocFFT routine hipfftSetStream: " << ret;
@@ -118,7 +118,7 @@ bool SetStream(ROCMExecutor *parent, hipfftHandle plan, Stream *stream) {
 }  // namespace
 
 port::Status ROCMFftPlan::Initialize(
-    ROCMExecutor *parent, Stream *stream, int rank, uint64 *elem_count,
+    GPUExecutor *parent, Stream *stream, int rank, uint64 *elem_count,
     uint64 *input_embed, uint64 input_stride, uint64 input_distance,
     uint64 *output_embed, uint64 output_stride, uint64 output_distance,
     fft::Type type, int batch_count, ScratchAllocator *scratch_allocator) {
@@ -310,7 +310,7 @@ port::Status ROCMFftPlan::Initialize(
   return port::Status::OK();
 }
 
-port::Status ROCMFftPlan::Initialize(ROCMExecutor *parent, Stream *stream,
+port::Status ROCMFftPlan::Initialize(GPUExecutor *parent, Stream *stream,
                                      int rank, uint64 *elem_count,
                                      fft::Type type,
                                      ScratchAllocator *scratch_allocator) {
@@ -567,8 +567,8 @@ REGISTER_MODULE_INITIALIZER(register_hipfft, {
               se::gpu::kROCmPlatformId, se::gpu::kRocFftPlugin, "rocFFT",
               [](se::internal::StreamExecutorInterface
                      *parent) -> se::fft::FftSupport * {
-                se::gpu::ROCMExecutor *rocm_executor =
-                    dynamic_cast<se::gpu::ROCMExecutor *>(parent);
+                se::gpu::GPUExecutor *rocm_executor =
+                    dynamic_cast<se::gpu::GPUExecutor *>(parent);
                 if (rocm_executor == nullptr) {
                   LOG(ERROR)
                       << "Attempting to initialize an instance of the rocFFT "

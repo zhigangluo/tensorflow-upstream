@@ -30,7 +30,7 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-class CUDAExecutor;
+class GPUExecutor;
 class CudnnRnnDescriptor;
 class CudnnRnnSequenceTensorDescriptor;
 class CudnnRnnStateTensorDescriptor;
@@ -42,7 +42,7 @@ extern const PluginId kCuDnnPlugin;
 // functions, see dnn.h.
 class CudnnSupport : public dnn::DnnSupport {
  public:
-  explicit CudnnSupport(CUDAExecutor* parent);
+  explicit CudnnSupport(GPUExecutor* parent);
 
   port::Status Init() override;
   port::StatusOr<perftools::gputools::dnn::VersionInfo> GetVersion() override;
@@ -632,7 +632,7 @@ class CudnnSupport : public dnn::DnnSupport {
                          DeviceMemoryBase* output_data) override;
 
  private:
-  CUDAExecutor* parent_;  // Parent executor object. Not owned.
+  GPUExecutor* parent_;  // Parent executor object. Not owned.
 
   // Provides access to the cuDNN handle.
   std::unique_ptr<class CudnnAccess> cudnn_;

@@ -46,7 +46,7 @@ namespace wrap {
 #define STREAM_EXECUTOR_CUFFT_WRAP(__name)                       \
   struct WrapperShim__##__name {                                 \
     template <typename... Args>                                  \
-    cufftResult operator()(CUDAExecutor *parent, Args... args) { \
+    cufftResult operator()(GPUExecutor *parent, Args... args) { \
       gpu::ScopedActivateExecutorContext sac{parent};           \
       return ::__name(args...);                                  \
     }                                                            \
@@ -96,7 +96,7 @@ cufftType CUDAFftType(fft::Type type) {
 }
 
 // Associates the given stream with the given cuFFT plan.
-bool SetStream(CUDAExecutor *parent, cufftHandle plan, Stream *stream) {
+bool SetStream(GPUExecutor *parent, cufftHandle plan, Stream *stream) {
   auto ret = wrap::cufftSetStream(parent, plan, AsCUDAStreamValue(stream));
   if (ret != CUFFT_SUCCESS) {
     LOG(ERROR) << "failed to run cuFFT routine cufftSetStream: " << ret;
@@ -108,7 +108,7 @@ bool SetStream(CUDAExecutor *parent, cufftHandle plan, Stream *stream) {
 }  // namespace
 
 port::Status CUDAFftPlan::Initialize(
-    CUDAExecutor *parent, Stream *stream, int rank, uint64 *elem_count,
+    GPUExecutor *parent, Stream *stream, int rank, uint64 *elem_count,
     uint64 *input_embed, uint64 input_stride, uint64 input_distance,
     uint64 *output_embed, uint64 output_stride, uint64 output_distance,
     fft::Type type, int batch_count, ScratchAllocator *scratch_allocator) {
@@ -268,7 +268,7 @@ port::Status CUDAFftPlan::Initialize(
   return port::Status::OK();
 }
 
-port::Status CUDAFftPlan::Initialize(CUDAExecutor *parent, Stream *stream,
+port::Status CUDAFftPlan::Initialize(GPUExecutor *parent, Stream *stream,
                                      int rank, uint64 *elem_count,
                                      fft::Type type,
                                      ScratchAllocator *scratch_allocator) {
@@ -572,8 +572,8 @@ void initialize_cufft() {
       PluginRegistry::Instance()->RegisterFactory<PluginRegistry::FftFactory>(
           gpu::kCudaPlatformId, gpu::kCuFftPlugin, "cuFFT",
           [](internal::StreamExecutorInterface *parent) -> fft::FftSupport * {
-            gpu::CUDAExecutor *cuda_executor =
-                dynamic_cast<gpu::CUDAExecutor *>(parent);
+            gpu::GPUExecutor *cuda_executor =
+                dynamic_cast<gpu::GPUExecutor *>(parent);
             if (cuda_executor == nullptr) {
               LOG(ERROR) << "Attempting to initialize an instance of the cuFFT "
                          << "support library with a non-CUDA StreamExecutor";

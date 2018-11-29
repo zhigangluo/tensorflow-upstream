@@ -225,7 +225,7 @@ class CudnnAccess {
   // The legacy default stream synchronizes with all other streams and it is
   // therefore a bad idea (performance wise) to call any cuDNN APIs that
   // enqueue work in the stream.
-  CudnnHandle GetHandle(CUDAExecutor* executor, Stream* stream) {
+  CudnnHandle GetHandle(GPUExecutor* executor, Stream* stream) {
     mutex_lock lock(mutex_);
     gpu::ScopedActivateExecutorContext context(executor);
     CUstream cu_stream = stream ? AsCUDAStreamValue(stream) : cudaStreamLegacy;
@@ -339,7 +339,7 @@ port::Status GetLoadedCudnnVersion(CudnnVersion* version) {
 
 }  // namespace
 
-CudnnSupport::CudnnSupport(CUDAExecutor* parent) : parent_(parent) {}
+CudnnSupport::CudnnSupport(GPUExecutor* parent) : parent_(parent) {}
 
 port::Status CudnnSupport::Init() {
   ScopedActivateExecutorContext context(parent_);
@@ -1227,7 +1227,7 @@ port::StatusOr<CudnnRnnParamsDescriptor> CudnnRnnParamsDescriptor::Create(
 
 class CudnnRnnSequenceTensorDescriptor
     : public dnn::RnnSequenceTensorDescriptor {
-  CudnnRnnSequenceTensorDescriptor(CUDAExecutor* parent, int seq_length,
+  CudnnRnnSequenceTensorDescriptor(GPUExecutor* parent, int seq_length,
                                    int batch_size, int data_size,
                                    cudnnDataType_t data_type,
                                    TensorDescriptor handle)
@@ -1244,7 +1244,7 @@ class CudnnRnnSequenceTensorDescriptor
       default;
 
   static port::StatusOr<CudnnRnnSequenceTensorDescriptor> Create(
-      CUDAExecutor* parent, int seq_length, int batch_size, int data_size,
+      GPUExecutor* parent, int seq_length, int batch_size, int data_size,
       cudnnDataType_t data_type) {
     CHECK_GT(seq_length, 0);
     int dims[] = {batch_size, data_size, 1};
@@ -1268,7 +1268,7 @@ class CudnnRnnSequenceTensorDescriptor
   int data_size() const { return data_size_; }
 
  private:
-  CUDAExecutor* parent_;
+  GPUExecutor* parent_;
   int seq_length_;
   int batch_size_;
   int data_size_;
@@ -1280,7 +1280,7 @@ class CudnnRnnSequenceTensorDescriptor
 
 class CudnnRnnStateTensorDescriptor : public dnn::RnnStateTensorDescriptor {
  public:
-  CudnnRnnStateTensorDescriptor(CUDAExecutor* parent, int num_layers,
+  CudnnRnnStateTensorDescriptor(GPUExecutor* parent, int num_layers,
                                 int batch_size, int data_size,
                                 cudnnDataType_t data_type)
       : parent_(parent),
@@ -1304,7 +1304,7 @@ class CudnnRnnStateTensorDescriptor : public dnn::RnnStateTensorDescriptor {
   int data_size() const { return data_size_; }
 
  private:
-  CUDAExecutor* parent_;
+  GPUExecutor* parent_;
   TensorDescriptor handle_;
   int num_layers_;
   int batch_size_;
@@ -4091,8 +4091,8 @@ void initialize_cudnn() {
       PluginRegistry::Instance()->RegisterFactory<PluginRegistry::DnnFactory>(
           gpu::kCudaPlatformId, gpu::kCuDnnPlugin, "cuDNN",
           [](internal::StreamExecutorInterface* parent) -> dnn::DnnSupport* {
-            gpu::CUDAExecutor* cuda_executor =
-                dynamic_cast<gpu::CUDAExecutor*>(parent);
+            gpu::GPUExecutor* cuda_executor =
+                dynamic_cast<gpu::GPUExecutor*>(parent);
             if (cuda_executor == nullptr) {
               LOG(ERROR) << "Attempting to initialize an instance of the cuDNN "
                          << "support library with a non-CUDA StreamExecutor";
