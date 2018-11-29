@@ -188,6 +188,13 @@ bool GPUExecutor::FindOnDiskForComputeCapability(
   return false;
 }
 
+ bool GPUExecutor::FindOnDiskForISAVersion(absl::string_view filename,
+					   absl::string_view canonical_suffix,
+					   string *found_filename) const {
+   LOG(FATAL) << "API not supported on CUDA GPUs (FindOnDiskForISAVersion)";
+   return false;
+ }
+
 // Returns the path to the running executable.
 // N.B. Derived from //knowledge/smalltalk/background_kb.cc
 // Arg: strip_exe: if true, remove the name of the executable itself from the
@@ -261,6 +268,11 @@ bool GPUExecutor::LoadModuleFromPtx(const char *ptx, CUmodule *module) {
   }
   gpu_binary_to_module_[ptx] = {*module, module_refcount};
   return true;
+}
+
+bool GPUExecutor::LoadModuleFromHsaco(const char* hsaco, CUmodule *module) {
+  LOG(FATAL) << "API not supported on CUDA GPUs (LoadModuleFromHsaco)";
+  return false;
 }
 
 bool GPUExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
@@ -560,6 +572,14 @@ void GPUExecutor::Deallocate(DeviceMemoryBase *mem) {
   if (!mem->is_sub_buffer()) {
     GPUDriver::DeviceDeallocate(context_, mem->opaque());
   }
+}
+  
+void *GPUExecutor::UnifiedMemoryAllocate(uint64 size) {
+  return GPUDriver::UnifiedMemoryAllocate(context_, size);
+}
+
+void GPUExecutor::UnifiedMemoryDeallocate(void *location) {
+  return GPUDriver::UnifiedMemoryDeallocate(context_, location);
 }
 
 bool GPUExecutor::HostMemoryRegister(void *location, uint64 size) {

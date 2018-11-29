@@ -52,6 +52,7 @@ class GPUExecutor : public internal::StreamExecutorInterface {
         device_ordinal_(0),
         cc_major_(0),
         cc_minor_(0),
+        version_(0),
         plugin_config_(plugin_config) {}
 
   // See the corresponding StreamExecutor methods for method comments on the
@@ -90,13 +91,9 @@ class GPUExecutor : public internal::StreamExecutorInterface {
 
   void Deallocate(DeviceMemoryBase *mem) override;
 
-  void *UnifiedMemoryAllocate(uint64 size) override {
-    return GPUDriver::UnifiedMemoryAllocate(context_, size);
-  }
+  void *UnifiedMemoryAllocate(uint64 size) override;
 
-  void UnifiedMemoryDeallocate(void *location) override {
-    return GPUDriver::UnifiedMemoryDeallocate(context_, location);
-  }
+  void UnifiedMemoryDeallocate(void *location) override;
 
   // CUDA allocation/registration functions are necessary because the driver
   // internally sets up buffers for DMA operations (and page locks them).
@@ -240,6 +237,12 @@ class GPUExecutor : public internal::StreamExecutorInterface {
                                       absl::string_view canonical_suffix,
                                       string *found_filename) const;
 
+  // Attempts to find a more specific version of the file indicated by
+  // filename by looking for AMDGPU ISA-specific suffixed versions.
+  bool FindOnDiskForISAVersion(absl::string_view filename,
+                               absl::string_view canonical_suffix,
+                               string *found_filename) const;
+
   // Host callback landing routine invoked by CUDA.
   // data: User-provided callback provided to HostCallback() above, captured
   //       as a std::function<void()>. Allocated/initialized inside
@@ -263,15 +266,30 @@ class GPUExecutor : public internal::StreamExecutorInterface {
   bool LoadModuleFromPtx(const char *ptx, GPUModuleHandle *module)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
+  bool LoadModuleFromHsaco(const char* hsaco, GPUModuleHandle* module) 
+      EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
+
   bool UnloadGpuBinary(const void *gpu_binary)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
+
+  // Guards the on-disk-module mapping.
+  mutex disk_modules_mu_;
+
+  // Mapping from filename to GPUModuleHandle, if it was already retrieved.
+  // Multiple GPUFunctionHandle are usually obtained from a single GPUModuleHandle so we
+  // attempt to hit in this mapping first, before retrieving it.
+  std::map<string, GPUModuleHandle> disk_modules_ GUARDED_BY(disk_modules_mu_);
 
   // Guards the in-memory-module mapping.
   mutex in_memory_modules_mu_;
 
+  std::map<const char *, GPUModuleHandle> in_memory_modules_
+      GUARDED_BY(in_memory_modules_mu_);
+
   // Kernel -> loaded GPU binary. Many kernels may load the same binary.
   std::unordered_map<const KernelBase *, const void *> kernel_to_gpu_binary_
       GUARDED_BY(in_memory_modules_mu_);
+  
   // GPU binary (PTX or CUBIN) -> {CUDA module, reference count}.
   std::unordered_map<const void *, std::pair<GPUModuleHandle, uint64>>
       gpu_binary_to_module_ GUARDED_BY(in_memory_modules_mu_);
@@ -299,6 +317,9 @@ class GPUExecutor : public internal::StreamExecutorInterface {
 
   // The minor verion of the compute capability for device_.
   int cc_minor_;
+
+  // GPU ISA version for device_.
+  int version_;
 
   // The plugin configuration associated with this instance.
   PluginConfig plugin_config_;

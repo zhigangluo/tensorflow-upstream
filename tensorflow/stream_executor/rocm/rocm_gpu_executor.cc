@@ -155,6 +155,10 @@ bool GPUExecutor::UnloadGpuBinary(const void* gpu_binary) {
   return true;
 }
 
+void GPUExecutor::UnloadKernel(const KernelBase *kernel) {
+  LOG(FATAL) << "API not supported on ROCM GPUs (UnloadKernel)";
+}
+
 port::Status GPUExecutor::Init(int device_ordinal,
                                 DeviceOptions device_options) {
   device_ordinal_ = device_ordinal;
@@ -178,6 +182,13 @@ port::Status GPUExecutor::Init(int device_ordinal,
   return GPUDriver::GetGPUISAVersion(&version_, device_);
 }
 
+bool GPUExecutor::FindOnDiskForComputeCapability(
+    absl::string_view filename, absl::string_view canonical_suffix,
+    string *found_filename) const {
+  LOG(FATAL) << "API not supported on ROCM GPUs (LoadModuleFromCuBin)";
+  return false;
+}
+  
 bool GPUExecutor::FindOnDiskForISAVersion(
     absl::string_view filename, absl::string_view canonical_suffix,
     string *found_filename) const {
@@ -351,6 +362,26 @@ bool GPUExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
 
   return true;
 }
+
+
+int GPUExecutor::CalculateOccupancy(const DeviceDescription &device_description, 
+				    uint64 registers_per_thread,
+				    uint64 shared_memory_per_block,
+				    const ThreadDim &thread_dims, GPUFunctionHandle func) {
+  LOG(FATAL) << "API not supported on ROCM GPUs (CalculateOccupancy)";
+  return 0;
+}
+
+int GPUExecutor::CompareOccupancy(int *initial_blocks,
+				  const DeviceDescription &device_description,
+				  uint64 registers_per_thread,
+				  uint64 shared_memory_per_block,
+				  const ThreadDim &thread_dims, GPUFunctionHandle func) {
+  LOG(FATAL) << "API not supported on ROCM GPUs (CompareOccupancy)";
+  return 0;
+}
+
+  
 bool GPUExecutor::LoadModule(const MultiModuleLoaderSpec& spec,
                               ModuleHandle* module_handle) {
   // In GPUExecutor we store the pointer to the  HSACO binary  as
@@ -371,6 +402,16 @@ bool GPUExecutor::LoadModule(const MultiModuleLoaderSpec& spec,
     LOG(ERROR) << "No HSACO binary found \n";
     return false;
   }
+}
+  
+bool GPUExecutor::LoadModuleFromCuBin(const char* cubin, hipModule_t* module) {
+  LOG(FATAL) << "API not supported on ROCM GPUs (LoadModuleFromCuBin)";
+  return false;
+}
+
+bool GPUExecutor::LoadModuleFromPtx(const char* ptx, hipModule_t* module) {
+  LOG(FATAL) << "API not supported on ROCM GPUs (LoadModuleFromPtx)";
+  return false;
 }
 
 bool GPUExecutor::LoadModuleFromHsaco(const char* hsaco, hipModule_t* module) {
@@ -418,6 +459,15 @@ void GPUExecutor::Deallocate(DeviceMemoryBase *mem) {
   if (!mem->is_sub_buffer()) {
     GPUDriver::DeviceDeallocate(context_, mem->opaque());
   }
+}
+
+void *GPUExecutor::UnifiedMemoryAllocate(uint64 size) { 
+  LOG(FATAL) << "API not supported on ROCM GPUs (UnifiedMemoryAllocate)";
+  return nullptr;
+}
+
+void GPUExecutor::UnifiedMemoryDeallocate(void *location) {
+  LOG(FATAL) << "API not supported on ROCM GPUs (UnifiedMemoryAllocate)";
 }
 
 bool GPUExecutor::HostMemoryRegister(void *location, uint64 size) {

@@ -25,6 +25,7 @@ limitations under the License.
 #include <map>
 #include <set>
 
+#include "absl/strings/string_view.h"
 #include "tensorflow/stream_executor/gpu/gpu_kernel.h"
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
 #include "tensorflow/stream_executor/event.h"
@@ -49,6 +50,8 @@ class GPUExecutor : public internal::StreamExecutorInterface {
       : device_(0),
         context_(nullptr),
         device_ordinal_(0),
+        cc_major_(0),
+        cc_minor_(0),
         version_(0),
         plugin_config_(plugin_config) {}
 
@@ -61,17 +64,25 @@ class GPUExecutor : public internal::StreamExecutorInterface {
 
   bool GetKernel(const MultiKernelLoaderSpec &spec,
                  KernelBase *kernel) override;
-
+  void UnloadKernel(const KernelBase *kernel) override;
   bool LoadModule(const MultiModuleLoaderSpec& spec,
                   ModuleHandle* module_handle) override;
-
   bool UnloadModule(ModuleHandle module_handle) override;
-  bool UnloadGpuBinary(const void* gpu_binary)
-      EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
   bool Launch(Stream *stream, const ThreadDim &thread_dims,
               const BlockDim &block_dims, const KernelBase &k,
               const KernelArgsArrayBase &args) override;
+
+  int CalculateOccupancy(const DeviceDescription &device_description, //todo
+                         uint64 registers_per_thread,
+                         uint64 shared_memory_per_block,
+                         const ThreadDim &thread_dims, GPUFunctionHandle func);
+
+  int CompareOccupancy(int *initial_blocks, //todo
+                       const DeviceDescription &device_description,
+                       uint64 registers_per_thread,
+                       uint64 shared_memory_per_block,
+                       const ThreadDim &thread_dims, GPUFunctionHandle func);
 
   void *Allocate(uint64 size) override;
 
@@ -79,6 +90,10 @@ class GPUExecutor : public internal::StreamExecutorInterface {
                           uint64 size_bytes) override;
 
   void Deallocate(DeviceMemoryBase *mem) override;
+
+  void *UnifiedMemoryAllocate(uint64 size) override;
+
+  void UnifiedMemoryDeallocate(void *location) override;
 
   // ROCM allocation/registration functions are necessary because the driver
   // internally sets up buffers for DMA operations (and page locks them).
@@ -173,7 +188,8 @@ class GPUExecutor : public internal::StreamExecutorInterface {
 
   // Search for the symbol and returns a device pointer and size.
   // Returns false if symbol does not exist.
-  bool GetSymbol(const string& symbol_name, ModuleHandle module_handle, void **mem, size_t *bytes) override;
+  bool GetSymbol(const string& symbol_name, ModuleHandle module_handle,
+		 void **mem, size_t *bytes) override;
 
   DeviceDescription *PopulateDeviceDescription() const override;
 
@@ -214,6 +230,14 @@ class GPUExecutor : public internal::StreamExecutorInterface {
 
  private:
   // Attempts to find a more specific version of the file indicated by
+  // filename by looking for compute-capability-specific suffixed versions; i.e.
+  // looking for "foo.ptx" will check to see if "foo.ptx.cc30.ptx" is present if
+  // we're on a compute capability 3.0 machine.
+  bool FindOnDiskForComputeCapability(absl::string_view filename,
+                                      absl::string_view canonical_suffix,
+                                      string *found_filename) const;
+
+  // Attempts to find a more specific version of the file indicated by
   // filename by looking for AMDGPU ISA-specific suffixed versions.
   bool FindOnDiskForISAVersion(absl::string_view filename,
                                absl::string_view canonical_suffix,
@@ -235,7 +259,17 @@ class GPUExecutor : public internal::StreamExecutorInterface {
   void VlogOccupancyInfo(const KernelBase &kernel, const ThreadDim &thread_dims,
                          const BlockDim &block_dims);
 
+  bool LoadModuleFromCuBin(const char *cubin, GPUModuleHandle *module)
+      EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
+
+  // Loads the PTX text `ptx` as a CUDA module.  `ptx` must be null terminated.
+  bool LoadModuleFromPtx(const char *ptx, GPUModuleHandle *module)
+      EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
+
   bool LoadModuleFromHsaco(const char* hsaco, GPUModuleHandle* module)
+      EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
+
+  bool UnloadGpuBinary(const void* gpu_binary)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
   // Guards the on-disk-module mapping.
@@ -252,6 +286,10 @@ class GPUExecutor : public internal::StreamExecutorInterface {
   std::map<const char *, GPUModuleHandle> in_memory_modules_
       GUARDED_BY(in_memory_modules_mu_);
 
+  // Kernel -> loaded GPU binary. Many kernels may load the same binary.
+  std::unordered_map<const KernelBase *, const void *> kernel_to_gpu_binary_
+      GUARDED_BY(in_memory_modules_mu_);
+  
   // HSACO Binary -> {Hip module, reference count}.
   std::unordered_map<const void*, std::pair<GPUModuleHandle, uint64>>
       gpu_binary_to_module_ GUARDED_BY(in_memory_modules_mu_);
@@ -274,7 +312,13 @@ class GPUExecutor : public internal::StreamExecutorInterface {
   // for use in getting device metadata. Immutable post-initialization.
   int device_ordinal_;
 
-  // AMDGPU ISA version for device_.
+  // The major verion of the compute capability for device_.
+  int cc_major_;
+
+  // The minor verion of the compute capability for device_.
+  int cc_minor_;
+
+  // GPU ISA version for device_.
   int version_;
 
   // The plugin configuration associated with this instance.
