@@ -493,7 +493,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
   return true;
 }
 
-/* static */ port::Status GPUDriver::CreateContext(
+/* static */ port::Status GPUDriver::CreateContext(int device_ordinal,
     CUdevice device, const DeviceOptions &device_options,
     GPUContext **context) {
   *context = nullptr;
