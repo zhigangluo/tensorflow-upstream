@@ -227,9 +227,8 @@ bool CUDAExecutor::LoadModuleFromCuBin(const char *cubin, CUmodule *module) {
   std::tie(*module, module_refcount) = gpu_binary_to_module_[cubin];
 
   if (*module == nullptr) {
-    auto load_status = CUDADriver::LoadGPUBinary(context_, CUDADriver::GPUBinaryType::CUDA_CUBIN, cubin, module);
-    if (!load_status.ok()) {
-      LOG(ERROR) << "failed to load CUBIN: " << load_status;
+    if (!CUDADriver::LoadGPUBinary(context_, CUDADriver::GPUBinaryType::CUDA_CUBIN, cubin, module)) {
+      LOG(ERROR) << "failed to load CUBIN";
       return false;
     }
     module_refcount = 1;

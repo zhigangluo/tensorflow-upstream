@@ -557,6 +557,7 @@ static bool LoadHsaco(GPUContext* context,
   } break;
     
   case GPUBinaryType::CUDA_CUBIN: {
+    LOG(ERROR) << "Loading CUDA_CUBIN binary not supported on the ROCM platform.";
   } break;
     
   case GPUBinaryType::ROCM_HSACO: {

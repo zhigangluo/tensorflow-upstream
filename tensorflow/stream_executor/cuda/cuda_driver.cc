@@ -768,7 +768,7 @@ static bool LoadPtx(GPUContext* context,
   } break;
     
   case GPUBinaryType::CUDA_CUBIN: {
-    result = LoadCubin(context, contents, module);
+    result = LoadCubin(context, contents, module).ok();
   } break;
     
   case GPUBinaryType::ROCM_HSACO: {
