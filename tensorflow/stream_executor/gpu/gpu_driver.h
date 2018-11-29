@@ -15,8 +15,8 @@ limitations under the License.
 
 // ROCM userspace driver library wrapper functionality.
 
-#ifndef TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_DRIVER_H_
-#define TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_DRIVER_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_DRIVER_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_DRIVER_H_
 
 #include <stddef.h>
 #include "tensorflow/stream_executor/platform/port.h"
@@ -25,7 +25,6 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/status.h"
 #include "tensorflow/stream_executor/lib/statusor.h"
 #include "tensorflow/stream_executor/platform/port.h"
-#include "rocm/include/hip/hip_runtime.h"
 #include "tensorflow/stream_executor/gpu/gpu_types.h"
 
 namespace stream_executor {
@@ -413,4 +412,4 @@ class ScopedActivateContext {
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_DRIVER_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_DRIVER_H_

@@ -26,7 +26,7 @@ limitations under the License.
 #include <set>
 
 #include "tensorflow/stream_executor/gpu/gpu_kernel.h"
-#include "tensorflow/stream_executor/rocm/rocm_driver.h"
+#include "tensorflow/stream_executor/gpu/gpu_driver.h"
 #include "tensorflow/stream_executor/event.h"
 #include "tensorflow/stream_executor/lib/status.h"
 #include "tensorflow/stream_executor/lib/statusor.h"
