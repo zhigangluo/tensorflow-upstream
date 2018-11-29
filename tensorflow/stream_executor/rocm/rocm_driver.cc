@@ -519,9 +519,11 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
   return true;
 }
 
-/* static */ bool ROCMDriver::LoadHsaco(GPUContext* context,
-                                        const char* hsaco_contents,
-                                        hipModule_t* module) {
+// Loads HSACO with the ROCM runtime and stores the resulting handle in
+// "module". Any error logs that are produced are logged internally.
+static bool LoadHsaco(GPUContext* context,
+		      const char* hsaco_contents,
+		      hipModule_t* module) {
   port::Notification notification;
   bool ret = true;
   GetDriverExecutor()->Schedule(
@@ -543,6 +545,26 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
   notification.WaitForNotification();
 
   return ret;
+}
+
+/* static */ bool ROCMDriver::LoadGPUBinary(GPUContext* context, GPUBinaryType type,
+					    const char *contents, GPUModuleHandle *module) {
+  bool result = false;
+  switch (type) {
+    
+  case GPUBinaryType::CUDA_PTX: {
+    LOG(ERROR) << "Loading CUDA_PTX binary not supported on the ROCM platform.";
+  } break;
+    
+  case GPUBinaryType::CUDA_CUBIN: {
+  } break;
+    
+  case GPUBinaryType::ROCM_HSACO: {
+    result = LoadHsaco(context, contents, module);
+  } break;
+    
+  }
+  return result;
 }
 
 /* static */ bool ROCMDriver::SynchronousMemsetUint8(GPUContext* context,
@@ -1094,8 +1116,17 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
   return device_count;
 }
 
-/* static */ port::Status ROCMDriver::GetAMDGPUISAVersion(int *version,
-                                                          hipDevice_t device) {
+/* static */ port::Status ROCMDriver::GetComputeCapability(int *cc_major,
+                                                           int *cc_minor,
+                                                           hipDevice_t device) {
+  return port::Status(
+      port::error::INTERNAL,
+      port::Printf("failed to get compute capability for device: %d (unsupported API on AMD GPUs)",
+                   device));
+}
+
+/* static */ port::Status ROCMDriver::GetGPUISAVersion(int *version,
+						       hipDevice_t device) {
   hipDeviceProp_t props;
   hipError_t result = hipGetDeviceProperties(&props, device);
   if (result == hipSuccess) {

@@ -671,9 +671,11 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
   return true;
 }
 
-/* static */ port::Status CUDADriver::LoadCubin(GPUContext* context,
-                                                const char *cubin_bytes,
-                                                CUmodule *module) {
+// Loads cubin_bytes with the CUDA driver's blob loading interface and stores
+// the resulting handle in "module".
+static port::Status LoadCubin(GPUContext* context,
+			      const char *cubin_bytes,
+			      CUmodule *module) {
   ScopedActivateContext activation(context);
   CUresult result = cuModuleLoadFatBinary(module, cubin_bytes);
   if (result != CUDA_SUCCESS) {
@@ -684,9 +686,11 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
   return port::Status::OK();
 }
 
-/* static */ bool CUDADriver::LoadPtx(GPUContext* context,
-                                      const char *ptx_contents,
-                                      CUmodule *module) {
+// Loads ptx_contents with the CUDA driver's PTX JIT and stores the resulting
+// handle in "module". Any error logs that are produced are logged internally.
+static bool LoadPtx(GPUContext* context,
+		    const char *ptx_contents,
+		    CUmodule *module) {
   port::Notification notification;
   bool ret = true;
   GetDriverExecutor()->Schedule([context, ptx_contents, module, &ret,
@@ -752,6 +756,27 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
   notification.WaitForNotification();
 
   return ret;
+}
+  
+/* static */ bool CUDADriver::LoadGPUBinary(GPUContext* context, GPUBinaryType type,
+					    const char *contents, GPUModuleHandle *module) {
+  bool result = false;
+  switch (type) {
+    
+  case GPUBinaryType::CUDA_PTX: {
+    result = LoadPtx(context, contents, module);
+  } break;
+    
+  case GPUBinaryType::CUDA_CUBIN: {
+    result = LoadCubin(context, contents, module);
+  } break;
+    
+  case GPUBinaryType::ROCM_HSACO: {
+    LOG(ERROR) << "Loading ROCM_HSACO binary not supported on the CUDA platform.";
+  } break;
+    
+  }
+  return result;
 }
 
 /* static */ bool CUDADriver::SynchronousMemsetUint8(GPUContext* context,
@@ -1333,6 +1358,13 @@ CUDADriver::ContextGetSharedMemConfig(GPUContext* context) {
       port::error::INTERNAL,
       port::Printf("failed to get compute capability for device: %s; %d",
                    ToString(result).c_str(), device));
+}
+
+/* static */ port::Status CUDADriver::GetGPUISAVersion(int *version,
+						       CUdevice device) {
+  return port::Status{
+      port::error::INTERNAL,
+      port::Printf("failed to determine GPU ISA version for device: %d (unsupported API on Nvidia GPUs)", device)};
 }
 
 // Helper function that turns the integer output of cuDeviceGetAttribute to type

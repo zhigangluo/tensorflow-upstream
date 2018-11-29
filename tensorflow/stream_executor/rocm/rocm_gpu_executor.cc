@@ -175,7 +175,7 @@ port::Status ROCMExecutor::Init(int device_ordinal,
     return status;
   }
 
-  return ROCMDriver::GetAMDGPUISAVersion(&version_, device_);
+  return ROCMDriver::GetGPUISAVersion(&version_, device_);
 }
 
 bool ROCMExecutor::FindOnDiskForISAVersion(
@@ -248,7 +248,7 @@ bool ROCMExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
     module = in_memory_modules_[hsaco];
 
     if (module == nullptr) {
-      if (!ROCMDriver::LoadHsaco(context_, hsaco, &module)) {
+      if (!ROCMDriver::LoadGPUBinary(context_, ROCMDriver::GPUBinaryType::ROCM_HSACO, hsaco, &module)) {
         LOG(ERROR) << "failed to load HSACO\n";
         return false;
       }
@@ -378,7 +378,7 @@ bool ROCMExecutor::LoadModuleFromHsaco(const char* hsaco, hipModule_t* module) {
   std::tie(*module, module_refcount) = gpu_binary_to_module_[hsaco];
 
   if (*module == nullptr) {
-    if (!ROCMDriver::LoadHsaco(context_, hsaco, module)) {
+    if (!ROCMDriver::LoadGPUBinary(context_, ROCMDriver::GPUBinaryType::ROCM_HSACO, hsaco, module)) {
       LOG(ERROR) << "failed to load : HSACO \n";
       return false;
     }

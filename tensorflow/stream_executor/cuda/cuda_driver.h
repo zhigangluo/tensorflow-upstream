@@ -199,16 +199,14 @@ class CUDADriver {
                            unsigned int shared_mem_bytes, GPUStreamHandle stream,
                            void **kernel_params, void **extra);
 
-  // Loads ptx_contents with the CUDA driver's PTX JIT and stores the resulting
+
+  enum class GPUBinaryType { CUDA_PTX, CUDA_CUBIN, ROCM_HSACO};
+  
+  // Loads gpubin_contents with the GPU Driver API and stores the resulting
   // handle in "module". Any error logs that are produced are logged internally.
-  static bool LoadPtx(GPUContext* context, const char *ptx_contents,
-                      GPUModuleHandle *module);
-
-  // Loads cubin_bytes with the CUDA driver's blob loading interface and stores
-  // the resulting handle in "module".
-  static port::Status LoadCubin(GPUContext* context, const char *cubin_bytes,
-                                GPUModuleHandle *module);
-
+  static bool LoadGPUBinary(GPUContext* context, GPUBinaryType type,
+			    const char *ptx_contents, GPUModuleHandle *module);
+  
   // Retrieves a named kernel from a loaded module, and places the resulting
   // handle into function (outparam) on success. Neither kernel_name nor
   // function may be null. No ownership is taken of kernel_name.
@@ -356,9 +354,14 @@ class CUDADriver {
   // Returns the compute capability for the device; i.e (3, 5).
   // This is currently done via the deprecated device API.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__DEVICE__DEPRECATED.html#group__CUDA__DEVICE__DEPRECATED_1ge2091bbac7e1fb18c2821612115607ea
+  // (supportedd for Nvidia GPUs only)
   static port::Status GetComputeCapability(int *cc_major, int *cc_minor,
                                            GPUDeviceHandle device);
 
+  // Returns AMDGPU ISA version for the device; i.e 803, 900.
+  // (supportedd for AMD GPUs only)
+  static port::Status GetGPUISAVersion(int *version,
+                                          GPUDeviceHandle device);
   // Returns the number of multiprocessors on the device (note that the device
   // may be multi-GPU-per-board).
   static port::StatusOr<int> GetMultiprocessorCount(GPUDeviceHandle device);

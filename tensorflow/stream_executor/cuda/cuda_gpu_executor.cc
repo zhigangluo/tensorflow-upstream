@@ -227,7 +227,7 @@ bool CUDAExecutor::LoadModuleFromCuBin(const char *cubin, CUmodule *module) {
   std::tie(*module, module_refcount) = gpu_binary_to_module_[cubin];
 
   if (*module == nullptr) {
-    auto load_status = CUDADriver::LoadCubin(context_, cubin, module);
+    auto load_status = CUDADriver::LoadGPUBinary(context_, CUDADriver::GPUBinaryType::CUDA_CUBIN, cubin, module);
     if (!load_status.ok()) {
       LOG(ERROR) << "failed to load CUBIN: " << load_status;
       return false;
@@ -249,7 +249,7 @@ bool CUDAExecutor::LoadModuleFromPtx(const char *ptx, CUmodule *module) {
   std::tie(*module, module_refcount) = gpu_binary_to_module_[ptx];
 
   if (*module == nullptr) {
-    if (!CUDADriver::LoadPtx(context_, ptx, module)) {
+    if (!CUDADriver::LoadGPUBinary(context_, CUDADriver::GPUBinaryType::CUDA_PTX, ptx, module)) {
       return false;
     }
     VLOG(3) << "Loaded PTX " << static_cast<const void *>(ptx) << " as module "
