@@ -49,8 +49,7 @@ namespace stream_executor {
 namespace gpu {
 
 // GPUContext wraps the device_ordinal.
-// Only reason we need this wrapper class is to make the ROCMDriver* API
-// similar to the CUDADriver* API (eventual goal being a common GPUDriver* API)
+// Only reason we need this wrapper class is to make the GPUDriver* API
 class GPUContext {
  public:
   GPUContext(const int v) : device_ordinal_(v) {}
@@ -350,7 +349,7 @@ string ROCMPointersToCanAccessString(hipDeviceptr_t from, hipDeviceptr_t to) {
   GPUContext fromCtx(from_pointerAttributes.device);
   GPUContext toCtx(to_pointerAttributes.device);
 
-  return ROCMDriver::CanEnablePeerAccess(&fromCtx, &toCtx) ? "true" : "false";
+  return GPUDriver::CanEnablePeerAccess(&fromCtx, &toCtx) ? "true" : "false";
 }
 
 
@@ -376,9 +375,9 @@ static port::Status InternalInit() {
 
 }  // namespace
 
-/* static */ port::Status ROCMDriver::Init() {
+/* static */ port::Status GPUDriver::Init() {
   // Cached return value from calling InternalInit(), as hipInit need only be
-  // called once, but ROCMDriver::Init may be called many times.
+  // called once, but GPUDriver::Init may be called many times.
   static port::Status init_retval;
   static bool set = false;
   static mutex *init_mu = new mutex;
@@ -392,7 +391,7 @@ static port::Status InternalInit() {
   return init_retval;
 }
 
-/* static */ port::Status ROCMDriver::GetDevice(int device_ordinal,
+/* static */ port::Status GPUDriver::GetDevice(int device_ordinal,
                                                 hipDevice_t *device) {
   hipError_t res = hipDeviceGet(device, device_ordinal);
   if (res == hipSuccess) {
@@ -404,7 +403,7 @@ static port::Status InternalInit() {
       absl::StrCat("failed call to hipDeviceGet: ", ToString(res))};
 }
 
-/* static */ bool ROCMDriver::GetDeviceName(hipDevice_t device,
+/* static */ bool GPUDriver::GetDeviceName(hipDevice_t device,
                                             string *device_name) {
   static const size_t kCharLimit = 64;
   absl::InlinedVector<char, 4> chars(kCharLimit);
@@ -426,20 +425,20 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
   return true;
 }
 
-/* static */ port::Status ROCMDriver::CreateContext(
+/* static */ port::Status GPUDriver::CreateContext(
     int device_ordinal, hipDevice_t device, const DeviceOptions& device_options,
     GPUContext** context) {
   *context = new GPUContext(device_ordinal);
   return port::Status::OK();
 }
-/* static */ void ROCMDriver::DestroyContext(GPUContext* context) {
+/* static */ void GPUDriver::DestroyContext(GPUContext* context) {
   if (context == nullptr) {
     return;
   }
   delete context;
 }
 
-/* static */ bool ROCMDriver::FuncGetAttribute(hipDeviceAttribute_t attribute,
+/* static */ bool GPUDriver::FuncGetAttribute(hipDeviceAttribute_t attribute,
                                                hipFunction_t func,
                                                int *attribute_value) {
   // ROCM TODO properly implement this feature in HIP
@@ -452,7 +451,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
   return true;
 }
 
-/* static */ bool ROCMDriver::FuncSetCacheConfig(hipFunction_t function,
+/* static */ bool GPUDriver::FuncSetCacheConfig(hipFunction_t function,
                                                  hipFuncCache_t cache_config) {
   hipError_t res = hipFuncSetCacheConfig(function, cache_config);
   if (res != hipSuccess) {
@@ -465,7 +464,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
 }
 
 /* static */ port::StatusOr<hipSharedMemConfig>
-ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
+GPUDriver::ContextGetSharedMemConfig(GPUContext* context) {
   hipSharedMemConfig shared_mem_config;
   ScopedActivateContext activation{context};
   hipError_t result = hipDeviceGetSharedMemConfig(&shared_mem_config);
@@ -480,7 +479,7 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
   return shared_mem_config;
 }
 
-/* static */ port::Status ROCMDriver::ContextSetSharedMemConfig(
+/* static */ port::Status GPUDriver::ContextSetSharedMemConfig(
     GPUContext* context, hipSharedMemConfig shared_mem_config) {
   ScopedActivateContext activation{context};
   hipError_t result = hipDeviceSetSharedMemConfig(shared_mem_config);
@@ -496,7 +495,7 @@ ROCMDriver::ContextGetSharedMemConfig(GPUContext* context) {
   return port::Status::OK();
 }
 
-/* static */ bool ROCMDriver::LaunchKernel(
+/* static */ bool GPUDriver::LaunchKernel(
     GPUContext* context, hipFunction_t function, unsigned int grid_dim_x,
     unsigned int grid_dim_y, unsigned int grid_dim_z, unsigned int block_dim_x,
     unsigned int block_dim_y, unsigned int block_dim_z,
@@ -547,7 +546,7 @@ static bool LoadHsaco(GPUContext* context,
   return ret;
 }
 
-/* static */ bool ROCMDriver::LoadGPUBinary(GPUContext* context, GPUBinaryType type,
+/* static */ bool GPUDriver::LoadGPUBinary(GPUContext* context, GPUBinaryType type,
 					    const char *contents, GPUModuleHandle *module) {
   bool result = false;
   switch (type) {
@@ -568,7 +567,7 @@ static bool LoadHsaco(GPUContext* context,
   return result;
 }
 
-/* static */ bool ROCMDriver::SynchronousMemsetUint8(GPUContext* context,
+/* static */ bool GPUDriver::SynchronousMemsetUint8(GPUContext* context,
                                                      hipDeviceptr_t location,
                                                      uint8 value, size_t size) {
   ScopedActivateContext activation{context};
@@ -580,7 +579,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ bool ROCMDriver::SynchronousMemsetUint32(GPUContext* context,
+/* static */ bool GPUDriver::SynchronousMemsetUint32(GPUContext* context,
                                                       hipDeviceptr_t location,
                                                       uint32 value,
                                                       size_t uint32_count) {
@@ -598,7 +597,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ bool ROCMDriver::AsynchronousMemsetUint8(GPUContext* context,
+/* static */ bool GPUDriver::AsynchronousMemsetUint8(GPUContext* context,
                                                       hipDeviceptr_t location,
                                                       uint8 value,
                                                       size_t uint32_count,
@@ -613,7 +612,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ bool ROCMDriver::AsynchronousMemsetUint32(GPUContext* context,
+/* static */ bool GPUDriver::AsynchronousMemsetUint32(GPUContext* context,
                                                        hipDeviceptr_t location,
                                                        uint32 value,
                                                        size_t uint32_count,
@@ -635,7 +634,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ bool ROCMDriver::AddStreamCallback(GPUContext* context,
+/* static */ bool GPUDriver::AddStreamCallback(GPUContext* context,
                                                 GPUStreamHandle stream,
                                                 StreamCallback callback,
                                                 void* data) {
@@ -647,7 +646,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ bool ROCMDriver::GetModuleFunction(GPUContext* context,
+/* static */ bool GPUDriver::GetModuleFunction(GPUContext* context,
                                                 hipModule_t module,
                                                 const char* kernel_name,
                                                 hipFunction_t* function) {
@@ -663,7 +662,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ bool ROCMDriver::GetModuleSymbol(GPUContext* context,
+/* static */ bool GPUDriver::GetModuleSymbol(GPUContext* context,
                                               hipModule_t module,
                                               const char* symbol_name,
                                               hipDeviceptr_t* dptr,
@@ -683,7 +682,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ void ROCMDriver::UnloadModule(GPUContext* context,
+/* static */ void GPUDriver::UnloadModule(GPUContext* context,
                                            hipModule_t module) {
   ScopedActivateContext activated{context};
   hipError_t res = hipModuleUnload(module);
@@ -693,7 +692,7 @@ static bool LoadHsaco(GPUContext* context,
   }
 }
 
-/* static */ bool ROCMDriver::CreateStream(GPUContext* context,
+/* static */ bool GPUDriver::CreateStream(GPUContext* context,
                                            GPUStreamHandle* stream) {
   ScopedActivateContext activated{context};
   hipError_t res = hipStreamCreateWithFlags(stream, hipStreamDefault);  // switch to hipStreamNonBlocking?
@@ -708,7 +707,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ void ROCMDriver::DestroyStream(GPUContext* context,
+/* static */ void GPUDriver::DestroyStream(GPUContext* context,
                                             GPUStreamHandle* stream) {
   if (*stream == nullptr) {
     return;
@@ -726,7 +725,7 @@ static bool LoadHsaco(GPUContext* context,
   }
 }
 
-/* static */ void* ROCMDriver::DeviceAllocate(GPUContext* context,
+/* static */ void* GPUDriver::DeviceAllocate(GPUContext* context,
                                               uint64 bytes) {
   ScopedActivateContext activated{context};
   hipDeviceptr_t result = 0;
@@ -743,7 +742,7 @@ static bool LoadHsaco(GPUContext* context,
   return ptr;
 }
 
-/* static */ void ROCMDriver::DeviceDeallocate(GPUContext* context,
+/* static */ void GPUDriver::DeviceDeallocate(GPUContext* context,
                                                void* location) {
   ScopedActivateContext activation{context};
   hipDeviceptr_t pointer = absl::bit_cast<hipDeviceptr_t>(location);
@@ -757,7 +756,7 @@ static bool LoadHsaco(GPUContext* context,
   }
 }
 
-/* static */ void* ROCMDriver::UnifiedMemoryAllocate(GPUContext* context,
+/* static */ void* GPUDriver::UnifiedMemoryAllocate(GPUContext* context,
                                                      uint64 bytes) {
   ScopedActivateContext activated{context};
 
@@ -765,12 +764,12 @@ static bool LoadHsaco(GPUContext* context,
   return nullptr;
 }
 
-/* static */ void ROCMDriver::UnifiedMemoryDeallocate(GPUContext* context,
+/* static */ void GPUDriver::UnifiedMemoryDeallocate(GPUContext* context,
                                                       void* location) {
   LOG(ERROR) << "Feature not supported (UnifiedMemoryDeallocate)";
 }
 
-/* static */ void* ROCMDriver::HostAllocate(GPUContext* context,
+/* static */ void* GPUDriver::HostAllocate(GPUContext* context,
                                             uint64 bytes) {
   ScopedActivateContext activation{context};
   void *host_mem = nullptr;
@@ -783,7 +782,7 @@ static bool LoadHsaco(GPUContext* context,
   return host_mem;
 }
 
-/* static */ void ROCMDriver::HostDeallocate(GPUContext* context,
+/* static */ void GPUDriver::HostDeallocate(GPUContext* context,
                                              void* location) {
   ScopedActivateContext activation{context};
   hipError_t res = hipHostFree(location);
@@ -793,7 +792,7 @@ static bool LoadHsaco(GPUContext* context,
   }
 }
 
-/* static */ bool ROCMDriver::HostRegister(GPUContext* context, void* location,
+/* static */ bool GPUDriver::HostRegister(GPUContext* context, void* location,
                                            uint64 bytes) {
   ScopedActivateContext activation{context};
   // "Portable" memory is visible to all ROCM contexts. Safe for our use model.
@@ -807,7 +806,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ bool ROCMDriver::HostUnregister(GPUContext* context,
+/* static */ bool GPUDriver::HostUnregister(GPUContext* context,
                                              void* location) {
   ScopedActivateContext activation{context};
   hipError_t res = hipHostUnregister(location);
@@ -819,7 +818,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ port::Status ROCMDriver::DestroyEvent(GPUContext* context,
+/* static */ port::Status GPUDriver::DestroyEvent(GPUContext* context,
                                                    GPUEventHandle* event) {
   if (*event == nullptr) {
     return port::Status{port::error::INVALID_ARGUMENT,
@@ -847,7 +846,7 @@ static bool LoadHsaco(GPUContext* context,
   }
 }
 
-/* static */ port::Status ROCMDriver::RecordEvent(GPUContext* context,
+/* static */ port::Status GPUDriver::RecordEvent(GPUContext* context,
                                                   GPUEventHandle event,
                                                   GPUStreamHandle stream) {
   ScopedActivateContext activated{context};
@@ -869,7 +868,7 @@ static bool LoadHsaco(GPUContext* context,
   }
 }
 
-/* static */ port::StatusOr<hipError_t> ROCMDriver::QueryEvent(
+/* static */ port::StatusOr<hipError_t> GPUDriver::QueryEvent(
     GPUContext* context, GPUEventHandle event) {
   ScopedActivateContext activated{context};
   hipError_t res = hipEventQuery(event);
@@ -882,7 +881,7 @@ static bool LoadHsaco(GPUContext* context,
   return res;
 }
 
-/* static */ bool ROCMDriver::GetEventElapsedTime(GPUContext* context,
+/* static */ bool GPUDriver::GetEventElapsedTime(GPUContext* context,
                                                   float* elapsed_milliseconds,
                                                   GPUEventHandle start,
                                                   GPUEventHandle stop) {
@@ -904,7 +903,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ bool ROCMDriver::WaitStreamOnEvent(GPUContext* context,
+/* static */ bool GPUDriver::WaitStreamOnEvent(GPUContext* context,
                                                 GPUStreamHandle stream,
                                                 GPUEventHandle event) {
   ScopedActivateContext activation{context};
@@ -917,7 +916,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ bool ROCMDriver::SynchronizeContext(GPUContext* context) {
+/* static */ bool GPUDriver::SynchronizeContext(GPUContext* context) {
   ScopedActivateContext activation{context};
   hipError_t res = hipDeviceSynchronize();
   if (res != hipSuccess) {
@@ -929,7 +928,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ port::Status ROCMDriver::SynchronizeStream(GPUContext* context,
+/* static */ port::Status GPUDriver::SynchronizeStream(GPUContext* context,
                                                         GPUStreamHandle stream) {
   ScopedActivateContext activated{context};
   CHECK(stream != nullptr);
@@ -945,7 +944,7 @@ static bool LoadHsaco(GPUContext* context,
   return port::Status::OK();
 }
 
-/* static */ bool ROCMDriver::IsStreamIdle(GPUContext* context,
+/* static */ bool GPUDriver::IsStreamIdle(GPUContext* context,
                                            GPUStreamHandle stream) {
   ScopedActivateContext activated{context};
   CHECK(stream != nullptr);
@@ -960,7 +959,7 @@ static bool LoadHsaco(GPUContext* context,
   return false;
 }
 
-/* static */ port::Status ROCMDriver::SynchronousMemcpyD2H(
+/* static */ port::Status GPUDriver::SynchronousMemcpyD2H(
     GPUContext* context, void* host_dst, hipDeviceptr_t gpu_src, uint64 size) {
   ScopedActivateContext activation{context};
   hipError_t res = hipMemcpyDtoH(host_dst, gpu_src, size);
@@ -976,7 +975,7 @@ static bool LoadHsaco(GPUContext* context,
   return port::Status::OK();
 }
 
-/* static */ port::Status ROCMDriver::SynchronousMemcpyH2D(
+/* static */ port::Status GPUDriver::SynchronousMemcpyH2D(
     GPUContext* context, hipDeviceptr_t gpu_dst, const void* host_src,
     uint64 size) {
   ScopedActivateContext activation{context};
@@ -992,7 +991,7 @@ static bool LoadHsaco(GPUContext* context,
   return port::Status::OK();
 }
 
-/* static */ port::Status ROCMDriver::SynchronousMemcpyD2D(
+/* static */ port::Status GPUDriver::SynchronousMemcpyD2D(
     GPUContext* context, hipDeviceptr_t gpu_dst, hipDeviceptr_t gpu_src,
     uint64 size) {
   ScopedActivateContext activation{context};
@@ -1008,7 +1007,7 @@ static bool LoadHsaco(GPUContext* context,
   return port::Status::OK();
 }
 
-/* static */ bool ROCMDriver::AsynchronousMemcpyD2H(GPUContext* context,
+/* static */ bool GPUDriver::AsynchronousMemcpyD2H(GPUContext* context,
                                                     void* host_dst,
                                                     hipDeviceptr_t gpu_src,
                                                     uint64 size,
@@ -1028,7 +1027,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ bool ROCMDriver::AsynchronousMemcpyH2D(GPUContext* context,
+/* static */ bool GPUDriver::AsynchronousMemcpyH2D(GPUContext* context,
                                                     hipDeviceptr_t gpu_dst,
                                                     const void* host_src,
                                                     uint64 size,
@@ -1047,7 +1046,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ bool ROCMDriver::AsynchronousMemcpyD2D(GPUContext* context,
+/* static */ bool GPUDriver::AsynchronousMemcpyD2D(GPUContext* context,
                                                     hipDeviceptr_t gpu_dst,
                                                     hipDeviceptr_t gpu_src,
                                                     uint64 size,
@@ -1073,7 +1072,7 @@ static bool LoadHsaco(GPUContext* context,
   return true;
 }
 
-/* static */ port::Status ROCMDriver::CreateEvent(GPUContext* context,
+/* static */ port::Status GPUDriver::CreateEvent(GPUContext* context,
                                                   GPUEventHandle* event,
                                                   EventFlags flags) {
   int hipflags;
@@ -1103,7 +1102,7 @@ static bool LoadHsaco(GPUContext* context,
   }
 }
 
-/* static */ int ROCMDriver::GetDeviceCount() {
+/* static */ int GPUDriver::GetDeviceCount() {
   int device_count = 0;
   hipError_t res = hipGetDeviceCount(&device_count);
   if (res != hipSuccess) {
@@ -1117,7 +1116,7 @@ static bool LoadHsaco(GPUContext* context,
   return device_count;
 }
 
-/* static */ port::Status ROCMDriver::GetComputeCapability(int *cc_major,
+/* static */ port::Status GPUDriver::GetComputeCapability(int *cc_major,
                                                            int *cc_minor,
                                                            hipDevice_t device) {
   return port::Status(
@@ -1126,7 +1125,7 @@ static bool LoadHsaco(GPUContext* context,
                    device));
 }
 
-/* static */ port::Status ROCMDriver::GetGPUISAVersion(int *version,
+/* static */ port::Status GPUDriver::GetGPUISAVersion(int *version,
 						       hipDevice_t device) {
   hipDeviceProp_t props;
   hipError_t result = hipGetDeviceProperties(&props, device);
@@ -1157,48 +1156,48 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return converted;
 }
 
-/* static */ port::StatusOr<int> ROCMDriver::GetMultiprocessorCount(
+/* static */ port::StatusOr<int> GPUDriver::GetMultiprocessorCount(
     hipDevice_t device) {
   return GetSimpleAttribute<int>(device,
                                  hipDeviceAttributeMultiprocessorCount);
 }
 
-/* static */ port::StatusOr<int64> ROCMDriver::GetMaxSharedMemoryPerCore(
+/* static */ port::StatusOr<int64> GPUDriver::GetMaxSharedMemoryPerCore(
     hipDevice_t device) {
   return GetSimpleAttribute<int64>(
       device, hipDeviceAttributeMaxSharedMemoryPerMultiprocessor);
 }
 
-/* static */ port::StatusOr<int64> ROCMDriver::GetMaxSharedMemoryPerBlock(
+/* static */ port::StatusOr<int64> GPUDriver::GetMaxSharedMemoryPerBlock(
     hipDevice_t device) {
   return GetSimpleAttribute<int64>(
       device, hipDeviceAttributeMaxSharedMemoryPerBlock);
 }
 
-/* static */ port::StatusOr<int64> ROCMDriver::GetMaxThreadsPerMultiprocessor(
+/* static */ port::StatusOr<int64> GPUDriver::GetMaxThreadsPerMultiprocessor(
     hipDevice_t device) {
   return GetSimpleAttribute<int64>(
       device, hipDeviceAttributeMaxThreadsPerMultiProcessor);
 }
 
-/* static */ port::StatusOr<int64> ROCMDriver::GetMaxThreadsPerBlock(
+/* static */ port::StatusOr<int64> GPUDriver::GetMaxThreadsPerBlock(
     hipDevice_t device) {
   return GetSimpleAttribute<int64>(device,
                                    hipDeviceAttributeMaxThreadsPerBlock);
 }
 
-/* static */ port::StatusOr<int64> ROCMDriver::GetMaxRegistersPerBlock(
+/* static */ port::StatusOr<int64> GPUDriver::GetMaxRegistersPerBlock(
     hipDevice_t device) {
   return GetSimpleAttribute<int64>(device,
                                    hipDeviceAttributeMaxRegistersPerBlock);
 }
 
-/* static */ port::StatusOr<int64> ROCMDriver::GetThreadsPerWarp(
+/* static */ port::StatusOr<int64> GPUDriver::GetThreadsPerWarp(
     hipDevice_t device) {
   return GetSimpleAttribute<int64>(device, hipDeviceAttributeWarpSize);
 }
 
-/* static */ bool ROCMDriver::GetGridLimits(int *x, int *y, int *z,
+/* static */ bool GPUDriver::GetGridLimits(int *x, int *y, int *z,
                                             hipDevice_t device) {
   int value;
   hipError_t res =
@@ -1227,7 +1226,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return true;
 }
 
-/* static */ bool ROCMDriver::GetDriverVersion(int *driver_version) {
+/* static */ bool GPUDriver::GetDriverVersion(int *driver_version) {
   hipError_t res = hipDriverGetVersion(driver_version);
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to query driver version: " << ToString(res);
@@ -1237,7 +1236,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return true;
 }
 
-/* static */ bool ROCMDriver::GetDeviceProperties(hipDeviceProp_t *device_properties,
+/* static */ bool GPUDriver::GetDeviceProperties(hipDeviceProp_t *device_properties,
                                                   int device_ordinal) {
   hipError_t res = hipGetDeviceProperties(device_properties, device_ordinal);
   if (res != hipSuccess) {
@@ -1248,12 +1247,12 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return true;
 }
 
-/* static */ port::StatusOr<int> ROCMDriver::GetDeviceAttribute(
+/* static */ port::StatusOr<int> GPUDriver::GetDeviceAttribute(
     hipDeviceAttribute_t attribute, hipDevice_t device) {
   return GetSimpleAttribute<int>(device, attribute);
 }
 
-/* static */ bool ROCMDriver::IsEccEnabled(hipDevice_t device, bool *result) {
+/* static */ bool GPUDriver::IsEccEnabled(hipDevice_t device, bool *result) {
   int value = -1;
   hipError_t res = hipSuccess;
   // ROCM TODO implement this feature in HIP
@@ -1266,7 +1265,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return true;
 }
 
-/* static */ bool ROCMDriver::GetDeviceMemoryInfo(GPUContext* context,
+/* static */ bool GPUDriver::GetDeviceMemoryInfo(GPUContext* context,
                                                   int64* free_out,
                                                   int64* total_out) {
   ScopedActivateContext activation{context};
@@ -1283,7 +1282,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return true;
 }
 
-/* static */ bool ROCMDriver::GetDeviceTotalMemory(hipDevice_t device,
+/* static */ bool GPUDriver::GetDeviceTotalMemory(hipDevice_t device,
                                                    uint64 *result) {
   size_t value = -1;
   hipError_t res = hipDeviceTotalMem(&value, device);
@@ -1296,7 +1295,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return true;
 }
 
-/* static */ string ROCMDriver::GetPCIBusID(hipDevice_t device) {
+/* static */ string GPUDriver::GetPCIBusID(hipDevice_t device) {
   string pci_bus_id;
   static const int kBufferSize = 64;
   absl::InlinedVector<char, 4> chars(kBufferSize);
@@ -1310,7 +1309,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return pci_bus_id;
 }
 
-/* static */ bool ROCMDriver::CanEnablePeerAccess(GPUContext* from,
+/* static */ bool GPUDriver::CanEnablePeerAccess(GPUContext* from,
                                                   GPUContext* to) {
   if (from->device_ordinal() == to->device_ordinal()) {
     return true;  // A device can always access its own memory.
@@ -1327,7 +1326,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return can_access_peer;
 }
 
-/* static */ port::Status ROCMDriver::EnablePeerAccess(GPUContext* from,
+/* static */ port::Status GPUDriver::EnablePeerAccess(GPUContext* from,
                                                        GPUContext* to) {
   if (from->device_ordinal() == to->device_ordinal()) {
     return port::Status::OK();  // A device can always access its own memory.
@@ -1348,7 +1347,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
   return port::Status::OK();
 }
 
-/* static */ port::StatusOr<int> ROCMDriver::GetMaxOccupiedBlocksPerCore(
+/* static */ port::StatusOr<int> GPUDriver::GetMaxOccupiedBlocksPerCore(
     GPUContext* context, hipFunction_t kernel, int threads_per_block,
     size_t dynamic_shared_memory_bytes) {
   ScopedActivateContext activation{context};

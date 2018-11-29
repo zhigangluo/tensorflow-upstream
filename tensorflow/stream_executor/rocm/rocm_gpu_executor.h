@@ -85,11 +85,11 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
   // There's no external interface for us to otherwise control these DMA
   // settings.
   void *HostMemoryAllocate(uint64 size) override {
-    return ROCMDriver::HostAllocate(context_, size);
+    return GPUDriver::HostAllocate(context_, size);
   }
 
   void HostMemoryDeallocate(void *location) override {
-    return ROCMDriver::HostDeallocate(context_, location);
+    return GPUDriver::HostDeallocate(context_, location);
   }
 
   bool HostMemoryRegister(void *location, uint64 size) override;
@@ -159,7 +159,7 @@ class ROCMExecutor : public internal::StreamExecutorInterface {
 
   port::Status BlockHostUntilDone(Stream *stream) override;
 
-  int PlatformDeviceCount() override { return ROCMDriver::GetDeviceCount(); }
+  int PlatformDeviceCount() override { return GPUDriver::GetDeviceCount(); }
 
   port::Status EnablePeerAccessTo(StreamExecutorInterface *other) override;
 

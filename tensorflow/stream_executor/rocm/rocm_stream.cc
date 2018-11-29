@@ -23,28 +23,28 @@ namespace stream_executor {
 namespace gpu {
 
 bool ROCMStream::Init() {
-  if (!ROCMDriver::CreateStream(parent_->rocm_context(), &rocm_stream_)) {
+  if (!GPUDriver::CreateStream(parent_->rocm_context(), &rocm_stream_)) {
     return false;
   }
-  return ROCMDriver::CreateEvent(parent_->rocm_context(), &completed_event_,
-                                 ROCMDriver::EventFlags::kDisableTiming)
+  return GPUDriver::CreateEvent(parent_->rocm_context(), &completed_event_,
+                                 GPUDriver::EventFlags::kDisableTiming)
       .ok();
 }
 
 void ROCMStream::Destroy() {
   if (completed_event_ != nullptr) {
     port::Status status =
-        ROCMDriver::DestroyEvent(parent_->rocm_context(), &completed_event_);
+        GPUDriver::DestroyEvent(parent_->rocm_context(), &completed_event_);
     if (!status.ok()) {
       LOG(ERROR) << status.error_message();
     }
   }
 
-  ROCMDriver::DestroyStream(parent_->rocm_context(), &rocm_stream_);
+  GPUDriver::DestroyStream(parent_->rocm_context(), &rocm_stream_);
 }
 
 bool ROCMStream::IsIdle() const {
-  return ROCMDriver::IsStreamIdle(parent_->rocm_context(), rocm_stream_);
+  return GPUDriver::IsStreamIdle(parent_->rocm_context(), rocm_stream_);
 }
 
 ROCMStream *AsROCMStream(Stream *stream) {

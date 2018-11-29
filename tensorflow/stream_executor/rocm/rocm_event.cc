@@ -28,22 +28,22 @@ ROCMEvent::ROCMEvent(ROCMExecutor* parent)
 ROCMEvent::~ROCMEvent() {}
 
 port::Status ROCMEvent::Init() {
-  return ROCMDriver::CreateEvent(parent_->rocm_context(), &rocm_event_,
-                                 ROCMDriver::EventFlags::kDisableTiming);
+  return GPUDriver::CreateEvent(parent_->rocm_context(), &rocm_event_,
+                                 GPUDriver::EventFlags::kDisableTiming);
 }
 
 port::Status ROCMEvent::Destroy() {
-  return ROCMDriver::DestroyEvent(parent_->rocm_context(), &rocm_event_);
+  return GPUDriver::DestroyEvent(parent_->rocm_context(), &rocm_event_);
 }
 
 port::Status ROCMEvent::Record(ROCMStream* stream) {
-  return ROCMDriver::RecordEvent(parent_->rocm_context(), rocm_event_,
+  return GPUDriver::RecordEvent(parent_->rocm_context(), rocm_event_,
                                  stream->rocm_stream());
 }
 
 Event::Status ROCMEvent::PollForStatus() {
   port::StatusOr<hipError_t> status =
-      ROCMDriver::QueryEvent(parent_->rocm_context(), rocm_event_);
+      GPUDriver::QueryEvent(parent_->rocm_context(), rocm_event_);
   if (!status.ok()) {
     LOG(ERROR) << "Error polling for event status: "
                << status.status().error_message();

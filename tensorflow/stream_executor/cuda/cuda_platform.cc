@@ -134,11 +134,11 @@ Platform::Id CudaPlatform::id() const { return kCudaPlatformId; }
 int CudaPlatform::VisibleDeviceCount() const {
   // Throw away the result - it logs internally, and this [containing] function
   // isn't in the path of user control. It's safe to call this > 1x.
-  if (!gpu::CUDADriver::Init().ok()) {
+  if (!gpu::GPUDriver::Init().ok()) {
     return -1;
   }
 
-  return CUDADriver::GetDeviceCount();
+  return GPUDriver::GetDeviceCount();
 }
 
 const string& CudaPlatform::Name() const { return name_; }

@@ -32,7 +32,7 @@ namespace stream_executor {
 namespace gpu {
 
 // Identifies the memory space where an allocation resides. See
-// ROCMDriver::GetPointerMemorySpace().
+// GPUDriver::GetPointerMemorySpace().
 enum class MemorySpace { kHost, kDevice };
 
 // Returns a casual string, such as "host" for the provided memory space.
@@ -40,7 +40,7 @@ string MemorySpaceString(MemorySpace memory_space);
 
 class GPUContext;
 
-// ROCMDriver contains wrappers for calls to the userspace library driver. It's
+// GPUDriver contains wrappers for calls to the userspace library driver. It's
 // useful to isolate these calls and put basic wrappers around them to separate
 // userspace library driver behaviors from the rest of the program.
 //
@@ -50,7 +50,7 @@ class GPUContext;
 // was successful to the caller.
 //
 // Thread safety: these functions should not be used from signal handlers.
-class ROCMDriver {
+class GPUDriver {
  public:
   // Wraps a call to hipInit with logging to help indicate what has gone wrong in
   // the case of failure. Safe to call multiple times; will be fast on all calls

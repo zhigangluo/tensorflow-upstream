@@ -99,11 +99,11 @@ int ROCmPlatform::VisibleDeviceCount() const {
   // Throw away the result - it logs internally, and this [containing] function
   // isn't in the path of user control. It's safe to call this > 1x.
 
-  if (!gpu::ROCMDriver::Init().ok()) {
+  if (!gpu::GPUDriver::Init().ok()) {
     return -1;
   }
 
-  return ROCMDriver::GetDeviceCount();
+  return GPUDriver::GetDeviceCount();
 }
 
 const string& ROCmPlatform::Name() const { return name_; }

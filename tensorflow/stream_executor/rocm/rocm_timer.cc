@@ -25,17 +25,17 @@ namespace gpu {
 
 bool ROCMTimer::Init() {
   CHECK(start_event_ == nullptr && stop_event_ == nullptr);
-  if (!ROCMDriver::CreateEvent(parent_->rocm_context(), &start_event_,
-                               ROCMDriver::EventFlags::kDefault)
+  if (!GPUDriver::CreateEvent(parent_->rocm_context(), &start_event_,
+                               GPUDriver::EventFlags::kDefault)
            .ok()) {
     return false;
   }
 
-  if (!ROCMDriver::CreateEvent(parent_->rocm_context(), &stop_event_,
-                               ROCMDriver::EventFlags::kDefault)
+  if (!GPUDriver::CreateEvent(parent_->rocm_context(), &stop_event_,
+                               GPUDriver::EventFlags::kDefault)
            .ok()) {
     port::Status status =
-        ROCMDriver::DestroyEvent(parent_->rocm_context(), &start_event_);
+        GPUDriver::DestroyEvent(parent_->rocm_context(), &start_event_);
     if (!status.ok()) {
       LOG(ERROR) << status;
     }
@@ -48,12 +48,12 @@ bool ROCMTimer::Init() {
 
 void ROCMTimer::Destroy() {
   port::Status status =
-      ROCMDriver::DestroyEvent(parent_->rocm_context(), &start_event_);
+      GPUDriver::DestroyEvent(parent_->rocm_context(), &start_event_);
   if (!status.ok()) {
     LOG(ERROR) << status;
   }
 
-  status = ROCMDriver::DestroyEvent(parent_->rocm_context(), &stop_event_);
+  status = GPUDriver::DestroyEvent(parent_->rocm_context(), &stop_event_);
   if (!status.ok()) {
     LOG(ERROR) << status;
   }
@@ -64,20 +64,20 @@ float ROCMTimer::GetElapsedMilliseconds() const {
   // TODO(leary) provide a way to query timer resolution?
   // ROCM docs say a resolution of about 0.5us
   float elapsed_milliseconds = NAN;
-  (void)ROCMDriver::GetEventElapsedTime(parent_->rocm_context(),
+  (void)GPUDriver::GetEventElapsedTime(parent_->rocm_context(),
                                         &elapsed_milliseconds, start_event_,
                                         stop_event_);
   return elapsed_milliseconds;
 }
 
 bool ROCMTimer::Start(ROCMStream *stream) {
-  return ROCMDriver::RecordEvent(parent_->rocm_context(), start_event_,
+  return GPUDriver::RecordEvent(parent_->rocm_context(), start_event_,
                                  stream->rocm_stream())
       .ok();
 }
 
 bool ROCMTimer::Stop(ROCMStream *stream) {
-  return ROCMDriver::RecordEvent(parent_->rocm_context(), stop_event_,
+  return GPUDriver::RecordEvent(parent_->rocm_context(), stop_event_,
                                  stream->rocm_stream())
       .ok();
 }

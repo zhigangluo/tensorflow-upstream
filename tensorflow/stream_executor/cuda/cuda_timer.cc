@@ -26,18 +26,18 @@ namespace gpu {
 bool CUDATimer::Init() {
   CHECK(start_event_ == nullptr && stop_event_ == nullptr);
   GPUContext* context = parent_->cuda_context();
-  port::Status status = CUDADriver::CreateEvent(
-      context, &start_event_, CUDADriver::EventFlags::kDefault);
+  port::Status status = GPUDriver::CreateEvent(
+      context, &start_event_, GPUDriver::EventFlags::kDefault);
   if (!status.ok()) {
     LOG(ERROR) << status;
     return false;
   }
 
-  status = CUDADriver::CreateEvent(context, &stop_event_,
-                                   CUDADriver::EventFlags::kDefault);
+  status = GPUDriver::CreateEvent(context, &stop_event_,
+                                   GPUDriver::EventFlags::kDefault);
   if (!status.ok()) {
     LOG(ERROR) << status;
-    status = CUDADriver::DestroyEvent(context, &start_event_);
+    status = GPUDriver::DestroyEvent(context, &start_event_);
     if (!status.ok()) {
       LOG(ERROR) << status;
     }
@@ -50,12 +50,12 @@ bool CUDATimer::Init() {
 
 void CUDATimer::Destroy() {
   GPUContext* context = parent_->cuda_context();
-  port::Status status = CUDADriver::DestroyEvent(context, &start_event_);
+  port::Status status = GPUDriver::DestroyEvent(context, &start_event_);
   if (!status.ok()) {
     LOG(ERROR) << status;
   }
 
-  status = CUDADriver::DestroyEvent(context, &stop_event_);
+  status = GPUDriver::DestroyEvent(context, &stop_event_);
   if (!status.ok()) {
     LOG(ERROR) << status;
   }
@@ -66,14 +66,14 @@ float CUDATimer::GetElapsedMilliseconds() const {
   // TODO(leary) provide a way to query timer resolution?
   // CUDA docs say a resolution of about 0.5us
   float elapsed_milliseconds = NAN;
-  (void)CUDADriver::GetEventElapsedTime(parent_->cuda_context(),
+  (void)GPUDriver::GetEventElapsedTime(parent_->cuda_context(),
                                         &elapsed_milliseconds, start_event_,
                                         stop_event_);
   return elapsed_milliseconds;
 }
 
 bool CUDATimer::Start(CUDAStream* stream) {
-  port::Status status = CUDADriver::RecordEvent(
+  port::Status status = GPUDriver::RecordEvent(
       parent_->cuda_context(), start_event_, stream->cuda_stream());
   if (!status.ok()) {
     LOG(ERROR) << status;
@@ -82,7 +82,7 @@ bool CUDATimer::Start(CUDAStream* stream) {
 }
 
 bool CUDATimer::Stop(CUDAStream* stream) {
-  port::Status status = CUDADriver::RecordEvent(
+  port::Status status = GPUDriver::RecordEvent(
       parent_->cuda_context(), stop_event_, stream->cuda_stream());
   if (!status.ok()) {
     LOG(ERROR) << status;
