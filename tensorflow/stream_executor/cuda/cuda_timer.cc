@@ -72,18 +72,18 @@ float CUDATimer::GetElapsedMilliseconds() const {
   return elapsed_milliseconds;
 }
 
-bool CUDATimer::Start(CUDAStream* stream) {
+bool CUDATimer::Start(GPUStream* stream) {
   port::Status status = GPUDriver::RecordEvent(
-      parent_->gpu_context(), start_event_, stream->cuda_stream());
+      parent_->gpu_context(), start_event_, stream->gpu_stream());
   if (!status.ok()) {
     LOG(ERROR) << status;
   }
   return status.ok();
 }
 
-bool CUDATimer::Stop(CUDAStream* stream) {
+bool CUDATimer::Stop(GPUStream* stream) {
   port::Status status = GPUDriver::RecordEvent(
-      parent_->gpu_context(), stop_event_, stream->cuda_stream());
+      parent_->gpu_context(), stop_event_, stream->gpu_stream());
   if (!status.ok()) {
     LOG(ERROR) << status;
   }

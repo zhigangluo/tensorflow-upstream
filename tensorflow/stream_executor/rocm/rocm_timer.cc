@@ -70,15 +70,15 @@ float ROCMTimer::GetElapsedMilliseconds() const {
   return elapsed_milliseconds;
 }
 
-bool ROCMTimer::Start(ROCMStream *stream) {
+bool ROCMTimer::Start(GPUStream *stream) {
   return GPUDriver::RecordEvent(parent_->gpu_context(), start_event_,
-                                 stream->rocm_stream())
+                                 stream->gpu_stream())
       .ok();
 }
 
-bool ROCMTimer::Stop(ROCMStream *stream) {
+bool ROCMTimer::Stop(GPUStream *stream) {
   return GPUDriver::RecordEvent(parent_->gpu_context(), stop_event_,
-                                 stream->rocm_stream())
+                                 stream->gpu_stream())
       .ok();
 }
 

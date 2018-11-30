@@ -294,10 +294,10 @@ ROCMBlas::~ROCMBlas() {
 
 bool ROCMBlas::SetStream(Stream *stream) {
   CHECK(stream != nullptr);
-  CHECK(AsROCMStreamValue(stream) != nullptr);
+  CHECK(AsGPUStreamValue(stream) != nullptr);
   CHECK(blas_ != nullptr);
   rocblas_status ret =
-    wrap::rocblas_set_stream(parent_, blas_, AsROCMStreamValue(stream));
+    wrap::rocblas_set_stream(parent_, blas_, AsGPUStreamValue(stream));
   if (ret != rocblas_status_success) {
     LOG(ERROR) << "failed to set stream for rocBLAS calls: " << ToString(ret);
     return false;

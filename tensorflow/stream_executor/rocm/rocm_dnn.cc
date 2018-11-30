@@ -2583,7 +2583,7 @@ bool MIOpenSupport::DoConvolveImpl(
 
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGPUStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "failed to set stream for miopen handle: " << ToString(status);
   }
@@ -2684,7 +2684,7 @@ bool MIOpenSupport::DoConvolveImpl(
     // The start and stop of the timer should be as close to the MIOpen call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
-    if (!timer->Start(AsROCMStream(stream))) {
+    if (!timer->Start(AsGPUStream(stream))) {
       timer->Destroy();
       return false;
     }
@@ -2698,7 +2698,7 @@ bool MIOpenSupport::DoConvolveImpl(
       /*destData=*/output_data->opaque(), /*workSpace=*/scratch.opaque(),
       /*workSpaceSizeInBytes=*/scratch.size());
   if (is_profiling) {
-    if (!timer->Stop(AsROCMStream(stream))) {
+    if (!timer->Stop(AsGPUStream(stream))) {
       timer->Destroy();
       return false;
     }
@@ -2827,7 +2827,7 @@ bool MIOpenSupport::DoBatchNormalizationForwardImpl(
     std::function<void()> inv_var_to_var) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-				      AsROCMStreamValue(stream));
+				      AsGPUStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -2909,7 +2909,7 @@ bool MIOpenSupport::DoBatchNormalizationBackwardImpl(
     DeviceMemory<U>* offset_backprop) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGPUStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -3127,7 +3127,7 @@ bool MIOpenSupport::DoConvolveBackwardDataImpl(
     dnn::ProfileResult* output_profile_result) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGPUStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "failed to set stream for miopen handle: " << ToString(status);
   }
@@ -3247,7 +3247,7 @@ bool MIOpenSupport::DoConvolveBackwardDataImpl(
     // The start and stop of the timer should be as close to the MIOpen call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
-    timer->Start(AsROCMStream(stream));
+    timer->Start(AsGPUStream(stream));
   }
 
   status = wrap::miopenConvolutionBackwardData(
@@ -3266,7 +3266,7 @@ bool MIOpenSupport::DoConvolveBackwardDataImpl(
       /*workSpaceSizeInBytes=*/scratch.size());
 
   if (is_profiling) {
-    timer->Stop(AsROCMStream(stream));
+    timer->Stop(AsGPUStream(stream));
     if (status == miopenStatusSuccess) {
       dnn::AlgorithmDesc algotype(algo_sz.first, false);
       output_profile_result->set_algorithm(algotype);
@@ -3352,7 +3352,7 @@ bool MIOpenSupport::DoConvolveBackwardFilterImpl(
     dnn::ProfileResult* output_profile_result) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGPUStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "failed to set stream for miopen handle: " << ToString(status);
   }
@@ -3474,7 +3474,7 @@ bool MIOpenSupport::DoConvolveBackwardFilterImpl(
     // The start and stop of the timer should be as close to the MIOpen call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
-    timer->Start(AsROCMStream(stream));
+    timer->Start(AsGPUStream(stream));
   }
 
   status = wrap::miopenConvolutionBackwardWeights(
@@ -3491,7 +3491,7 @@ bool MIOpenSupport::DoConvolveBackwardFilterImpl(
       /*workSpace=*/scratch.opaque(),
       /*workSpaceSizeInBytes=*/scratch.size());
   if (is_profiling) {
-    timer->Stop(AsROCMStream(stream));
+    timer->Stop(AsGPUStream(stream));
     if (status == miopenStatusSuccess) {
       dnn::AlgorithmDesc algotype(algo_sz.first, false);
       output_profile_result->set_algorithm(algotype);
@@ -3572,7 +3572,7 @@ bool MIOpenSupport::DoConvolveBackwardBiasImpl(
     DeviceMemory<T>* backward_bias_data) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGPUStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "failed to set stream for miopen handle: " << ToString(status);
   }
@@ -3793,7 +3793,7 @@ bool MIOpenSupport::DoBiasAdd(Stream* stream,
 
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGPUStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -3847,7 +3847,7 @@ bool MIOpenSupport::DoPoolForward(
     ScratchAllocator* workspace_allocator) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGPUStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -3884,7 +3884,7 @@ bool MIOpenSupport::DoPoolForward(
     ScratchAllocator* workspace_allocator) {
 
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGPUStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -3936,7 +3936,7 @@ bool MIOpenSupport::DoPoolBackward(
     ScratchAllocator* workspace_allocator) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGPUStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4037,7 +4037,7 @@ bool MIOpenSupport::DoPoolBackward(
 
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGPUStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4150,7 +4150,7 @@ bool MIOpenSupport::DoNormalizeWithDimensions(
   // Launch the normalization.
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGPUStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4194,7 +4194,7 @@ bool MIOpenSupport::DoNormalizeBackwardWithDimensions(
 
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGPUStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4458,7 +4458,7 @@ bool MIOpenSupport::DoFusedConvolutionBiasActivationImpl(
     if (is_profiling) {
       timer.reset(new ROCMTimer(parent_));
       timer->Init();
-      timer->Start(AsROCMStream(stream));
+      timer->Start(AsGPUStream(stream));
     }
 
     miopenStatus_t status = miopenStatusSuccess;
@@ -4482,7 +4482,7 @@ bool MIOpenSupport::DoFusedConvolutionBiasActivationImpl(
     }
 
     if (is_profiling) {
-      timer->Stop(AsROCMStream(stream));
+      timer->Stop(AsGPUStream(stream));
       if (status == miopenStatusSuccess) {
         output_profile_result->set_elapsed_time_in_ms(
             timer->GetElapsedMilliseconds());
@@ -4554,7 +4554,7 @@ bool MIOpenSupport::DoFusedBatchNormActivationInferenceImpl(
     if (is_profiling) {
       timer.reset(new ROCMTimer(parent_));
       timer->Init();
-      timer->Start(AsROCMStream(stream));
+      timer->Start(AsGPUStream(stream));
     }
 
     miopenStatus_t status = miopenStatusSuccess;
@@ -4575,7 +4575,7 @@ bool MIOpenSupport::DoFusedBatchNormActivationInferenceImpl(
     }
 
     if (is_profiling) {
-      timer->Stop(AsROCMStream(stream));
+      timer->Stop(AsGPUStream(stream));
       if (status == miopenStatusSuccess) {
         output_profile_result->set_elapsed_time_in_ms(
             timer->GetElapsedMilliseconds());
@@ -4663,7 +4663,7 @@ bool MIOpenSupport::DoFusedBatchNormActivationForwardImpl(
     if (is_profiling) {
       timer.reset(new ROCMTimer(parent_));
       timer->Init();
-      timer->Start(AsROCMStream(stream));
+      timer->Start(AsGPUStream(stream));
     }
 
     miopenStatus_t status = miopenStatusSuccess;
@@ -4685,7 +4685,7 @@ bool MIOpenSupport::DoFusedBatchNormActivationForwardImpl(
     }
 
     if (is_profiling) {
-      timer->Stop(AsROCMStream(stream));
+      timer->Stop(AsGPUStream(stream));
       if (status == miopenStatusSuccess) {
         output_profile_result->set_elapsed_time_in_ms(
             timer->GetElapsedMilliseconds());
@@ -4778,7 +4778,7 @@ bool MIOpenSupport::DoFusedBatchNormActivationBackwardImpl(
     if (is_profiling) {
       timer.reset(new ROCMTimer(parent_));
       timer->Init();
-      timer->Start(AsROCMStream(stream));
+      timer->Start(AsGPUStream(stream));
     }
 
     miopenStatus_t status = miopenStatusSuccess;
@@ -4802,7 +4802,7 @@ bool MIOpenSupport::DoFusedBatchNormActivationBackwardImpl(
     }
 
     if (is_profiling) {
-      timer->Stop(AsROCMStream(stream));
+      timer->Stop(AsGPUStream(stream));
       if (status == miopenStatusSuccess) {
         output_profile_result->set_elapsed_time_in_ms(
             timer->GetElapsedMilliseconds());

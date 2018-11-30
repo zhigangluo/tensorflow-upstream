@@ -36,9 +36,9 @@ port::Status ROCMEvent::Destroy() {
   return GPUDriver::DestroyEvent(parent_->gpu_context(), &rocm_event_);
 }
 
-port::Status ROCMEvent::Record(ROCMStream* stream) {
+port::Status ROCMEvent::Record(GPUStream* stream) {
   return GPUDriver::RecordEvent(parent_->gpu_context(), rocm_event_,
-                                 stream->rocm_stream());
+                                 stream->gpu_stream());
 }
 
 Event::Status ROCMEvent::PollForStatus() {

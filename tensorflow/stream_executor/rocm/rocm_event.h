@@ -40,7 +40,7 @@ class ROCMEvent : public internal::EventInterface {
   port::Status Destroy();
 
   // Inserts the event at the current position into the specified stream.
-  port::Status Record(ROCMStream* stream);
+  port::Status Record(GPUStream* stream);
 
   // Polls the ROCM platform for the event's current status.
   Event::Status PollForStatus();

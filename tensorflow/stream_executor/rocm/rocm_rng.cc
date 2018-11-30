@@ -130,7 +130,7 @@ bool ROCMRng::Init() {
 
 bool ROCMRng::SetStream(Stream *stream) {
   hiprandStatus_t ret =
-    wrap::hiprandSetStream(parent_, rng_, AsROCMStreamValue(stream));
+    wrap::hiprandSetStream(parent_, rng_, AsGPUStreamValue(stream));
   if (ret != HIPRAND_STATUS_SUCCESS) {
     LOG(ERROR) << "failed to set stream for random generation: " << ret;
     return false;

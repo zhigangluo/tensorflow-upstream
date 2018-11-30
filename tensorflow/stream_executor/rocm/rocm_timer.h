@@ -27,7 +27,7 @@ namespace stream_executor {
 namespace gpu {
 
 class GPUExecutor;
-class ROCMStream;
+class GPUStream;
 
 // Wraps a pair of GPUEventHandles in order to satisfy the platform-independent
 // TimerInferface -- both a start and a stop event are present which may be
@@ -50,10 +50,10 @@ class ROCMTimer : public internal::TimerInterface {
   void Destroy();
 
   // Records the "timer start" event at the current point in the stream.
-  bool Start(ROCMStream *stream);
+  bool Start(GPUStream *stream);
 
   // Records the "timer stop" event at the current point in the stream.
-  bool Stop(ROCMStream *stream);
+  bool Stop(GPUStream *stream);
 
   // Returns the elapsed time, in milliseconds, between the start and stop
   // events.

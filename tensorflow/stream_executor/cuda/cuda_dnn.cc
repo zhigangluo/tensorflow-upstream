@@ -228,7 +228,7 @@ class CudnnAccess {
   CudnnHandle GetHandle(GPUExecutor* executor, Stream* stream) {
     mutex_lock lock(mutex_);
     gpu::ScopedActivateExecutorContext context(executor);
-    CUstream cu_stream = stream ? AsCUDAStreamValue(stream) : cudaStreamLegacy;
+    CUstream cu_stream = stream ? AsGPUStreamValue(stream) : cudaStreamLegacy;
     auto status = cudnnSetStream(handle_, cu_stream);
     CHECK_EQ(status, CUDNN_STATUS_SUCCESS) << "Failed to set cuDNN stream.";
     return CudnnHandle(std::move(context), std::move(lock), handle_);
@@ -1475,7 +1475,7 @@ port::Status CudnnSupport::DoRnnForwardImpl(
     // The start and stop of the timer should be as close to the Cudnn call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
-    if (!timer->Init() || !timer->Start(AsCUDAStream(stream))) {
+    if (!timer->Init() || !timer->Start(AsGPUStream(stream))) {
       return port::Status(port::error::INTERNAL, "Failed to start timer");
     }
   }
@@ -1509,7 +1509,7 @@ port::Status CudnnSupport::DoRnnForwardImpl(
   }
 
   if (is_profiling) {
-    if (!timer->Stop(AsCUDAStream(stream))) {
+    if (!timer->Stop(AsGPUStream(stream))) {
       return port::Status(port::error::INTERNAL, "Failed to stop timer");
     }
     auto algo_desc = *rnn_desc.algorithm_config().algorithm();
@@ -1567,7 +1567,7 @@ port::Status CudnnSupport::DoRnnBackwardImpl(
     // The start and stop of the timer should be as close to the Cudnn call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
-    if (!timer->Init() || !timer->Start(AsCUDAStream(stream))) {
+    if (!timer->Init() || !timer->Start(AsGPUStream(stream))) {
       return port::Status(port::error::INTERNAL, "Failed to start timer");
     }
   }
@@ -1612,7 +1612,7 @@ port::Status CudnnSupport::DoRnnBackwardImpl(
   }
 
   if (is_profiling) {
-    if (!timer->Stop(AsCUDAStream(stream))) {
+    if (!timer->Stop(AsGPUStream(stream))) {
       return port::Status(port::error::INTERNAL, "Failed to stop timer");
     }
     auto algo_desc = *rnn_desc.algorithm_config().algorithm();
@@ -2475,7 +2475,7 @@ port::Status CudnnSupport::DoConvolveImpl(
     // The start and stop of the timer should be as close to the Cudnn call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
-    if (!timer->Init() || !timer->Start(AsCUDAStream(stream))) {
+    if (!timer->Init() || !timer->Start(AsGPUStream(stream))) {
       return port::Status(port::error::INTERNAL, "Failed to start timer");
     }
   }
@@ -2526,7 +2526,7 @@ port::Status CudnnSupport::DoConvolveImpl(
       /*yDesc=*/output_nd.handle(), /*y=*/output_data->opaque()));
 
   if (is_profiling) {
-    if (!timer->Stop(AsCUDAStream(stream))) {
+    if (!timer->Stop(AsGPUStream(stream))) {
       return port::Status(port::error::INTERNAL, "Failed to stop timer");
     }
     output_profile_result->set_algorithm(algo_desc);
@@ -2590,7 +2590,7 @@ port::Status CudnnSupport::DoFusedConvolveImpl(
     // The start and stop of the timer should be as close to the Cudnn call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
-    if (!timer->Init() || !timer->Start(AsCUDAStream(stream))) {
+    if (!timer->Init() || !timer->Start(AsGPUStream(stream))) {
       return port::Status(port::error::INTERNAL, "Failed to start timer");
     }
   }
@@ -2643,7 +2643,7 @@ port::Status CudnnSupport::DoFusedConvolveImpl(
       /*yDesc=*/output_nd.handle(), /*y=*/output_data->opaque()));
 
   if (is_profiling) {
-    if (!timer->Stop(AsCUDAStream(stream))) {
+    if (!timer->Stop(AsGPUStream(stream))) {
       return port::Status(port::error::INTERNAL, "Failed to stop timer");
     }
     output_profile_result->set_algorithm(algo_desc);
@@ -3151,7 +3151,7 @@ port::Status CudnnSupport::DoConvolveBackwardDataImpl(
     // The start and stop of the timer should be as close to the Cudnn call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
-    if (!timer->Init() || !timer->Start(AsCUDAStream(stream))) {
+    if (!timer->Init() || !timer->Start(AsGPUStream(stream))) {
       return port::Status(port::error::INTERNAL, "Failed to start timer");
     }
   }
@@ -3191,7 +3191,7 @@ port::Status CudnnSupport::DoConvolveBackwardDataImpl(
                                    /*dxDesc=*/in_back_nd.handle(),
                                    /*dx=*/backward_input_data->opaque()));
   if (is_profiling) {
-    if (!timer->Stop(AsCUDAStream(stream))) {
+    if (!timer->Stop(AsGPUStream(stream))) {
       return port::Status(port::error::INTERNAL, "Failed to stop timer");
     }
     output_profile_result->set_algorithm(algo_desc);
@@ -3308,7 +3308,7 @@ port::Status CudnnSupport::DoConvolveBackwardFilterImpl(
     // The start and stop of the timer should be as close to the Cudnn call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
-    if (!timer->Init() || !timer->Start(AsCUDAStream(stream))) {
+    if (!timer->Init() || !timer->Start(AsGPUStream(stream))) {
       return port::Status(port::error::INTERNAL, "Failed to start timer");
     }
   }
@@ -3384,7 +3384,7 @@ port::Status CudnnSupport::DoConvolveBackwardFilterImpl(
       /*gradDesc=*/filter.handle(),
       /*dw=*/backward_filter_data->opaque()));
   if (is_profiling) {
-    if (!timer->Stop(AsCUDAStream(stream))) {
+    if (!timer->Stop(AsGPUStream(stream))) {
       return port::Status(port::error::INTERNAL, "Failed to stop timer");
     }
     output_profile_result->set_algorithm(algo_desc);

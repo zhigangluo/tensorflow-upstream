@@ -36,9 +36,9 @@ port::Status CUDAEvent::Destroy() {
   return GPUDriver::DestroyEvent(parent_->gpu_context(), &cuda_event_);
 }
 
-port::Status CUDAEvent::Record(CUDAStream* stream) {
+port::Status CUDAEvent::Record(GPUStream* stream) {
   return GPUDriver::RecordEvent(parent_->gpu_context(), cuda_event_,
-                                 stream->cuda_stream());
+                                 stream->gpu_stream());
 }
 
 Event::Status CUDAEvent::PollForStatus() {

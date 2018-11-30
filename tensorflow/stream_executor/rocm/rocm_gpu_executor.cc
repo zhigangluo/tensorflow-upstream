@@ -308,7 +308,7 @@ bool GPUExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
                           const BlockDim &block_dims, const KernelBase &kernel,
                           const KernelArgsArrayBase &args) {
   CHECK_EQ(kernel.Arity(), args.number_of_arguments());
-  GPUStreamHandle hipstream = AsROCMStreamValue(stream);
+  GPUStreamHandle hipstream = AsGPUStreamValue(stream);
   const GPUKernel* rocm_kernel = AsGPUKernel(&kernel);
   hipFunction_t hipfunc = rocm_kernel->GetFunctionHandle();
 
@@ -550,7 +550,7 @@ bool GPUExecutor::Memset(Stream *stream, DeviceMemoryBase *location,
           << " and pattern " << std::hex << pattern;
   return GPUDriver::AsynchronousMemsetUint8(context_,
                                              AsROCmDevicePtr(location), pattern,
-                                             size, AsROCMStreamValue(stream));
+                                             size, AsGPUStreamValue(stream));
 }
 
 bool GPUExecutor::Memset32(Stream *stream, DeviceMemoryBase *location,
@@ -562,21 +562,21 @@ bool GPUExecutor::Memset32(Stream *stream, DeviceMemoryBase *location,
         size % 4 == 0);
   return GPUDriver::AsynchronousMemsetUint32(
       context_, AsROCmDevicePtr(location), pattern, size / 4,
-      AsROCMStreamValue(stream));
+      AsGPUStreamValue(stream));
 }
 
 bool GPUExecutor::Memcpy(Stream *stream, void *host_dst,
                           const DeviceMemoryBase &gpu_src, uint64 size) {
   return GPUDriver::AsynchronousMemcpyD2H(context_, host_dst,
                                            AsROCmDevicePtr(gpu_src), size,
-                                           AsROCMStreamValue(stream));
+                                           AsGPUStreamValue(stream));
 }
 
 bool GPUExecutor::Memcpy(Stream *stream, DeviceMemoryBase *gpu_dst,
                           const void *host_src, uint64 size) {
   return GPUDriver::AsynchronousMemcpyH2D(context_, AsROCmDevicePtr(gpu_dst),
                                            host_src, size,
-                                           AsROCMStreamValue(stream));
+                                           AsGPUStreamValue(stream));
 }
 
 bool GPUExecutor::MemcpyDeviceToDevice(Stream *stream,
@@ -585,13 +585,13 @@ bool GPUExecutor::MemcpyDeviceToDevice(Stream *stream,
                                         uint64 size) {
   return GPUDriver::AsynchronousMemcpyD2D(context_, AsROCmDevicePtr(gpu_dst),
                                            AsROCmDevicePtr(gpu_src), size,
-                                           AsROCMStreamValue(stream));
+                                           AsGPUStreamValue(stream));
 }
 
 bool GPUExecutor::HostCallback(Stream *stream,
                                 std::function<void()> callback) {
   auto callback_ptr = new std::function<void()>(callback);
-  return GPUDriver::AddStreamCallback(context_, AsROCMStreamValue(stream),
+  return GPUDriver::AddStreamCallback(context_, AsGPUStreamValue(stream),
                                        InternalHostCallback, callback_ptr);
 }
 
@@ -613,12 +613,12 @@ port::Status GPUExecutor::DeallocateEvent(Event *event) {
 }
 
 port::Status GPUExecutor::RecordEvent(Stream *stream, Event *event) {
-  return AsROCMEvent(event)->Record(AsROCMStream(stream));
+  return AsROCMEvent(event)->Record(AsGPUStream(stream));
 }
 
 port::Status GPUExecutor::WaitForEvent(Stream *stream, Event *event) {
   if (GPUDriver::WaitStreamOnEvent(context_,
-                                    AsROCMStream(stream)->rocm_stream(),
+                                    AsGPUStream(stream)->gpu_stream(),
                                     AsROCMEvent(event)->rocm_event())) {
     return port::Status::OK();
   } else {
@@ -634,11 +634,11 @@ Event::Status GPUExecutor::PollForEventStatus(Event *event) {
 }
 
 bool GPUExecutor::AllocateStream(Stream *stream) {
-  return AsROCMStream(stream)->Init();
+  return AsGPUStream(stream)->Init();
 }
 
 void GPUExecutor::DeallocateStream(Stream *stream) {
-  ROCMStream *rocm_stream = AsROCMStream(stream);
+  GPUStream *rocm_stream = AsGPUStream(stream);
   if (!rocm_stream->IsIdle()) {
     LOG(ERROR) << "Deallocating stream with pending work";
   }
@@ -654,9 +654,9 @@ void GPUExecutor::DeallocateTimer(Timer *timer) {
 }
 
 bool GPUExecutor::CreateStreamDependency(Stream *dependent, Stream *other) {
-  GPUEventHandle other_completed_event = AsROCMStream(other)->completed_event();
+  GPUEventHandle other_completed_event = AsGPUStream(other)->completed_event();
   bool ok = GPUDriver::RecordEvent(context_, other_completed_event,
-                                    AsROCMStreamValue(other))
+                                    AsGPUStreamValue(other))
                 .ok();
   if (!ok) {
     LOG(ERROR) << "failed to record completion event; "
@@ -664,20 +664,20 @@ bool GPUExecutor::CreateStreamDependency(Stream *dependent, Stream *other) {
     return false;
   }
 
-  return GPUDriver::WaitStreamOnEvent(context_, AsROCMStreamValue(dependent),
+  return GPUDriver::WaitStreamOnEvent(context_, AsGPUStreamValue(dependent),
                                        other_completed_event);
 }
 
 bool GPUExecutor::StartTimer(Stream *stream, Timer *timer) {
-  return AsROCMTimer(timer)->Start(AsROCMStream(stream));
+  return AsROCMTimer(timer)->Start(AsGPUStream(stream));
 }
 
 bool GPUExecutor::StopTimer(Stream *stream, Timer *timer) {
-  return AsROCMTimer(timer)->Stop(AsROCMStream(stream));
+  return AsROCMTimer(timer)->Stop(AsGPUStream(stream));
 }
 
 port::Status GPUExecutor::BlockHostUntilDone(Stream *stream) {
-  return GPUDriver::SynchronizeStream(context_, AsROCMStreamValue(stream));
+  return GPUDriver::SynchronizeStream(context_, AsGPUStreamValue(stream));
 }
 
 blas::BlasSupport *GPUExecutor::CreateBlas() {
@@ -879,7 +879,7 @@ GPUExecutor::CreateKernelImplementation() {
 
 std::unique_ptr<internal::StreamInterface>
 GPUExecutor::GetStreamImplementation() {
-  return std::unique_ptr<internal::StreamInterface>(new ROCMStream(this));
+  return std::unique_ptr<internal::StreamInterface>(new GPUStream(this));
 }
 
 std::unique_ptr<internal::TimerInterface>

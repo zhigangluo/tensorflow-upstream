@@ -97,7 +97,7 @@ cufftType CUDAFftType(fft::Type type) {
 
 // Associates the given stream with the given cuFFT plan.
 bool SetStream(GPUExecutor *parent, cufftHandle plan, Stream *stream) {
-  auto ret = wrap::cufftSetStream(parent, plan, AsCUDAStreamValue(stream));
+  auto ret = wrap::cufftSetStream(parent, plan, AsGPUStreamValue(stream));
   if (ret != CUFFT_SUCCESS) {
     LOG(ERROR) << "failed to run cuFFT routine cufftSetStream: " << ret;
     return false;

@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// Defines the ROCMStream type - the ROCM-specific implementation of the generic
+// Defines the GPUStream type - the ROCM-specific implementation of the generic
 // StreamExecutor Stream interface.
 
 #ifndef TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_STREAM_H_
@@ -32,17 +32,17 @@ class GPUExecutor;
 // StreamInterface.
 //
 // Thread-safe post-initialization.
-class ROCMStream : public internal::StreamInterface {
+class GPUStream : public internal::StreamInterface {
  public:
-  explicit ROCMStream(GPUExecutor *parent)
-      : parent_(parent), rocm_stream_(nullptr), completed_event_(nullptr) {}
+  explicit GPUStream(GPUExecutor *parent)
+      : parent_(parent), gpu_stream_(nullptr), completed_event_(nullptr) {}
 
   // Note: teardown is handled by a parent's call to DeallocateStream.
-  ~ROCMStream() override {}
+  ~GPUStream() override {}
 
-  void *GpuStreamHack() override { return rocm_stream_; }
+  void *GpuStreamHack() override { return gpu_stream_; }
   void **GpuStreamMemberHack() override {
-    return reinterpret_cast<void **>(&rocm_stream_);
+    return reinterpret_cast<void **>(&gpu_stream_);
   }
 
   // Explicitly initialize the ROCM resources associated with this stream, used
@@ -63,29 +63,29 @@ class ROCMStream : public internal::StreamInterface {
 
   // Returns the GPUStreamHandle value for passing to the ROCM API.
   //
-  // Precond: this ROCMStream has been allocated (otherwise passing a nullptr
+  // Precond: this GPUStream has been allocated (otherwise passing a nullptr
   // into ROCM library causes difficult-to-understand faults).
-  GPUStreamHandle rocm_stream() const {
-    DCHECK(rocm_stream_ != nullptr);
-    return const_cast<GPUStreamHandle>(rocm_stream_);
+  GPUStreamHandle gpu_stream() const {
+    DCHECK(gpu_stream_ != nullptr);
+    return const_cast<GPUStreamHandle>(gpu_stream_);
   }
 
   GPUExecutor *parent() const { return parent_; }
 
  private:
   GPUExecutor *parent_;  // Executor that spawned this stream.
-  GPUStreamHandle rocm_stream_;  // Wrapped ROCM stream handle.
+  GPUStreamHandle gpu_stream_;  // Wrapped ROCM stream handle.
 
   // Event that indicates this stream has completed.
   GPUEventHandle completed_event_ = nullptr;
 };
 
 // Helper functions to simplify extremely common flows.
-// Converts a Stream to the underlying ROCMStream implementation.
-ROCMStream *AsROCMStream(Stream *stream);
+// Converts a Stream to the underlying GPUStream implementation.
+GPUStream *AsGPUStream(Stream *stream);
 
-// Extracts a GPUStreamHandle from a ROCMStream-backed Stream object.
-GPUStreamHandle AsROCMStreamValue(Stream *stream);
+// Extracts a GPUStreamHandle from a GPUStream-backed Stream object.
+GPUStreamHandle AsGPUStreamValue(Stream *stream);
 
 }  // namespace gpu
 }  // namespace stream_executor

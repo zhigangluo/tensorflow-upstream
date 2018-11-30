@@ -107,7 +107,7 @@ hipfftType ROCMFftType(fft::Type type) {
 
 // Associates the given stream with the given rocFFT plan.
 bool SetStream(GPUExecutor *parent, hipfftHandle plan, Stream *stream) {
-  auto ret = wrap::hipfftSetStream(parent, plan, AsROCMStreamValue(stream));
+  auto ret = wrap::hipfftSetStream(parent, plan, AsGPUStreamValue(stream));
   if (ret != HIPFFT_SUCCESS) {
     LOG(ERROR) << "failed to run rocFFT routine hipfftSetStream: " << ret;
     return false;

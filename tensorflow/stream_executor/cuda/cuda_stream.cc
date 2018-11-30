@@ -22,8 +22,8 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-bool CUDAStream::Init() {
-  if (!GPUDriver::CreateStream(parent_->gpu_context(), &cuda_stream_)) {
+bool GPUStream::Init() {
+  if (!GPUDriver::CreateStream(parent_->gpu_context(), &gpu_stream_)) {
     return false;
   }
   return GPUDriver::CreateEvent(parent_->gpu_context(), &completed_event_,
@@ -31,7 +31,7 @@ bool CUDAStream::Init() {
       .ok();
 }
 
-void CUDAStream::Destroy() {
+void GPUStream::Destroy() {
   if (completed_event_ != nullptr) {
     port::Status status =
         GPUDriver::DestroyEvent(parent_->gpu_context(), &completed_event_);
@@ -40,21 +40,21 @@ void CUDAStream::Destroy() {
     }
   }
 
-  GPUDriver::DestroyStream(parent_->gpu_context(), &cuda_stream_);
+  GPUDriver::DestroyStream(parent_->gpu_context(), &gpu_stream_);
 }
 
-bool CUDAStream::IsIdle() const {
-  return GPUDriver::IsStreamIdle(parent_->gpu_context(), cuda_stream_);
+bool GPUStream::IsIdle() const {
+  return GPUDriver::IsStreamIdle(parent_->gpu_context(), gpu_stream_);
 }
 
-CUDAStream *AsCUDAStream(Stream *stream) {
+GPUStream *AsGPUStream(Stream *stream) {
   DCHECK(stream != nullptr);
-  return static_cast<CUDAStream *>(stream->implementation());
+  return static_cast<GPUStream *>(stream->implementation());
 }
 
-GPUStreamHandle AsCUDAStreamValue(Stream *stream) {
+GPUStreamHandle AsGPUStreamValue(Stream *stream) {
   DCHECK(stream != nullptr);
-  return AsCUDAStream(stream)->cuda_stream();
+  return AsGPUStream(stream)->gpu_stream();
 }
 
 }  // namespace gpu

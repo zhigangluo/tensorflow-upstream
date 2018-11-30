@@ -40,7 +40,7 @@ class CUDAEvent : public internal::EventInterface {
   port::Status Destroy();
 
   // Inserts the event at the current position into the specified stream.
-  port::Status Record(CUDAStream* stream);
+  port::Status Record(GPUStream* stream);
 
   // Polls the CUDA platform for the event's current status.
   Event::Status PollForStatus();

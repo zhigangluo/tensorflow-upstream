@@ -130,7 +130,7 @@ bool CUDARng::Init() {
 
 bool CUDARng::SetStream(Stream *stream) {
   curandStatus_t ret =
-    wrap::curandSetStream(parent_, rng_, AsCUDAStreamValue(stream));
+    wrap::curandSetStream(parent_, rng_, AsGPUStreamValue(stream));
   if (ret != CURAND_STATUS_SUCCESS) {
     LOG(ERROR) << "failed to set stream for random generation: " << ret;
     return false;
