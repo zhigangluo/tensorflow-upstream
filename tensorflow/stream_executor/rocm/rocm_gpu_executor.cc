@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/stream_executor/rocm/rocm_gpu_executor.h"
+#include "tensorflow/stream_executor/gpu/gpu_executor.h"
 
 #include <unistd.h>
 #include "absl/base/casts.h"
@@ -108,12 +108,12 @@ static hipDeviceptr_t AsROCmDevicePtr(DeviceMemoryBase *gpu_mem) {
 
 static GPUContext* GetGPUContext(Stream* stream) {
   return static_cast<GPUExecutor*>(stream->parent()->implementation())
-      ->rocm_context();
+      ->gpu_context();
 }
 
 GPUContext* ExtractGPUContext(GPUExecutor* rocm_exec) {
   CHECK(rocm_exec != nullptr);
-  return rocm_exec->rocm_context();
+  return rocm_exec->gpu_context();
 }
 
 GPUExecutor *ExtractROCmExecutor(StreamExecutor *stream_exec) {

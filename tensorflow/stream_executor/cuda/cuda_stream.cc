@@ -15,7 +15,7 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/cuda/cuda_stream.h"
 
-#include "tensorflow/stream_executor/cuda/cuda_gpu_executor.h"
+#include "tensorflow/stream_executor/gpu/gpu_executor.h"
 #include "tensorflow/stream_executor/lib/status.h"
 #include "tensorflow/stream_executor/stream.h"
 
@@ -23,10 +23,10 @@ namespace stream_executor {
 namespace gpu {
 
 bool CUDAStream::Init() {
-  if (!GPUDriver::CreateStream(parent_->cuda_context(), &cuda_stream_)) {
+  if (!GPUDriver::CreateStream(parent_->gpu_context(), &cuda_stream_)) {
     return false;
   }
-  return GPUDriver::CreateEvent(parent_->cuda_context(), &completed_event_,
+  return GPUDriver::CreateEvent(parent_->gpu_context(), &completed_event_,
                                  GPUDriver::EventFlags::kDisableTiming)
       .ok();
 }
@@ -34,17 +34,17 @@ bool CUDAStream::Init() {
 void CUDAStream::Destroy() {
   if (completed_event_ != nullptr) {
     port::Status status =
-        GPUDriver::DestroyEvent(parent_->cuda_context(), &completed_event_);
+        GPUDriver::DestroyEvent(parent_->gpu_context(), &completed_event_);
     if (!status.ok()) {
       LOG(ERROR) << status.error_message();
     }
   }
 
-  GPUDriver::DestroyStream(parent_->cuda_context(), &cuda_stream_);
+  GPUDriver::DestroyStream(parent_->gpu_context(), &cuda_stream_);
 }
 
 bool CUDAStream::IsIdle() const {
-  return GPUDriver::IsStreamIdle(parent_->cuda_context(), cuda_stream_);
+  return GPUDriver::IsStreamIdle(parent_->gpu_context(), cuda_stream_);
 }
 
 CUDAStream *AsCUDAStream(Stream *stream) {

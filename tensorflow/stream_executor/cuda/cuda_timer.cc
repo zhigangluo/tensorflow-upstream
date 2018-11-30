@@ -16,7 +16,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/cuda/cuda_timer.h"
 
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
-#include "tensorflow/stream_executor/cuda/cuda_gpu_executor.h"
+#include "tensorflow/stream_executor/gpu/gpu_executor.h"
 #include "tensorflow/stream_executor/cuda/cuda_stream.h"
 #include "tensorflow/stream_executor/lib/status.h"
 
@@ -25,7 +25,7 @@ namespace gpu {
 
 bool CUDATimer::Init() {
   CHECK(start_event_ == nullptr && stop_event_ == nullptr);
-  GPUContext* context = parent_->cuda_context();
+  GPUContext* context = parent_->gpu_context();
   port::Status status = GPUDriver::CreateEvent(
       context, &start_event_, GPUDriver::EventFlags::kDefault);
   if (!status.ok()) {
@@ -49,7 +49,7 @@ bool CUDATimer::Init() {
 }
 
 void CUDATimer::Destroy() {
-  GPUContext* context = parent_->cuda_context();
+  GPUContext* context = parent_->gpu_context();
   port::Status status = GPUDriver::DestroyEvent(context, &start_event_);
   if (!status.ok()) {
     LOG(ERROR) << status;
@@ -66,7 +66,7 @@ float CUDATimer::GetElapsedMilliseconds() const {
   // TODO(leary) provide a way to query timer resolution?
   // CUDA docs say a resolution of about 0.5us
   float elapsed_milliseconds = NAN;
-  (void)GPUDriver::GetEventElapsedTime(parent_->cuda_context(),
+  (void)GPUDriver::GetEventElapsedTime(parent_->gpu_context(),
                                         &elapsed_milliseconds, start_event_,
                                         stop_event_);
   return elapsed_milliseconds;
@@ -74,7 +74,7 @@ float CUDATimer::GetElapsedMilliseconds() const {
 
 bool CUDATimer::Start(CUDAStream* stream) {
   port::Status status = GPUDriver::RecordEvent(
-      parent_->cuda_context(), start_event_, stream->cuda_stream());
+      parent_->gpu_context(), start_event_, stream->cuda_stream());
   if (!status.ok()) {
     LOG(ERROR) << status;
   }
@@ -83,7 +83,7 @@ bool CUDATimer::Start(CUDAStream* stream) {
 
 bool CUDATimer::Stop(CUDAStream* stream) {
   port::Status status = GPUDriver::RecordEvent(
-      parent_->cuda_context(), stop_event_, stream->cuda_stream());
+      parent_->gpu_context(), stop_event_, stream->cuda_stream());
   if (!status.ok()) {
     LOG(ERROR) << status;
   }

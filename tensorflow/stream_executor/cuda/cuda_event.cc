@@ -15,7 +15,7 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/cuda/cuda_event.h"
 
-#include "tensorflow/stream_executor/cuda/cuda_gpu_executor.h"
+#include "tensorflow/stream_executor/gpu/gpu_executor.h"
 #include "tensorflow/stream_executor/cuda/cuda_stream.h"
 #include "tensorflow/stream_executor/lib/statusor.h"
 
@@ -28,22 +28,22 @@ CUDAEvent::CUDAEvent(GPUExecutor* parent)
 CUDAEvent::~CUDAEvent() {}
 
 port::Status CUDAEvent::Init() {
-  return GPUDriver::CreateEvent(parent_->cuda_context(), &cuda_event_,
+  return GPUDriver::CreateEvent(parent_->gpu_context(), &cuda_event_,
                                  GPUDriver::EventFlags::kDisableTiming);
 }
 
 port::Status CUDAEvent::Destroy() {
-  return GPUDriver::DestroyEvent(parent_->cuda_context(), &cuda_event_);
+  return GPUDriver::DestroyEvent(parent_->gpu_context(), &cuda_event_);
 }
 
 port::Status CUDAEvent::Record(CUDAStream* stream) {
-  return GPUDriver::RecordEvent(parent_->cuda_context(), cuda_event_,
+  return GPUDriver::RecordEvent(parent_->gpu_context(), cuda_event_,
                                  stream->cuda_stream());
 }
 
 Event::Status CUDAEvent::PollForStatus() {
   port::StatusOr<CUresult> status =
-      GPUDriver::QueryEvent(parent_->cuda_context(), cuda_event_);
+      GPUDriver::QueryEvent(parent_->gpu_context(), cuda_event_);
   if (!status.ok()) {
     LOG(ERROR) << "Error polling for event status: "
                << status.status().error_message();

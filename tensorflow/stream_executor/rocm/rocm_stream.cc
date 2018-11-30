@@ -15,7 +15,7 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/rocm/rocm_stream.h"
 
-#include "tensorflow/stream_executor/rocm/rocm_gpu_executor.h"
+#include "tensorflow/stream_executor/gpu/gpu_executor.h"
 #include "tensorflow/stream_executor/lib/status.h"
 #include "tensorflow/stream_executor/stream.h"
 
@@ -23,10 +23,10 @@ namespace stream_executor {
 namespace gpu {
 
 bool ROCMStream::Init() {
-  if (!GPUDriver::CreateStream(parent_->rocm_context(), &rocm_stream_)) {
+  if (!GPUDriver::CreateStream(parent_->gpu_context(), &rocm_stream_)) {
     return false;
   }
-  return GPUDriver::CreateEvent(parent_->rocm_context(), &completed_event_,
+  return GPUDriver::CreateEvent(parent_->gpu_context(), &completed_event_,
                                  GPUDriver::EventFlags::kDisableTiming)
       .ok();
 }
@@ -34,17 +34,17 @@ bool ROCMStream::Init() {
 void ROCMStream::Destroy() {
   if (completed_event_ != nullptr) {
     port::Status status =
-        GPUDriver::DestroyEvent(parent_->rocm_context(), &completed_event_);
+        GPUDriver::DestroyEvent(parent_->gpu_context(), &completed_event_);
     if (!status.ok()) {
       LOG(ERROR) << status.error_message();
     }
   }
 
-  GPUDriver::DestroyStream(parent_->rocm_context(), &rocm_stream_);
+  GPUDriver::DestroyStream(parent_->gpu_context(), &rocm_stream_);
 }
 
 bool ROCMStream::IsIdle() const {
-  return GPUDriver::IsStreamIdle(parent_->rocm_context(), rocm_stream_);
+  return GPUDriver::IsStreamIdle(parent_->gpu_context(), rocm_stream_);
 }
 
 ROCMStream *AsROCMStream(Stream *stream) {

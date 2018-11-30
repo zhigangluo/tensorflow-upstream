@@ -16,7 +16,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/rocm/rocm_platform.h"
 
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
-#include "tensorflow/stream_executor/rocm/rocm_gpu_executor.h"
+#include "tensorflow/stream_executor/gpu/gpu_executor.h"
 #include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 #include "tensorflow/stream_executor/lib/error.h"
 #include "tensorflow/stream_executor/lib/initialize.h"

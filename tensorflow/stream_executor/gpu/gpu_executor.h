@@ -13,14 +13,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// The CUDA implementation of the StreamExecutorInterface functionality.
-// CUDA inclusions are ideally confined to this implementation file.
+// The GPU implementation of the StreamExecutorInterface functionality.
+// GPU inclusions are ideally confined to this implementation file.
 //
-// The notions from the StreamExecutor basically correspond to the CUDA streams
-// programming model provided by the libcuda.so driver APIs, so we don't have
+// The notions from the StreamExecutor basically correspond to the GPU streams
+// programming model provided by the libgpu.so driver APIs, so we don't have
 // to do much more than wrap the calls to the libraries appropriately.
-#ifndef TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_GPU_EXECUTOR_H_
-#define TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_GPU_EXECUTOR_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_GPU_EXECUTOR_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_GPU_EXECUTOR_H_
 
 #include <set>
 #include <unordered_map>
@@ -40,12 +40,12 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-// CUDA-platform implementation of the platform-agnostic
+// GPU-platform implementation of the platform-agnostic
 // StreamExecutorInferface.
 class GPUExecutor : public internal::StreamExecutorInterface {
  public:
   // sub_platform indicates the subplatform used in this executor; it must
-  // be a CUDA type.
+  // be a GPU type.
   explicit GPUExecutor(const PluginConfig &plugin_config)
       : device_(0),
         context_(nullptr),
@@ -95,7 +95,7 @@ class GPUExecutor : public internal::StreamExecutorInterface {
 
   void UnifiedMemoryDeallocate(void *location) override;
 
-  // CUDA allocation/registration functions are necessary because the driver
+  // GPU allocation/registration functions are necessary because the driver
   // internally sets up buffers for DMA operations (and page locks them).
   // There's no external interface for us to otherwise control these DMA
   // settings.
@@ -224,9 +224,9 @@ class GPUExecutor : public internal::StreamExecutorInterface {
 
   std::unique_ptr<internal::TimerInterface> GetTimerImplementation() override;
 
-  void *GpuContextHack() override;
+  void* GpuContextHack() override { return context_; }
 
-  GPUContext* cuda_context();
+  GPUContext* gpu_context() { return context_; }
 
  private:
   // Attempts to find a more specific version of the file indicated by
@@ -243,7 +243,7 @@ class GPUExecutor : public internal::StreamExecutorInterface {
                                absl::string_view canonical_suffix,
                                string *found_filename) const;
 
-  // Host callback landing routine invoked by CUDA.
+  // Host callback landing routine invoked by GPU.
   // data: User-provided callback provided to HostCallback() above, captured
   //       as a std::function<void()>. Allocated/initialized inside
   //       HostCallback() and owned and deleted by this call.
@@ -251,7 +251,7 @@ class GPUExecutor : public internal::StreamExecutorInterface {
                                    void *data);
 
   // Collects metadata for the specified kernel.
-  bool GetKernelMetadata(GPUKernel* cuda_kernel,
+  bool GetKernelMetadata(GPUKernel* gpu_kernel,
                          KernelMetadata* kernel_metadata);
 
   // Prints to VLOG(2) information about the kernel's occupancy and how it might
@@ -262,7 +262,7 @@ class GPUExecutor : public internal::StreamExecutorInterface {
   bool LoadModuleFromCuBin(const char *cubin, GPUModuleHandle *module)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
-  // Loads the PTX text `ptx` as a CUDA module.  `ptx` must be null terminated.
+  // Loads the PTX text `ptx` as a GPU module.  `ptx` must be null terminated.
   bool LoadModuleFromPtx(const char *ptx, GPUModuleHandle *module)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
@@ -290,7 +290,7 @@ class GPUExecutor : public internal::StreamExecutorInterface {
   std::unordered_map<const KernelBase *, const void *> kernel_to_gpu_binary_
       GUARDED_BY(in_memory_modules_mu_);
   
-  // GPU binary (PTX or CUBIN) -> {CUDA module, reference count}.
+  // GPU binary (PTX or CUBIN or HSACO) -> {GPU module, reference count}.
   std::unordered_map<const void *, std::pair<GPUModuleHandle, uint64>>
       gpu_binary_to_module_ GUARDED_BY(in_memory_modules_mu_);
 
@@ -301,7 +301,7 @@ class GPUExecutor : public internal::StreamExecutorInterface {
   // occupancy check on subsequent launches.
   std::set<GPUFunctionHandle> launched_kernels_ GUARDED_BY(launched_kernels_mu_);
 
-  // Handle for the CUDA device being operated on. Immutable
+  // Handle for the GPU device being operated on. Immutable
   // post-initialization.
   GPUDeviceHandle device_;
 
@@ -330,4 +330,4 @@ class GPUExecutor : public internal::StreamExecutorInterface {
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_GPU_EXECUTOR_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_GPU_EXECUTOR_H_

@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/stream_executor/cuda/cuda_gpu_executor.h"
+#include "tensorflow/stream_executor/gpu/gpu_executor.h"
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
@@ -125,7 +125,7 @@ static CUdeviceptr AsCudaDevicePtr(DeviceMemoryBase *gpu_mem) {
 
 GPUContext* ExtractGPUContext(GPUExecutor *cuda_exec) {
   CHECK(cuda_exec != nullptr);
-  return cuda_exec->cuda_context();
+  return cuda_exec->gpu_context();
 }
 
 GPUExecutor *ExtractCudaExecutor(StreamExecutor *stream_exec) {
@@ -978,10 +978,6 @@ std::unique_ptr<internal::TimerInterface>
 GPUExecutor::GetTimerImplementation() {
   return std::unique_ptr<internal::TimerInterface>(new CUDATimer(this));
 }
-
-void *GPUExecutor::GpuContextHack() { return context_; }
-
-GPUContext* GPUExecutor::cuda_context() { return context_; }
 
 // Attempts to read the NUMA node corresponding to the GPU device's PCI bus out
 // of SysFS. Returns -1 if it cannot.

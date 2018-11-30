@@ -15,7 +15,7 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/rocm/rocm_event.h"
 
-#include "tensorflow/stream_executor/rocm/rocm_gpu_executor.h"
+#include "tensorflow/stream_executor/gpu/gpu_executor.h"
 #include "tensorflow/stream_executor/rocm/rocm_stream.h"
 #include "tensorflow/stream_executor/lib/statusor.h"
 
@@ -28,22 +28,22 @@ ROCMEvent::ROCMEvent(GPUExecutor* parent)
 ROCMEvent::~ROCMEvent() {}
 
 port::Status ROCMEvent::Init() {
-  return GPUDriver::CreateEvent(parent_->rocm_context(), &rocm_event_,
+  return GPUDriver::CreateEvent(parent_->gpu_context(), &rocm_event_,
                                  GPUDriver::EventFlags::kDisableTiming);
 }
 
 port::Status ROCMEvent::Destroy() {
-  return GPUDriver::DestroyEvent(parent_->rocm_context(), &rocm_event_);
+  return GPUDriver::DestroyEvent(parent_->gpu_context(), &rocm_event_);
 }
 
 port::Status ROCMEvent::Record(ROCMStream* stream) {
-  return GPUDriver::RecordEvent(parent_->rocm_context(), rocm_event_,
+  return GPUDriver::RecordEvent(parent_->gpu_context(), rocm_event_,
                                  stream->rocm_stream());
 }
 
 Event::Status ROCMEvent::PollForStatus() {
   port::StatusOr<hipError_t> status =
-      GPUDriver::QueryEvent(parent_->rocm_context(), rocm_event_);
+      GPUDriver::QueryEvent(parent_->gpu_context(), rocm_event_);
   if (!status.ok()) {
     LOG(ERROR) << "Error polling for event status: "
                << status.status().error_message();

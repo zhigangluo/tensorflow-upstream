@@ -13,17 +13,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// The ROCM implementation of the StreamExecutorInterface functionality.
-// ROCM inclusions are ideally confined to this implementation file.
+// The GPU implementation of the StreamExecutorInterface functionality.
+// GPU inclusions are ideally confined to this implementation file.
 //
-// The notions from the StreamExecutor basically correspond to the ROCM streams
+// The notions from the StreamExecutor basically correspond to the GPU streams
 // programming model provided by the librocm.so driver APIs, so we don't have
 // to do much more than wrap the calls to the libraries appropriately.
-#ifndef TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_GPU_EXECUTOR_H_
-#define TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_GPU_EXECUTOR_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_GPU_EXECUTOR_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_GPU_EXECUTOR_H_
 
 #include <map>
 #include <set>
+#include <unordered_map>
 
 #include "absl/strings/string_view.h"
 #include "tensorflow/stream_executor/gpu/gpu_kernel.h"
@@ -40,12 +41,12 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-// ROCM-platform implementation of the platform-agnostic
+// GPU-platform implementation of the platform-agnostic
 // StreamExecutorInferface.
 class GPUExecutor : public internal::StreamExecutorInterface {
  public:
   // sub_platform indicates the subplatform used in this executor; it must
-  // be a ROCM type.
+  // be a GPU type.
   explicit GPUExecutor(const PluginConfig &plugin_config)
       : device_(0),
         context_(nullptr),
@@ -73,12 +74,12 @@ class GPUExecutor : public internal::StreamExecutorInterface {
               const BlockDim &block_dims, const KernelBase &k,
               const KernelArgsArrayBase &args) override;
 
-  int CalculateOccupancy(const DeviceDescription &device_description, //todo
+  int CalculateOccupancy(const DeviceDescription &device_description, 
                          uint64 registers_per_thread,
                          uint64 shared_memory_per_block,
                          const ThreadDim &thread_dims, GPUFunctionHandle func);
 
-  int CompareOccupancy(int *initial_blocks, //todo
+  int CompareOccupancy(int *initial_blocks,
                        const DeviceDescription &device_description,
                        uint64 registers_per_thread,
                        uint64 shared_memory_per_block,
@@ -95,7 +96,7 @@ class GPUExecutor : public internal::StreamExecutorInterface {
 
   void UnifiedMemoryDeallocate(void *location) override;
 
-  // ROCM allocation/registration functions are necessary because the driver
+  // GPU allocation/registration functions are necessary because the driver
   // internally sets up buffers for DMA operations (and page locks them).
   // There's no external interface for us to otherwise control these DMA
   // settings.
@@ -224,9 +225,9 @@ class GPUExecutor : public internal::StreamExecutorInterface {
 
   std::unique_ptr<internal::TimerInterface> GetTimerImplementation() override;
 
-  void* GpuContextHack() { return context_; }
+  void* GpuContextHack() override { return context_; }
 
-  GPUContext* rocm_context() { return context_; }
+  GPUContext* gpu_context() override { return context_; }
 
  private:
   // Attempts to find a more specific version of the file indicated by
@@ -243,7 +244,7 @@ class GPUExecutor : public internal::StreamExecutorInterface {
                                absl::string_view canonical_suffix,
                                string *found_filename) const;
 
-  // Host callback landing routine invoked by ROCM.
+  // Host callback landing routine invoked by GPU.
   // data: User-provided callback provided to HostCallback() above, captured
   //       as a std::function<void()>. Allocated/initialized inside
   //       HostCallback() and owned and deleted by this call.
@@ -251,7 +252,7 @@ class GPUExecutor : public internal::StreamExecutorInterface {
                                    void *data);
 
   // Collects metadata for the specified kernel.
-  bool GetKernelMetadata(GPUKernel* rocm_kernel,
+  bool GetKernelMetadata(GPUKernel* gpu_kernel,
                          KernelMetadata* kernel_metadata);
 
   // Prints to VLOG(2) information about the kernel's occupancy and how it might
@@ -262,7 +263,7 @@ class GPUExecutor : public internal::StreamExecutorInterface {
   bool LoadModuleFromCuBin(const char *cubin, GPUModuleHandle *module)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
-  // Loads the PTX text `ptx` as a CUDA module.  `ptx` must be null terminated.
+  // Loads the PTX text `ptx` as a GPU module.  `ptx` must be null terminated.
   bool LoadModuleFromPtx(const char *ptx, GPUModuleHandle *module)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
@@ -301,7 +302,7 @@ class GPUExecutor : public internal::StreamExecutorInterface {
   // occupancy check on subsequent launches.
   std::set<GPUFunctionHandle> launched_kernels_ GUARDED_BY(launched_kernels_mu_);
 
-  // Handle for the ROCM device being operated on. Immutable
+  // Handle for the GPU device being operated on. Immutable
   // post-initialization.
   GPUDeviceHandle device_;
 
@@ -330,4 +331,4 @@ class GPUExecutor : public internal::StreamExecutorInterface {
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_GPU_EXECUTOR_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_GPU_EXECUTOR_H_
