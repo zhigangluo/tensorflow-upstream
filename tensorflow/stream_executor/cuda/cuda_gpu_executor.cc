@@ -67,7 +67,7 @@ extern bool FLAGS_check_gpu_leaks;
 bool FLAGS_prefer_cubin_to_ptx = true;
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 // Hook that can be used to CUBIN-ate PTX before it is loaded into the driver.
 // It has been observed that loading both PTX and cubins into the driver library
@@ -1119,11 +1119,11 @@ DeviceDescription *CUDAExecutor::PopulateDeviceDescription() const {
   return built.release();
 }
 
-}  // namespace cuda
+}  // namespace gpu
 
 void initialize_cuda_gpu_executor() {
   *internal::MakeCUDAExecutorImplementation() = [](const PluginConfig &config) {
-    return new cuda::CUDAExecutor{config};
+    return new gpu::CUDAExecutor{config};
   };
 }
 

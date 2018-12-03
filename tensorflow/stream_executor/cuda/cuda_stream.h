@@ -24,7 +24,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 class CUDAExecutor;
 
@@ -87,7 +87,7 @@ CUDAStream *AsCUDAStream(Stream *stream);
 // Extracts a CUstream from a CUDAStream-backed Stream object.
 CUstream AsCUDAStreamValue(Stream *stream);
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_STREAM_H_

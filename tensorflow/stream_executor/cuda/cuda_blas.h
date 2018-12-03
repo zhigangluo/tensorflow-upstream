@@ -33,7 +33,7 @@ namespace stream_executor {
 
 class Stream;
 
-namespace cuda {
+namespace gpu {
 
 // Opaque and unique identifier for the cuBLAS plugin.
 extern const PluginId kCuBlasPlugin;
@@ -155,7 +155,7 @@ class CUDABlas : public blas::BlasSupport {
   SE_DISALLOW_COPY_AND_ASSIGN(CUDABlas);
 };
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_BLAS_H_

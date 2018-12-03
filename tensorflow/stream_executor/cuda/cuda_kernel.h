@@ -40,7 +40,7 @@ limitations under the License.
 #endif
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 // Wraps a CUfunction to implement the platform-independent KernelInterface.
 class CUDAKernel : public internal::KernelInterface {
@@ -121,7 +121,7 @@ inline CUDAKernel *AsCUDAKernel(KernelBase *kernel) {
   return static_cast<CUDAKernel *>(kernel->implementation());
 }
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_KERNEL_H_

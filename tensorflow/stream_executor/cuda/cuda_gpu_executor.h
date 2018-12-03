@@ -37,7 +37,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 // CUDA-platform implementation of the platform-agnostic
 // StreamExecutorInferface.
@@ -306,7 +306,7 @@ class CUDAExecutor : public internal::StreamExecutorInterface {
   SE_DISALLOW_COPY_AND_ASSIGN(CUDAExecutor);
 };
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_GPU_EXECUTOR_H_

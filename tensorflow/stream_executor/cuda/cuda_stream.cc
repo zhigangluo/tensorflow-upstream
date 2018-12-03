@@ -20,7 +20,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/stream.h"
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 bool CUDAStream::Init() {
   if (!CUDADriver::CreateStream(parent_->cuda_context(), &cuda_stream_)) {
@@ -57,5 +57,5 @@ CUstream AsCUDAStreamValue(Stream *stream) {
   return AsCUDAStream(stream)->cuda_stream();
 }
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor

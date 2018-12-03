@@ -30,7 +30,7 @@ class Stream;
 template <typename ElemT>
 class DeviceMemory;
 
-namespace cuda {
+namespace gpu {
 
 // Opaque and unique identifier for the cuRAND plugin.
 extern const PluginId kCuRandPlugin;
@@ -96,7 +96,7 @@ class CUDARng : public rng::RngSupport {
   SE_DISALLOW_COPY_AND_ASSIGN(CUDARng);
 };
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_RNG_H_

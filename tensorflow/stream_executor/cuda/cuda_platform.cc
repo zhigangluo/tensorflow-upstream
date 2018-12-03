@@ -25,7 +25,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/stringprintf.h"
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 namespace {
 
 // Synchronize with spinlocks.
@@ -134,7 +134,7 @@ Platform::Id CudaPlatform::id() const { return kCudaPlatformId; }
 int CudaPlatform::VisibleDeviceCount() const {
   // Throw away the result - it logs internally, and this [containing] function
   // isn't in the path of user control. It's safe to call this > 1x.
-  if (!cuda::CUDADriver::Init().ok()) {
+  if (!gpu::CUDADriver::Init().ok()) {
     return -1;
   }
 
@@ -191,13 +191,13 @@ void CudaPlatform::UnregisterTraceListener(TraceListener* listener) {
   LOG(FATAL) << "not yet implemented: unregister CUDA trace listener";
 }
 
-}  // namespace cuda
+}  // namespace gpu
 
 static void InitializeCudaPlatform() {
   // Disabling leak checking, MultiPlatformManager does not destroy its
   // registered platforms.
 
-  std::unique_ptr<cuda::CudaPlatform> platform(new cuda::CudaPlatform);
+  std::unique_ptr<gpu::CudaPlatform> platform(new gpu::CudaPlatform);
   SE_CHECK_OK(MultiPlatformManager::RegisterPlatform(std::move(platform)));
 }
 

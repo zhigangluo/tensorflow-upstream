@@ -47,7 +47,7 @@ bool FLAGS_gpuexec_cuda_device_0_only = false;
 constexpr bool kVerifyCudaContext = false;
 
 namespace stream_executor {
-namespace cuda {
+namespace gpu {
 
 namespace {
 
@@ -1552,5 +1552,5 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   return current;
 }
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor

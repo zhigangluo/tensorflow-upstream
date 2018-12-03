@@ -32,7 +32,7 @@ namespace stream_executor {
 template <typename ElemT>
 class DeviceMemory;
 
-namespace cuda {
+namespace gpu {
 
 // Converts a const DeviceMemory reference to its underlying typed pointer in
 // CUDA
@@ -99,7 +99,7 @@ inline cuDoubleComplex CUDAComplexValue(std::complex<double> val) {
   return {val.real(), val.imag()};
 }
 
-}  // namespace cuda
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_HELPERS_H_
