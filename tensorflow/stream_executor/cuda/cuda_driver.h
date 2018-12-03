@@ -32,7 +32,7 @@ namespace stream_executor {
 namespace gpu {
 
 // Identifies the memory space where an allocation resides. See
-// CUDADriver::GetPointerMemorySpace().
+// GpuDriver::GetPointerMemorySpace().
 enum class MemorySpace { kHost, kDevice };
 
 // Returns a casual string, such as "host" for the provided memory space.
@@ -40,7 +40,7 @@ string MemorySpaceString(MemorySpace memory_space);
 
 class GpuContext;
 
-// CUDADriver contains wrappers for calls to the userspace library driver. It's
+// GpuDriver contains wrappers for calls to the userspace library driver. It's
 // useful to isolate these calls and put basic wrappers around them to separate
 // userspace library driver behaviors from the rest of the program.
 //
@@ -56,7 +56,7 @@ class GpuContext;
 // http://docs.nvidia.com/cuda/cuda-driver-api/
 //
 // Thread safety: these functions should not be used from signal handlers.
-class CUDADriver {
+class GpuDriver {
  public:
   // Wraps a call to cuInit with logging to help indicate what has gone wrong in
   // the case of failure. Safe to call multiple times; will be fast on all calls

@@ -90,11 +90,11 @@ class CUDAExecutor : public internal::StreamExecutorInterface {
   void Deallocate(DeviceMemoryBase *mem) override;
 
   void *UnifiedMemoryAllocate(uint64 size) override {
-    return CUDADriver::UnifiedMemoryAllocate(context_, size);
+    return GpuDriver::UnifiedMemoryAllocate(context_, size);
   }
 
   void UnifiedMemoryDeallocate(void *location) override {
-    return CUDADriver::UnifiedMemoryDeallocate(context_, location);
+    return GpuDriver::UnifiedMemoryDeallocate(context_, location);
   }
 
   // CUDA allocation/registration functions are necessary because the driver
@@ -102,11 +102,11 @@ class CUDAExecutor : public internal::StreamExecutorInterface {
   // There's no external interface for us to otherwise control these DMA
   // settings.
   void *HostMemoryAllocate(uint64 size) override {
-    return CUDADriver::HostAllocate(context_, size);
+    return GpuDriver::HostAllocate(context_, size);
   }
 
   void HostMemoryDeallocate(void *location) override {
-    return CUDADriver::HostDeallocate(context_, location);
+    return GpuDriver::HostDeallocate(context_, location);
   }
 
   bool HostMemoryRegister(void *location, uint64 size) override;
@@ -177,7 +177,7 @@ class CUDAExecutor : public internal::StreamExecutorInterface {
 
   port::Status BlockHostUntilDone(Stream *stream) override;
 
-  int PlatformDeviceCount() override { return CUDADriver::GetDeviceCount(); }
+  int PlatformDeviceCount() override { return GpuDriver::GetDeviceCount(); }
 
   port::Status EnablePeerAccessTo(StreamExecutorInterface *other) override;
 
