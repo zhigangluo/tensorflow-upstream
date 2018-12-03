@@ -158,7 +158,7 @@ typename std::enable_if<sizeof(I) == 8, void>::type EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE static LSBZeroSetterHelper(I& t, int n) {
   // Only zero the bits for non-NaNs.
   // For NaNs, let the non-truncation version handle it.
-  if (!std::isnan(t)) {
+  if (!isnan(t)) {
     uint64_t* p = reinterpret_cast<uint64_t*>(&t);
     *p &= (0xFFFFFFFFFFFFFFFF << n);
   }
@@ -169,7 +169,7 @@ typename std::enable_if<sizeof(I) == 4, void>::type EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE static LSBZeroSetterHelper(I& t, int n) {
   // Only zero the bits for non-NaNs.
   // For NaNs, let the non-truncation version handle it.
-  if (!std::isnan(t)) {
+  if (!isnan(t)) {
     uint32_t* p = reinterpret_cast<uint32_t*>(&t);
     *p &= (0xFFFFFFFF << n);
   }
