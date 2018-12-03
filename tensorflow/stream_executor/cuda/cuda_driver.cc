@@ -78,7 +78,7 @@ namespace {
 //
 // CUDA-runtime-created contexts are avoided, if triple angle
 // brace launches are required, by using the scoped activations in
-// cuda_activation.h.
+// gpu_activation.h.
 class CreatedContexts {
  public:
   // Returns whether context is a member of the live set.

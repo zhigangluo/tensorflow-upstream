@@ -17,7 +17,7 @@ limitations under the License.
 
 #include <complex>
 
-#include "tensorflow/stream_executor/cuda/cuda_activation.h"
+#include "tensorflow/stream_executor/gpu/gpu_activation.h"
 #include "tensorflow/stream_executor/gpu/gpu_executor.h"
 #include "tensorflow/stream_executor/cuda/cuda_helpers.h"
 #include "tensorflow/stream_executor/cuda/cuda_platform_id.h"

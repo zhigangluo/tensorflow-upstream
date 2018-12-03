@@ -17,6 +17,6 @@ limitations under the License.
 #define TENSORFLOW_PLATFORM_ROCM_H_
 
 #include "tensorflow/core/platform/platform.h"
-#include "tensorflow/stream_executor/rocm/rocm_activation.h"
+#include "tensorflow/stream_executor/gpu/gpu_activation.h"
 
 #endif  // TENSORFLOW_PLATFORM_CUDA_H_
