@@ -13,12 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// This file contains APIs that assume a StreamExecutor is backed by CUDA.
-// It reaches into the CUDA implementation to activate an underlying CUDA
+// This file contains APIs that assume a StreamExecutor is backed by GPU.
+// It reaches into the GPU implementation to activate an underlying GPU
 // context.
 //
-// Having this file separate from cuda_gpu_executor.h means that dependent
-// code does not also have to depend on cuda.h.
+// Having this file separate from gpu_gpu_executor.h means that dependent
+// code does not also have to depend on gpu.h.
 
 #ifndef TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_ACTIVATION_H_
 #define TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_ACTIVATION_H_
@@ -34,14 +34,14 @@ namespace gpu {
 class GPUExecutor;
 class ScopedActivateContext;
 
-// Activates a CUDA context within an enclosing scope.
+// Activates a GPU context within an enclosing scope.
 class ScopedActivateExecutorContext {
  public:
-  // Form that takes a CUDA executor implementation.
-  explicit ScopedActivateExecutorContext(GPUExecutor* cuda_exec);
+  // Form that takes a GPU executor implementation.
+  explicit ScopedActivateExecutorContext(GPUExecutor* gpu_exec);
 
-  // Form that takes a pImpl executor and extracts a CUDA implementation --
-  // fatal failure if it is not CUDA inside.
+  // Form that takes a pImpl executor and extracts a GPU implementation --
+  // fatal failure if it is not GPU inside.
   explicit ScopedActivateExecutorContext(StreamExecutor* stream_exec);
 
   ScopedActivateExecutorContext(ScopedActivateExecutorContext&& other);
@@ -49,7 +49,7 @@ class ScopedActivateExecutorContext {
   ~ScopedActivateExecutorContext();
 
  private:
-  // The cuda.h-using datatype that we wrap.
+  // The gpu.h-using datatype that we wrap.
   ScopedActivateContext* driver_scoped_activate_context_;
 
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedActivateExecutorContext);

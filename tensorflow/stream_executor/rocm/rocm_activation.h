@@ -13,12 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// This file contains APIs that assume a StreamExecutor is backed by ROCM.
-// It reaches into the ROCM implementation to activate an underlying ROCM
+// This file contains APIs that assume a StreamExecutor is backed by GPU.
+// It reaches into the GPU implementation to activate an underlying GPU
 // context.
 //
-// Having this file separate from rocm_gpu_executor.h means that dependent
-// code does not also have to depend on rocm.h.
+// Having this file separate from gpu_gpu_executor.h means that dependent
+// code does not also have to depend on gpu.h.
 
 #ifndef TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_ACTIVATION_H_
 #define TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_ACTIVATION_H_
@@ -34,21 +34,22 @@ namespace gpu {
 class GPUExecutor;
 class ScopedActivateContext;
 
-// Activates a ROCM context within an enclosing scope.
+// Activates a GPU context within an enclosing scope.
 class ScopedActivateExecutorContext {
  public:
-  // Form that takes a ROCM executor implementation.
-  explicit ScopedActivateExecutorContext(GPUExecutor* rocm_exec);
+  // Form that takes a GPU executor implementation.
+  explicit ScopedActivateExecutorContext(GPUExecutor* gpu_exec);
 
-  // Form that takes a pImpl executor and extracts a ROCM implementation --
-  // fatal failure if it is not ROCM inside.
+  // Form that takes a pImpl executor and extracts a GPU implementation --
+  // fatal failure if it is not GPU inside.
   explicit ScopedActivateExecutorContext(StreamExecutor* stream_exec);
+
+  ScopedActivateExecutorContext(ScopedActivateExecutorContext&& other);
 
   ~ScopedActivateExecutorContext();
 
  private:
-
-  // The rocm.h-using datatype that we wrap.
+  // The gpu.h-using datatype that we wrap.
   ScopedActivateContext* driver_scoped_activate_context_;
 
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedActivateExecutorContext);
