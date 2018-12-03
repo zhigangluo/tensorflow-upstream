@@ -24,8 +24,6 @@ limitations under the License.
 #include <stddef.h>
 #include <complex>
 
-#include "rocm/include/hip/hip_complex.h"
-
 namespace stream_executor {
 
 template <typename ElemT>
@@ -37,64 +35,64 @@ namespace gpu {
 // ROCM
 // device memory.
 template <typename T>
-const T *ROCMMemory(const DeviceMemory<T> &mem) {
+const T *GpuMemory(const DeviceMemory<T> &mem) {
   return static_cast<const T *>(mem.opaque());
 }
 
 // Converts a (non-const) DeviceMemory pointer reference to its underlying typed
 // pointer in ROCM device memory.
 template <typename T>
-T *ROCMMemoryMutable(DeviceMemory<T> *mem) {
+T *GpuMemoryMutable(DeviceMemory<T> *mem) {
   return static_cast<T *>(mem->opaque());
 }
 
-static_assert(sizeof(std::complex<float>) == sizeof(hipComplex),
-              "std::complex<float> and hipComplex should have the same size");
-static_assert(offsetof(hipComplex, x) == 0,
-              "The real part of hipComplex should appear first.");
-static_assert(sizeof(std::complex<double>) == sizeof(hipDoubleComplex),
-              "std::complex<double> and hipDoubleComplex should have the same "
+static_assert(sizeof(std::complex<float>) == sizeof(GPUComplexType),
+              "std::complex<float> and GPUComplexType should have the same size");
+static_assert(offsetof(GPUComplexType, x) == 0,
+              "The real part of GPUComplexType should appear first.");
+static_assert(sizeof(std::complex<double>) == sizeof(GPUDoubleComplexType),
+              "std::complex<double> and GPUDoubleComplexType should have the same "
               "size");
-static_assert(offsetof(hipDoubleComplex, x) == 0,
-              "The real part of hipDoubleComplex should appear first.");
+static_assert(offsetof(GPUDoubleComplexType, x) == 0,
+              "The real part of GPUDoubleComplexType should appear first.");
 
 // Type traits to get ROCM complex types from std::complex<>.
 
 template <typename T>
-struct ROCMComplexT {
+struct GpuComplexT {
   typedef T type;
 };
 
 template <>
-struct ROCMComplexT<std::complex<float>> {
-  typedef hipComplex type;
+struct GpuComplexT<std::complex<float>> {
+  typedef GPUComplexType type;
 };
 
 template <>
-struct ROCMComplexT<std::complex<double>> {
-  typedef hipDoubleComplex type;
+struct GpuComplexT<std::complex<double>> {
+  typedef GPUDoubleComplexType type;
 };
 
 // Converts pointers of std::complex<> to pointers of
-// hipComplex/hipDoubleComplex. No type conversion for non-complex types.
+// GPUComplexType/GPUDoubleComplexType. No type conversion for non-complex types.
 
 template <typename T>
-inline const typename ROCMComplexT<T>::type *ROCMComplex(const T *p) {
-  return reinterpret_cast<const typename ROCMComplexT<T>::type *>(p);
+inline const typename GpuComplexT<T>::type *GpuComplex(const T *p) {
+  return reinterpret_cast<const typename GpuComplexT<T>::type *>(p);
 }
 
 template <typename T>
-inline typename ROCMComplexT<T>::type *ROCMComplex(T *p) {
-  return reinterpret_cast<typename ROCMComplexT<T>::type *>(p);
+inline typename GpuComplexT<T>::type *GpuComplex(T *p) {
+  return reinterpret_cast<typename GpuComplexT<T>::type *>(p);
 }
 
 // Converts values of std::complex<float/double> to values of
-// hipComplex/hipDoubleComplex.
-inline hipComplex ROCMComplexValue(std::complex<float> val) {
+// GPUComplexType/GPUDoubleComplexType.
+inline GPUComplexType GpuComplexValue(std::complex<float> val) {
   return {val.real(), val.imag()};
 }
 
-inline hipDoubleComplex ROCMComplexValue(std::complex<double> val) {
+inline GPUDoubleComplexType GpuComplexValue(std::complex<double> val) {
   return {val.real(), val.imag()};
 }
 

@@ -169,11 +169,11 @@ bool ROCMRng::DoPopulateRandUniformInternal(Stream *stream,
   if (std::is_same<T, float>::value ||
       std::is_same<T, std::complex<float>>::value) {
     ret = wrap::hiprandGenerateUniform(
-        parent_, rng_, reinterpret_cast<float *>(ROCMMemoryMutable(v)),
+        parent_, rng_, reinterpret_cast<float *>(GpuMemoryMutable(v)),
         element_count);
   } else {
     ret = wrap::hiprandGenerateUniformDouble(
-        parent_, rng_, reinterpret_cast<double *>(ROCMMemoryMutable(v)),
+        parent_, rng_, reinterpret_cast<double *>(GpuMemoryMutable(v)),
         element_count);
   }
   if (ret != HIPRAND_STATUS_SUCCESS) {
@@ -217,7 +217,7 @@ bool ROCMRng::DoPopulateRandGaussianInternal(Stream *stream, ElemT mean,
 
   uint64 element_count = v->ElementCount();
   hiprandStatus_t ret =
-      func(parent_, rng_, ROCMMemoryMutable(v), element_count, mean, stddev);
+      func(parent_, rng_, GpuMemoryMutable(v), element_count, mean, stddev);
 
   if (ret != HIPRAND_STATUS_SUCCESS) {
     LOG(ERROR) << "failed to do gaussian generation of " << v->ElementCount()

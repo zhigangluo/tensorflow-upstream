@@ -490,8 +490,8 @@ bool ROCMFft::DoFftInternal(Stream *stream, fft::Plan *plan, FuncT hipfftExec,
   }
 
   auto ret = hipfftExec(parent_, rocm_fft_plan->GetPlan(),
-                       ROCMComplex(const_cast<InputT *>(ROCMMemory(input))),
-                       ROCMComplex(ROCMMemoryMutable(output)));
+                       GpuComplex(const_cast<InputT *>(GpuMemory(input))),
+                       GpuComplex(GpuMemoryMutable(output)));
 
   if (ret != HIPFFT_SUCCESS) {
     LOG(ERROR) << "failed to run rocFFT routine: " << ret;
@@ -517,8 +517,8 @@ bool ROCMFft::DoFftWithDirectionInternal(Stream *stream, fft::Plan *plan,
   }
 
   auto ret = hipfftExec(parent_, rocm_fft_plan->GetPlan(),
-                       ROCMComplex(const_cast<InputT *>(ROCMMemory(input))),
-                       ROCMComplex(ROCMMemoryMutable(output)),
+                       GpuComplex(const_cast<InputT *>(GpuMemory(input))),
+                       GpuComplex(GpuMemoryMutable(output)),
                        rocm_fft_plan->GetFftDirection());
 
   if (ret != HIPFFT_SUCCESS) {
