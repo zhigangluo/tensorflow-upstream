@@ -24,13 +24,13 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-// CUDAEvent wraps a CUevent in the platform-independent EventInterface
+// GpuEvent wraps a GpuEventHandle in the platform-independent EventInterface
 // interface.
-class CUDAEvent : public internal::EventInterface {
+class GpuEvent : public internal::EventInterface {
  public:
-  explicit CUDAEvent(GpuExecutor* parent);
+  explicit GpuEvent(GpuExecutor* parent);
 
-  ~CUDAEvent() override;
+  ~GpuEvent() override;
 
   // Populates the CUDA-platform-specific elements of this object.
   port::Status Init();
@@ -46,14 +46,14 @@ class CUDAEvent : public internal::EventInterface {
   Event::Status PollForStatus();
 
   // The underlying CUDA event element.
-  const CUevent& cuda_event();
+  const GpuEventHandle& gpu_event();
 
  private:
-  // The Executor used to which this object and CUevent are bound.
+  // The Executor used to which this object and GpuEventHandle are bound.
   GpuExecutor* parent_;
 
   // The underlying CUDA event element.
-  CUevent cuda_event_;
+  GpuEventHandle gpu_event_;
 };
 
 }  // namespace gpu

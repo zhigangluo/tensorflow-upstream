@@ -79,9 +79,9 @@ namespace gpu {
 // variable with extern linkage and populate it from another translation unit.
 std::function<string(const string &)> g_cubinate;
 
-static CUDAEvent *AsCUDAEvent(Event *event) {
+static GpuEvent *AsGpuEvent(Event *event) {
   DCHECK(event != nullptr);
-  return static_cast<CUDAEvent *>(event->implementation());
+  return static_cast<GpuEvent *>(event->implementation());
 }
 
 
@@ -683,21 +683,21 @@ bool GpuExecutor::HostCallback(Stream *stream,
 }
 
 port::Status GpuExecutor::AllocateEvent(Event *event) {
-  return AsCUDAEvent(event)->Init();
+  return AsGpuEvent(event)->Init();
 }
 
 port::Status GpuExecutor::DeallocateEvent(Event *event) {
-  return AsCUDAEvent(event)->Destroy();
+  return AsGpuEvent(event)->Destroy();
 }
 
 port::Status GpuExecutor::RecordEvent(Stream *stream, Event *event) {
-  return AsCUDAEvent(event)->Record(AsCUDAStream(stream));
+  return AsGpuEvent(event)->Record(AsCUDAStream(stream));
 }
 
 port::Status GpuExecutor::WaitForEvent(Stream *stream, Event *event) {
   if (GpuDriver::WaitStreamOnEvent(context_,
                                     AsCUDAStream(stream)->cuda_stream(),
-                                    AsCUDAEvent(event)->cuda_event())) {
+                                    AsGpuEvent(event)->gpu_event())) {
     return port::Status::OK();
   } else {
     return port::Status(
@@ -708,7 +708,7 @@ port::Status GpuExecutor::WaitForEvent(Stream *stream, Event *event) {
 }
 
 Event::Status GpuExecutor::PollForEventStatus(Event *event) {
-  return AsCUDAEvent(event)->PollForStatus();
+  return AsGpuEvent(event)->PollForStatus();
 }
 
 bool GpuExecutor::AllocateStream(Stream *stream) {
@@ -927,7 +927,7 @@ bool GpuExecutor::SupportsRng() const { return true; }
 
 std::unique_ptr<internal::EventInterface>
 GpuExecutor::CreateEventImplementation() {
-  return std::unique_ptr<internal::EventInterface>(new CUDAEvent(this));
+  return std::unique_ptr<internal::EventInterface>(new GpuEvent(this));
 }
 
 std::unique_ptr<internal::KernelInterface>
