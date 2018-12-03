@@ -23,7 +23,7 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-bool ROCMTimer::Init() {
+bool GpuTimer::Init() {
   CHECK(start_event_ == nullptr && stop_event_ == nullptr);
   if (!GPUDriver::CreateEvent(parent_->gpu_context(), &start_event_,
                                GPUDriver::EventFlags::kDefault)
@@ -46,7 +46,7 @@ bool ROCMTimer::Init() {
   return true;
 }
 
-void ROCMTimer::Destroy() {
+void GpuTimer::Destroy() {
   port::Status status =
       GPUDriver::DestroyEvent(parent_->gpu_context(), &start_event_);
   if (!status.ok()) {
@@ -59,7 +59,7 @@ void ROCMTimer::Destroy() {
   }
 }
 
-float ROCMTimer::GetElapsedMilliseconds() const {
+float GpuTimer::GetElapsedMilliseconds() const {
   CHECK(start_event_ != nullptr && stop_event_ != nullptr);
   // TODO(leary) provide a way to query timer resolution?
   // ROCM docs say a resolution of about 0.5us
@@ -70,13 +70,13 @@ float ROCMTimer::GetElapsedMilliseconds() const {
   return elapsed_milliseconds;
 }
 
-bool ROCMTimer::Start(GPUStream *stream) {
+bool GpuTimer::Start(GPUStream *stream) {
   return GPUDriver::RecordEvent(parent_->gpu_context(), start_event_,
                                  stream->gpu_stream())
       .ok();
 }
 
-bool ROCMTimer::Stop(GPUStream *stream) {
+bool GpuTimer::Stop(GPUStream *stream) {
   return GPUDriver::RecordEvent(parent_->gpu_context(), stop_event_,
                                  stream->gpu_stream())
       .ok();

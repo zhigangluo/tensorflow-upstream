@@ -2675,9 +2675,9 @@ bool MIOpenSupport::DoConvolveImpl(
     }
   }
 
-  std::unique_ptr<ROCMTimer> timer;
+  std::unique_ptr<GpuTimer> timer;
   if (is_profiling) {
-    timer.reset(new ROCMTimer(parent_));
+    timer.reset(new GpuTimer(parent_));
     if (!timer->Init()) {
       return false;
     }
@@ -3240,9 +3240,9 @@ bool MIOpenSupport::DoConvolveBackwardDataImpl(
     }
   }
 
-  std::unique_ptr<ROCMTimer> timer;
+  std::unique_ptr<GpuTimer> timer;
   if (is_profiling) {
-    timer.reset(new ROCMTimer(parent_));
+    timer.reset(new GpuTimer(parent_));
     timer->Init();
     // The start and stop of the timer should be as close to the MIOpen call as
     // possible. It is still possible for other threads to issue workload on
@@ -3467,9 +3467,9 @@ bool MIOpenSupport::DoConvolveBackwardFilterImpl(
     }
   }
 
-  std::unique_ptr<ROCMTimer> timer;
+  std::unique_ptr<GpuTimer> timer;
   if (is_profiling) {
-    timer.reset(new ROCMTimer(parent_));
+    timer.reset(new GpuTimer(parent_));
     timer->Init();
     // The start and stop of the timer should be as close to the MIOpen call as
     // possible. It is still possible for other threads to issue workload on
@@ -4454,9 +4454,9 @@ bool MIOpenSupport::DoFusedConvolutionBiasActivationImpl(
   if (fusion_plan.CompilationSucceeded()) {
     const bool is_profiling = output_profile_result != nullptr;
 
-    std::unique_ptr<ROCMTimer> timer;
+    std::unique_ptr<GpuTimer> timer;
     if (is_profiling) {
-      timer.reset(new ROCMTimer(parent_));
+      timer.reset(new GpuTimer(parent_));
       timer->Init();
       timer->Start(AsGPUStream(stream));
     }
@@ -4550,9 +4550,9 @@ bool MIOpenSupport::DoFusedBatchNormActivationInferenceImpl(
   if (fusion_plan.CompilationSucceeded()) {
     const bool is_profiling = output_profile_result != nullptr;
 
-    std::unique_ptr<ROCMTimer> timer;
+    std::unique_ptr<GpuTimer> timer;
     if (is_profiling) {
-      timer.reset(new ROCMTimer(parent_));
+      timer.reset(new GpuTimer(parent_));
       timer->Init();
       timer->Start(AsGPUStream(stream));
     }
@@ -4659,9 +4659,9 @@ bool MIOpenSupport::DoFusedBatchNormActivationForwardImpl(
   if (fusion_plan.CompilationSucceeded()) {
     const bool is_profiling = output_profile_result != nullptr;
 
-    std::unique_ptr<ROCMTimer> timer;
+    std::unique_ptr<GpuTimer> timer;
     if (is_profiling) {
-      timer.reset(new ROCMTimer(parent_));
+      timer.reset(new GpuTimer(parent_));
       timer->Init();
       timer->Start(AsGPUStream(stream));
     }
@@ -4774,9 +4774,9 @@ bool MIOpenSupport::DoFusedBatchNormActivationBackwardImpl(
   if (fusion_plan.CompilationSucceeded()) {
     const bool is_profiling = output_profile_result != nullptr;
 
-    std::unique_ptr<ROCMTimer> timer;
+    std::unique_ptr<GpuTimer> timer;
     if (is_profiling) {
-      timer.reset(new ROCMTimer(parent_));
+      timer.reset(new GpuTimer(parent_));
       timer->Init();
       timer->Start(AsGPUStream(stream));
     }

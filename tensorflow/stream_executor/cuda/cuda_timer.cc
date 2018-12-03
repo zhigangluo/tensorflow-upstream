@@ -23,7 +23,7 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-bool CUDATimer::Init() {
+bool GpuTimer::Init() {
   CHECK(start_event_ == nullptr && stop_event_ == nullptr);
   GPUContext* context = parent_->gpu_context();
   port::Status status = GPUDriver::CreateEvent(
@@ -48,7 +48,7 @@ bool CUDATimer::Init() {
   return true;
 }
 
-void CUDATimer::Destroy() {
+void GpuTimer::Destroy() {
   GPUContext* context = parent_->gpu_context();
   port::Status status = GPUDriver::DestroyEvent(context, &start_event_);
   if (!status.ok()) {
@@ -61,7 +61,7 @@ void CUDATimer::Destroy() {
   }
 }
 
-float CUDATimer::GetElapsedMilliseconds() const {
+float GpuTimer::GetElapsedMilliseconds() const {
   CHECK(start_event_ != nullptr && stop_event_ != nullptr);
   // TODO(leary) provide a way to query timer resolution?
   // CUDA docs say a resolution of about 0.5us
@@ -72,7 +72,7 @@ float CUDATimer::GetElapsedMilliseconds() const {
   return elapsed_milliseconds;
 }
 
-bool CUDATimer::Start(GPUStream* stream) {
+bool GpuTimer::Start(GPUStream* stream) {
   port::Status status = GPUDriver::RecordEvent(
       parent_->gpu_context(), start_event_, stream->gpu_stream());
   if (!status.ok()) {
@@ -81,7 +81,7 @@ bool CUDATimer::Start(GPUStream* stream) {
   return status.ok();
 }
 
-bool CUDATimer::Stop(GPUStream* stream) {
+bool GpuTimer::Stop(GPUStream* stream) {
   port::Status status = GPUDriver::RecordEvent(
       parent_->gpu_context(), stop_event_, stream->gpu_stream());
   if (!status.ok()) {

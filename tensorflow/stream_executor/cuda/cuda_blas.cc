@@ -2074,9 +2074,9 @@ bool CUDABlas::DoBlasGemvWithProfilingImpl(
     const DeviceMemory<T> &a, int lda, const DeviceMemory<T> &x, int incx,
     const T &beta, DeviceMemory<T> *y, int incy,
     blas::ProfileResult *output_profile_result) {
-  std::unique_ptr<CUDATimer, TimerDeleter> timer;
+  std::unique_ptr<GpuTimer, GpuTimerDeleter> timer;
   if (output_profile_result != nullptr) {
-    timer.reset(new CUDATimer(parent_));
+    timer.reset(new GpuTimer(parent_));
     if (!timer->Init() || !timer->Start(AsGPUStream(stream))) {
       return false;
     }
@@ -2087,7 +2087,7 @@ bool CUDABlas::DoBlasGemvWithProfilingImpl(
       DoBlasGemv(stream, trans, m, n, alpha, a, lda, x, incx, beta, y, incy);
 
   if (timer != nullptr && result) {
-    // CUDATimer will CHECK-fail if we Stop() it while the stream is in an error
+    // GpuTimer will CHECK-fail if we Stop() it while the stream is in an error
     // state.
     if (!timer->Stop(AsGPUStream(stream))) {
       return false;
@@ -2106,9 +2106,9 @@ bool CUDABlas::DoBlasGemmWithProfilingImpl(
     uint64 n, uint64 k, const ParamType &alpha, const DeviceMemory<T> &a,
     int lda, const DeviceMemory<T> &b, int ldb, const ParamType &beta,
     DeviceMemory<T> *c, int ldc, blas::ProfileResult *output_profile_result) {
-  std::unique_ptr<CUDATimer, TimerDeleter> timer;
+  std::unique_ptr<GpuTimer, GpuTimerDeleter> timer;
   if (output_profile_result != nullptr) {
-    timer.reset(new CUDATimer(parent_));
+    timer.reset(new GpuTimer(parent_));
     if (!timer->Init() || !timer->Start(AsGPUStream(stream))) {
       return false;
     }
@@ -2119,7 +2119,7 @@ bool CUDABlas::DoBlasGemmWithProfilingImpl(
                            ldb, beta, c, ldc);
 
   if (timer != nullptr && result) {
-    // CUDATimer will CHECK-fail if we Stop() it while the stream is in an error
+    // GpuTimer will CHECK-fail if we Stop() it while the stream is in an error
     // state.
     if (!timer->Stop(AsGPUStream(stream))) {
       return false;
@@ -2196,13 +2196,13 @@ bool CUDABlas::DoBlasGemmWithAlgorithmImpl(
     return false;
   }
 
-  std::unique_ptr<CUDATimer, TimerDeleter> timer;
+  std::unique_ptr<GpuTimer, GpuTimerDeleter> timer;
   if (output_profile_result != nullptr) {
-    timer.reset(new CUDATimer(parent_));
+    timer.reset(new GpuTimer(parent_));
     if (!timer->Init() || !timer->Start(AsGPUStream(stream))) {
       VLOG(2) << "DoBlasGemmWithAlgorithm returning false because "
                  "output_profile_result was given, but we were unable to "
-                 "create a CUDATimer.";
+                 "create a GpuTimer.";
       return false;
     }
   }
@@ -2236,11 +2236,11 @@ bool CUDABlas::DoBlasGemmWithAlgorithmImpl(
       static_cast<cublasGemmAlgo_t>(algorithm));
 
   if (timer != nullptr && result) {
-    // CUDATimer will CHECK-fail if we Stop() it while the stream is in an error
+    // GpuTimer will CHECK-fail if we Stop() it while the stream is in an error
     // state.
     if (!timer->Stop(AsGPUStream(stream))) {
       VLOG(2) << "DoBlasGemmWithAlgorithm returning false; unable to stop "
-                 "CUDATimer.";
+                 "GpuTimer.";
       return false;
     }
     output_profile_result->set_is_valid(true);

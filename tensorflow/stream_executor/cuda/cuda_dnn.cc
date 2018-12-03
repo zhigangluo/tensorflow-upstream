@@ -1468,10 +1468,10 @@ port::Status CudnnSupport::DoRnnForwardImpl(
     }
   }
 
-  std::unique_ptr<CUDATimer, TimerDeleter> timer;
+  std::unique_ptr<GpuTimer, GpuTimerDeleter> timer;
   const bool is_profiling = output_profile_result != nullptr;
   if (is_profiling) {
-    timer.reset(new CUDATimer(parent_));
+    timer.reset(new GpuTimer(parent_));
     // The start and stop of the timer should be as close to the Cudnn call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
@@ -1560,10 +1560,10 @@ port::Status CudnnSupport::DoRnnBackwardImpl(
                       CreateRnnWorkspace(stream, cudnn, rnn_desc, input_desc,
                                          workspace_allocator));
 
-  std::unique_ptr<CUDATimer, TimerDeleter> timer;
+  std::unique_ptr<GpuTimer, GpuTimerDeleter> timer;
   const bool is_profiling = output_profile_result != nullptr;
   if (is_profiling) {
-    timer.reset(new CUDATimer(parent_));
+    timer.reset(new GpuTimer(parent_));
     // The start and stop of the timer should be as close to the Cudnn call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
@@ -2469,9 +2469,9 @@ port::Status CudnnSupport::DoConvolveImpl(
                           stream, cudnn, algorithm_config, input_nd, filter,
                           conv, output_nd, scratch_allocator, &scratch));
 
-  std::unique_ptr<CUDATimer, TimerDeleter> timer;
+  std::unique_ptr<GpuTimer, GpuTimerDeleter> timer;
   if (is_profiling) {
-    timer.reset(new CUDATimer(parent_));  // NOLINT
+    timer.reset(new GpuTimer(parent_));  // NOLINT
     // The start and stop of the timer should be as close to the Cudnn call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
@@ -2584,9 +2584,9 @@ port::Status CudnnSupport::DoFusedConvolveImpl(
           stream, cudnn, algorithm_config, conv_input_nd, filter, conv,
           output_nd, scratch_allocator, &scratch));
 
-  std::unique_ptr<CUDATimer, TimerDeleter> timer;
+  std::unique_ptr<GpuTimer, GpuTimerDeleter> timer;
   if (is_profiling) {
-    timer.reset(new CUDATimer(parent_));  // NOLINT
+    timer.reset(new GpuTimer(parent_));  // NOLINT
     // The start and stop of the timer should be as close to the Cudnn call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
@@ -3145,9 +3145,9 @@ port::Status CudnnSupport::DoConvolveBackwardDataImpl(
                           stream, cudnn, algorithm_config, in_back_nd, filter,
                           conv, out_back_nd, scratch_allocator, &scratch));
 
-  std::unique_ptr<CUDATimer, TimerDeleter> timer;
+  std::unique_ptr<GpuTimer, GpuTimerDeleter> timer;
   if (is_profiling) {
-    timer.reset(new CUDATimer(parent_));  // NOLINT
+    timer.reset(new GpuTimer(parent_));  // NOLINT
     // The start and stop of the timer should be as close to the Cudnn call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
@@ -3302,9 +3302,9 @@ port::Status CudnnSupport::DoConvolveBackwardFilterImpl(
                           stream, cudnn, algorithm_config, input_nd, filter,
                           conv, out_back_nd, scratch_allocator, &scratch));
 
-  std::unique_ptr<CUDATimer, TimerDeleter> timer;
+  std::unique_ptr<GpuTimer, GpuTimerDeleter> timer;
   if (is_profiling) {
-    timer.reset(new CUDATimer(parent_));  // NOLINT
+    timer.reset(new GpuTimer(parent_));  // NOLINT
     // The start and stop of the timer should be as close to the Cudnn call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.

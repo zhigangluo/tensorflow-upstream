@@ -20,7 +20,7 @@ limitations under the License.
 #include "absl/strings/str_cat.h"
 #include "tensorflow/stream_executor/gpu/gpu_diagnostics.h"
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
-#include "tensorflow/stream_executor/rocm/rocm_event.h"
+#include "tensorflow/stream_executor/gpu/gpu_event.h"
 #include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 #include "tensorflow/stream_executor/gpu/gpu_stream.h"
 #include "tensorflow/stream_executor/rocm/rocm_timer.h"
@@ -86,9 +86,9 @@ static GpuEvent *AsGpuEvent(Event *event) {
 
 // Given a platform-independent timer datatype, returns the internal ROCM
 // platform implementation pointer.
-static ROCMTimer *AsROCMTimer(Timer *timer) {
+static GpuTimer *AsGpuTimer(Timer *timer) {
   DCHECK(timer != nullptr);
-  return static_cast<ROCMTimer *>(timer->implementation());
+  return static_cast<GpuTimer *>(timer->implementation());
 }
 
 // Given const GPU memory, returns a librocm device pointer datatype, suitable
@@ -646,11 +646,11 @@ void GPUExecutor::DeallocateStream(Stream *stream) {
 }
 
 bool GPUExecutor::AllocateTimer(Timer *timer) {
-  return AsROCMTimer(timer)->Init();
+  return AsGpuTimer(timer)->Init();
 }
 
 void GPUExecutor::DeallocateTimer(Timer *timer) {
-  AsROCMTimer(timer)->Destroy();
+  AsGpuTimer(timer)->Destroy();
 }
 
 bool GPUExecutor::CreateStreamDependency(Stream *dependent, Stream *other) {
@@ -669,11 +669,11 @@ bool GPUExecutor::CreateStreamDependency(Stream *dependent, Stream *other) {
 }
 
 bool GPUExecutor::StartTimer(Stream *stream, Timer *timer) {
-  return AsROCMTimer(timer)->Start(AsGPUStream(stream));
+  return AsGpuTimer(timer)->Start(AsGPUStream(stream));
 }
 
 bool GPUExecutor::StopTimer(Stream *stream, Timer *timer) {
-  return AsROCMTimer(timer)->Stop(AsGPUStream(stream));
+  return AsGpuTimer(timer)->Stop(AsGPUStream(stream));
 }
 
 port::Status GPUExecutor::BlockHostUntilDone(Stream *stream) {
@@ -884,7 +884,7 @@ GPUExecutor::GetStreamImplementation() {
 
 std::unique_ptr<internal::TimerInterface>
 GPUExecutor::GetTimerImplementation() {
-  return std::unique_ptr<internal::TimerInterface>(new ROCMTimer(this));
+  return std::unique_ptr<internal::TimerInterface>(new GpuTimer(this));
 }
 
 // Attempts to read the NUMA node corresponding to the GPU device's PCI bus out

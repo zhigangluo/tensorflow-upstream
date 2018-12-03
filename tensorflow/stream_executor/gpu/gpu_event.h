@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_EVENT_H_
-#define TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_EVENT_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_EVENT_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_EVENT_H_
 
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
 #include "tensorflow/stream_executor/gpu/gpu_stream.h"
@@ -32,7 +32,7 @@ class GpuEvent : public internal::EventInterface {
 
   ~GpuEvent() override;
 
-  // Populates the ROCM-platform-specific elements of this object.
+  // Populates the GPU-platform-specific elements of this object.
   port::Status Init();
 
   // Deallocates any platform-specific elements of this object. This is broken
@@ -42,21 +42,21 @@ class GpuEvent : public internal::EventInterface {
   // Inserts the event at the current position into the specified stream.
   port::Status Record(GPUStream* stream);
 
-  // Polls the ROCM platform for the event's current status.
+  // Polls the GPU platform for the event's current status.
   Event::Status PollForStatus();
 
-  // The underlying ROCM event element.
+  // The underlying GPU event element.
   GPUEventHandle gpu_event();
 
  private:
   // The Executor used to which this object and GPUEventHandle are bound.
   GPUExecutor* parent_;
 
-  // The underlying ROCM event element.
+  // The underlying GPU event element.
   GPUEventHandle gpu_event_;
 };
 
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_EVENT_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_EVENT_H_

@@ -28,7 +28,7 @@ limitations under the License.
 #include "absl/strings/string_view.h"
 #include "tensorflow/stream_executor/gpu/gpu_diagnostics.h"
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
-#include "tensorflow/stream_executor/cuda/cuda_event.h"
+#include "tensorflow/stream_executor/gpu/gpu_event.h"
 #include "tensorflow/stream_executor/cuda/cuda_platform_id.h"
 #include "tensorflow/stream_executor/gpu/gpu_stream.h"
 #include "tensorflow/stream_executor/cuda/cuda_timer.h"
@@ -103,9 +103,9 @@ static GpuEvent *AsGpuEvent(Event *event) {
 
 // Given a platform-independent timer datatype, returns the internal CUDA
 // platform implementation pointer.
-static CUDATimer *AsCUDATimer(Timer *timer) {
+static GpuTimer *AsGpuTimer(Timer *timer) {
   DCHECK(timer != nullptr);
-  return static_cast<CUDATimer *>(timer->implementation());
+  return static_cast<GpuTimer *>(timer->implementation());
 }
 
 // Given const GPU memory, returns a libcuda device pointer datatype, suitable
@@ -758,11 +758,11 @@ void GPUExecutor::DeallocateStream(Stream *stream) {
 }
 
 bool GPUExecutor::AllocateTimer(Timer *timer) {
-  return AsCUDATimer(timer)->Init();
+  return AsGpuTimer(timer)->Init();
 }
 
 void GPUExecutor::DeallocateTimer(Timer *timer) {
-  AsCUDATimer(timer)->Destroy();
+  AsGpuTimer(timer)->Destroy();
 }
 
 bool GPUExecutor::CreateStreamDependency(Stream *dependent, Stream *other) {
@@ -781,11 +781,11 @@ bool GPUExecutor::CreateStreamDependency(Stream *dependent, Stream *other) {
 }
 
 bool GPUExecutor::StartTimer(Stream *stream, Timer *timer) {
-  return AsCUDATimer(timer)->Start(AsGPUStream(stream));
+  return AsGpuTimer(timer)->Start(AsGPUStream(stream));
 }
 
 bool GPUExecutor::StopTimer(Stream *stream, Timer *timer) {
-  return AsCUDATimer(timer)->Stop(AsGPUStream(stream));
+  return AsGpuTimer(timer)->Stop(AsGPUStream(stream));
 }
 
 port::Status GPUExecutor::BlockHostUntilDone(Stream *stream) {
@@ -976,7 +976,7 @@ GPUExecutor::GetStreamImplementation() {
 
 std::unique_ptr<internal::TimerInterface>
 GPUExecutor::GetTimerImplementation() {
-  return std::unique_ptr<internal::TimerInterface>(new CUDATimer(this));
+  return std::unique_ptr<internal::TimerInterface>(new GpuTimer(this));
 }
 
 // Attempts to read the NUMA node corresponding to the GPU device's PCI bus out
