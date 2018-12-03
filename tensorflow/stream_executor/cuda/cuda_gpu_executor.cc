@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/stream_executor/cuda/cuda_gpu_executor.h"
+#include "tensorflow/stream_executor/gpu/gpu_executor.h"
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>

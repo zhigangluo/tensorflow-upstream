@@ -21,7 +21,7 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
-#include "tensorflow/stream_executor/cuda/cuda_gpu_executor.h"
+#include "tensorflow/stream_executor/gpu/gpu_executor.h"
 
 namespace stream_executor {
 namespace gpu {
