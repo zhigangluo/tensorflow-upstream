@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_DIAGNOSTICS_H_
-#define TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_DIAGNOSTICS_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_DIAGNOSTICS_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_DIAGNOSTICS_H_
 
 #include "tensorflow/stream_executor/platform/port.h"
 #include <tuple>
@@ -39,11 +39,11 @@ port::StatusOr<DriverVersion> StringToDriverVersion(const string &value);
 
 class Diagnostician {
  public:
-  // Logs diagnostic information when ROCM appears to be misconfigured (e.g. is
+  // Logs diagnostic information when GPU appears to be misconfigured (e.g. is
   // not initializing).
   //
   // Note: if we're running on a machine that has no GPUs, we don't want to
-  // produce very much log spew beyond saying, "looks like there's no ROCM
+  // produce very much log spew beyond saying, "looks like there's no GPU
   // kernel
   // module running".
   //
@@ -55,7 +55,7 @@ class Diagnostician {
   // returns it as a string.
   //
   // This is solely used for more informative log messages when the user is
-  // running on a machine that happens to have a librocm/kernel driver mismatch.
+  // running on a machine that happens to have a libgpu/kernel driver mismatch.
   static port::StatusOr<DriverVersion> FindKernelModuleVersion(
       const string &driver_version_file_contents);
 
@@ -77,7 +77,7 @@ class Diagnostician {
   // incompatibility.
   //
   // This is solely used for more informative log messages when the user is
-  // running on a machine that happens to have a librocm/kernel driver mismatch.
+  // running on a machine that happens to have a libgpu/kernel driver mismatch.
   static void WarnOnDsoKernelMismatch(
       port::StatusOr<DriverVersion> dso_version,
       port::StatusOr<DriverVersion> kernel_version);
@@ -94,4 +94,4 @@ class Diagnostician {
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_DIAGNOSTICS_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_DIAGNOSTICS_H_

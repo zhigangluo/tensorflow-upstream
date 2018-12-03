@@ -18,7 +18,7 @@ limitations under the License.
 #include <unistd.h>
 #include "absl/base/casts.h"
 #include "absl/strings/str_cat.h"
-#include "tensorflow/stream_executor/rocm/rocm_diagnostics.h"
+#include "tensorflow/stream_executor/gpu/gpu_diagnostics.h"
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
 #include "tensorflow/stream_executor/rocm/rocm_event.h"
 #include "tensorflow/stream_executor/rocm/rocm_platform_id.h"

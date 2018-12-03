@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/stream_executor/cuda/cuda_diagnostics.h"
+#include "tensorflow/stream_executor/gpu/gpu_diagnostics.h"
 
 #if !defined(PLATFORM_WINDOWS)
 #include <dirent.h>
