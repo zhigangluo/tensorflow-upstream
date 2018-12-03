@@ -49,6 +49,26 @@ constexpr bool kVerifyCudaContext = false;
 namespace stream_executor {
 namespace gpu {
 
+// CudaContext wraps a cuda CUcontext handle, and includes a unique id. The
+// unique id is positive, and ids are not repeated within the process.
+class CudaContext {
+ public:
+  CudaContext(CUcontext context, int64 id) : context_(context), id_(id) { }
+
+  CUcontext context() const { return context_; }
+  int64 id() const { return id_; }
+
+  // Disallow copying and moving.
+  CudaContext(CudaContext&&) = delete;
+  CudaContext(const CudaContext&) = delete;
+  CudaContext& operator=(CudaContext&&) = delete;
+  CudaContext& operator=(const CudaContext&) = delete;
+
+ private:
+  CUcontext const context_;
+  const int64 id_;
+};
+
 namespace {
 
 // Manages the singleton map of contexts that we've created, mapping
