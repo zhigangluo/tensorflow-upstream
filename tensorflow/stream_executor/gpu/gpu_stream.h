@@ -13,11 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// Defines the GPUStream type - the ROCM-specific implementation of the generic
+// Defines the GPUStream type - the GPU-specific implementation of the generic
 // StreamExecutor Stream interface.
 
-#ifndef TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_STREAM_H_
-#define TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_STREAM_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_STREAM_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_STREAM_H_
 
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
 #include "tensorflow/stream_executor/platform/thread_annotations.h"
@@ -45,11 +45,11 @@ class GPUStream : public internal::StreamInterface {
     return reinterpret_cast<void **>(&gpu_stream_);
   }
 
-  // Explicitly initialize the ROCM resources associated with this stream, used
+  // Explicitly initialize the GPU resources associated with this stream, used
   // by StreamExecutor::AllocateStream().
   bool Init();
 
-  // Explicitly destroy the ROCM resources associated with this stream, used by
+  // Explicitly destroy the GPU resources associated with this stream, used by
   // StreamExecutor::DeallocateStream().
   void Destroy();
 
@@ -61,10 +61,10 @@ class GPUStream : public internal::StreamInterface {
   // event is owned by this stream.
   GPUEventHandle completed_event() { return completed_event_; }
 
-  // Returns the GPUStreamHandle value for passing to the ROCM API.
+  // Returns the GPUStreamHandle value for passing to the GPU API.
   //
   // Precond: this GPUStream has been allocated (otherwise passing a nullptr
-  // into ROCM library causes difficult-to-understand faults).
+  // into the NVIDIA library causes difficult-to-understand faults).
   GPUStreamHandle gpu_stream() const {
     DCHECK(gpu_stream_ != nullptr);
     return const_cast<GPUStreamHandle>(gpu_stream_);
@@ -74,7 +74,7 @@ class GPUStream : public internal::StreamInterface {
 
  private:
   GPUExecutor *parent_;  // Executor that spawned this stream.
-  GPUStreamHandle gpu_stream_;  // Wrapped ROCM stream handle.
+  GPUStreamHandle gpu_stream_;  // Wrapped GPU stream handle.
 
   // Event that indicates this stream has completed.
   GPUEventHandle completed_event_ = nullptr;
@@ -90,4 +90,4 @@ GPUStreamHandle AsGPUStreamValue(Stream *stream);
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_STREAM_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_STREAM_H_

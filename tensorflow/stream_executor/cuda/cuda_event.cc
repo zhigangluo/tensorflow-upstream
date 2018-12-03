@@ -16,7 +16,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/cuda/cuda_event.h"
 
 #include "tensorflow/stream_executor/gpu/gpu_executor.h"
-#include "tensorflow/stream_executor/cuda/cuda_stream.h"
+#include "tensorflow/stream_executor/gpu/gpu_stream.h"
 #include "tensorflow/stream_executor/lib/statusor.h"
 
 namespace stream_executor {
