@@ -1,4 +1,4 @@
-/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2018 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@ limitations under the License.
 #include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 PLATFORM_DEFINE_ID(kROCmPlatformId);
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor

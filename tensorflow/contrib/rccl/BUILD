@@ -66,6 +66,7 @@ tf_custom_op_library(
     deps = if_rocm_is_configured([
         "//tensorflow/core:gpu_headers_lib",
         "//tensorflow/core:core_cpu_lib",
+        "//tensorflow/stream_executor/gpu:gpu_activation",
         "@rccl_archive//:rccl",
     ]),
 )

@@ -13,12 +13,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/stream_executor/cuda/cuda_platform_id.h"
+#include "tensorflow/stream_executor/gpu/gpu_kernel.h"
 
 namespace stream_executor {
 namespace gpu {
 
-PLATFORM_DEFINE_ID(kCudaPlatformId);
+CUfunc_cache GpuKernel::GetGpuCacheConfig() const {
+  switch (preferred_cache_config_) {
+    case KernelCacheConfig::kNoPreference:
+      return CU_FUNC_CACHE_PREFER_NONE;
+    case KernelCacheConfig::kPreferShared:
+      return CU_FUNC_CACHE_PREFER_SHARED;
+    case KernelCacheConfig::kPreferL1:
+      return CU_FUNC_CACHE_PREFER_L1;
+    case KernelCacheConfig::kPreferEqual:
+      return CU_FUNC_CACHE_PREFER_EQUAL;
+    default:
+      LOG(FATAL) << "Unknown KernelCacheConfig"
+                 << static_cast<int32>(preferred_cache_config_);
+  }
+}
 
 }  // namespace gpu
 }  // namespace stream_executor

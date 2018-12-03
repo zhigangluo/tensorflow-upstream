@@ -28,6 +28,7 @@ limitations under the License.
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/common_runtime/gpu/gpu_event_mgr.h"
+#include "tensorflow/stream_executor/gpu/gpu_activation.h"
 #endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #if GOOGLE_CUDA
@@ -179,14 +180,8 @@ class CheckNumericsOp<GPUDevice, T> : public AsyncOpKernel {
     TensorReference abnormal_detected_ref(abnormal_detected);
     auto check_cb = [this, stream, abnormal_detected_ref,
                      abnormal_detected_host, context, done]() {
-      // ROCM TODO: figure out a better way for this
-#if GOOGLE_CUDA
-      se::cuda::ScopedActivateExecutorContext scoped_activation{
+      se::gpu::ScopedActivateExecutorContext scoped_activation{
           stream->parent()};
-#elif TENSORFLOW_USE_ROCM
-      se::rocm::ScopedActivateExecutorContext scoped_activation{
-          stream->parent()};
-#endif
       auto abnormal_detected_host_flat = abnormal_detected_host.flat<int>();
       int is_nan = abnormal_detected_host_flat(0);
       int is_inf = abnormal_detected_host_flat(1);

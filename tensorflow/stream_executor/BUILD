@@ -664,31 +664,7 @@ alias(
     actual = "//tensorflow/stream_executor/cuda:all_runtime",
 )
 
-cc_library(
+alias(
     name = "rocm_platform",
-    srcs = if_rocm_is_configured(
-        glob(
-            [
-                "rocm/*.cc",
-            ],
-            exclude = ["rocm/rocm_platform_id.cc"],
-        ),
-    ),
-    linkopts = select({
-        "//tensorflow:freebsd": [],
-        "//conditions:default": ["-ldl"],
-    }),
-    visibility = ["//visibility:public"],
-    deps = [
-        ":stream_executor",
-        "//tensorflow/core:lib",
-        "@local_config_rocm//rocm:rocm_headers",
-    ] + if_rocm_is_configured([
-        "//tensorflow/core:rocm",
-        "@local_config_rocm//rocm:hiprand",
-        "@local_config_rocm//rocm:rocfft",
-        "@local_config_rocm//rocm:rocblas",
-        "@local_config_rocm//rocm:miopen",
-    ]),
-    alwayslink = 1,
+    actual = "//tensorflow/stream_executor/rocm:all_runtime",
 )

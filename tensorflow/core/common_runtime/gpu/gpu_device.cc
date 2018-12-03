@@ -87,14 +87,14 @@ namespace tensorflow {
 typedef cudaStream_t gpuStream_t;
 typedef cudaDeviceProp gpuDeviceProp_t;
 #define EIGEN_GPU_SCRATCH_SIZE (Eigen::kGpuScratchSize)
-using se::cuda::ScopedActivateExecutorContext;
+using se::gpu::ScopedActivateExecutorContext;
 
 #elif TENSORFLOW_USE_ROCM
 
 typedef hipStream_t gpuStream_t;
 typedef hipDeviceProp_t gpuDeviceProp_t;
 #define EIGEN_GPU_SCRATCH_SIZE (Eigen::kGpuScratchSize)
-using se::rocm::ScopedActivateExecutorContext;
+using se::gpu::ScopedActivateExecutorContext;
 
 #endif
 
@@ -544,7 +544,7 @@ void BaseGPUDevice::ComputeHelper(OpKernel* op_kernel,
       if (idc->stream() != stream) stream->ThenWaitFor(idc->stream());
     }
   }
-  ScopedActivateExecutorContext scoped_activation{stream->parent()};
+  se::gpu::ScopedActivateExecutorContext scoped_activation{stream->parent()};
   op_kernel->Compute(context);
   if (context->status().ok()) {
     if (sync_every_op_) {
@@ -602,7 +602,7 @@ void BaseGPUDevice::ComputeAsync(AsyncOpKernel* op_kernel,
   // activity is simple enough that its overhead is negligible.
   tracing::ScopedActivity activity(op_kernel->name(), op_kernel->type_string(),
                                    op_kernel->IsExpensive());
-  ScopedActivateExecutorContext scoped_activation{stream->parent()};
+  se::gpu::ScopedActivateExecutorContext scoped_activation{stream->parent()};
   op_kernel->ComputeAsync(context, done);
 }
 

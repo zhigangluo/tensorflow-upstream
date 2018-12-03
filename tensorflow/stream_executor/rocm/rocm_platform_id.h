@@ -1,4 +1,4 @@
-/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2018 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,16 +19,16 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 // Opaque and unique identifier for the ROCm platform.
 // This is needed so that plugins can refer to/identify this platform without
 // instantiating a ROCmPlatform object.
 // This is broken out here to avoid a circular dependency between ROCmPlatform
-// and ROCmExecutor.
+// and GpuExecutor.
 extern const Platform::Id kROCmPlatformId;
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_PLATFORM_ID_H_

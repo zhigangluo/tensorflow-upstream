@@ -1,4 +1,4 @@
-/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2018 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,17 +15,18 @@ limitations under the License.
 
 #include "tensorflow/stream_executor/rocm/rocm_platform.h"
 
-#include "tensorflow/stream_executor/rocm/rocm_driver.h"
-#include "tensorflow/stream_executor/rocm/rocm_gpu_executor.h"
-#include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
+#include "absl/strings/str_format.h"
+#include "tensorflow/stream_executor/gpu/gpu_driver.h"
+#include "tensorflow/stream_executor/gpu/gpu_executor.h"
 #include "tensorflow/stream_executor/lib/error.h"
 #include "tensorflow/stream_executor/lib/initialize.h"
 #include "tensorflow/stream_executor/lib/ptr_util.h"
 #include "tensorflow/stream_executor/lib/status.h"
 #include "tensorflow/stream_executor/lib/stringprintf.h"
+#include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 ROCmPlatform::ROCmPlatform()
     : name_("ROCM"), min_numa_node_(0), limit_numa_node_(0) {}
@@ -90,7 +91,7 @@ port::StatusOr<StreamExecutor*> ROCmPlatform::FirstExecutorForBus(
 
   return port::Status{
       port::error::NOT_FOUND,
-      port::Printf("Executor for bus %d not found.", bus_ordinal)};
+      absl::StrFormat("Executor for bus %d not found.", bus_ordinal)};
 }
 
 Platform::Id ROCmPlatform::id() const { return kROCmPlatformId; }
@@ -99,11 +100,11 @@ int ROCmPlatform::VisibleDeviceCount() const {
   // Throw away the result - it logs internally, and this [containing] function
   // isn't in the path of user control. It's safe to call this > 1x.
 
-  if (!rocm::ROCMDriver::Init().ok()) {
+  if (!gpu::GpuDriver::Init().ok()) {
     return -1;
   }
 
-  return ROCMDriver::GetDeviceCount();
+  return GpuDriver::GetDeviceCount();
 }
 
 const string& ROCmPlatform::Name() const { return name_; }
@@ -134,12 +135,12 @@ port::StatusOr<StreamExecutor*> ROCmPlatform::GetExecutor(
 port::StatusOr<std::unique_ptr<StreamExecutor>>
 ROCmPlatform::GetUncachedExecutor(const StreamExecutorConfig& config) {
   auto executor = MakeUnique<StreamExecutor>(
-      this, MakeUnique<ROCMExecutor>(config.plugin_config));
+      this, MakeUnique<GpuExecutor>(config.plugin_config));
   auto init_status = executor->Init(config.ordinal, config.device_options);
   if (!init_status.ok()) {
     return port::Status{
         port::error::INTERNAL,
-        port::Printf(
+        absl::StrFormat(
             "failed initializing StreamExecutor for ROCM device ordinal %d: %s",
             config.ordinal, init_status.ToString().c_str())};
   }
@@ -156,14 +157,14 @@ void ROCmPlatform::UnregisterTraceListener(TraceListener* listener) {
   LOG(FATAL) << "not yet implemented: unregister ROCM trace listener";
 }
 
-}  // namespace rocm
+}  // namespace gpu
 
 static void InitializeROCmPlatform() {
   // Disabling leak checking, MultiPlatformManager does not destroy its
   // registered platforms.
   auto status = MultiPlatformManager::PlatformWithName("ROCM");
   if (!status.ok()) {
-    std::unique_ptr<rocm::ROCmPlatform> platform(new rocm::ROCmPlatform);
+    std::unique_ptr<gpu::ROCmPlatform> platform(new gpu::ROCmPlatform);
     SE_CHECK_OK(MultiPlatformManager::RegisterPlatform(std::move(platform)));
   }
 }

@@ -37,15 +37,10 @@ limitations under the License.
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 #include "tensorflow/core/common_runtime/gpu/gpu_event_mgr.h"
 #include "tensorflow/core/platform/stream_executor.h"
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#include "tensorflow/stream_executor/gpu/gpu_activation.h"
 
-#if GOOGLE_CUDA
-#include "tensorflow/core/platform/cuda.h"
-using stream_executor::cuda::ScopedActivateExecutorContext;
-#elif TENSORFLOW_USE_ROCM
-#include "tensorflow/core/platform/rocm.h"
-using stream_executor::rocm::ScopedActivateExecutorContext;
-#endif
+using stream_executor::gpu::ScopedActivateExecutorContext;
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 namespace tensorflow {
 namespace {

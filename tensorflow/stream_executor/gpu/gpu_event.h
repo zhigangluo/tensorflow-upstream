@@ -13,26 +13,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_EVENT_H_
-#define TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_EVENT_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_EVENT_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_EVENT_H_
 
-#include "tensorflow/stream_executor/rocm/rocm_driver.h"
-#include "tensorflow/stream_executor/rocm/rocm_stream.h"
 #include "tensorflow/stream_executor/event.h"
+#include "tensorflow/stream_executor/gpu/gpu_driver.h"
+#include "tensorflow/stream_executor/gpu/gpu_stream.h"
 #include "tensorflow/stream_executor/lib/status.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
-// ROCMEvent wraps a hipEvent_t in the platform-independent EventInterface
+// GpuEvent wraps a GpuEventHandle in the platform-independent EventInterface
 // interface.
-class ROCMEvent : public internal::EventInterface {
+class GpuEvent : public internal::EventInterface {
  public:
-  explicit ROCMEvent(ROCMExecutor* parent);
+  explicit GpuEvent(GpuExecutor* parent);
 
-  ~ROCMEvent() override;
+  ~GpuEvent() override;
 
-  // Populates the ROCM-platform-specific elements of this object.
+  // Populates the CUDA-platform-specific elements of this object.
   port::Status Init();
 
   // Deallocates any platform-specific elements of this object. This is broken
@@ -40,23 +40,23 @@ class ROCMEvent : public internal::EventInterface {
   port::Status Destroy();
 
   // Inserts the event at the current position into the specified stream.
-  port::Status Record(ROCMStream* stream);
+  port::Status Record(GpuStream* stream);
 
-  // Polls the ROCM platform for the event's current status.
+  // Polls the CUDA platform for the event's current status.
   Event::Status PollForStatus();
 
-  // The underlying ROCM event element.
-  const hipEvent_t& rocm_event();
+  // The underlying CUDA event element.
+  GpuEventHandle gpu_event();
 
  private:
-  // The Executor used to which this object and hipEvent_t are bound.
-  ROCMExecutor* parent_;
+  // The Executor used to which this object and GpuEventHandle are bound.
+  GpuExecutor* parent_;
 
-  // The underlying ROCM event element.
-  hipEvent_t rocm_event_;
+  // The underlying CUDA event element.
+  GpuEventHandle gpu_event_;
 };
 
-}  // namespace rocm
+}  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_EVENT_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_EVENT_H_
