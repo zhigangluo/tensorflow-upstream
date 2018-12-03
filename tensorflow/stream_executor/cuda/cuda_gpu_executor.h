@@ -74,13 +74,13 @@ class GpuExecutor : public internal::StreamExecutorInterface {
   int CalculateOccupancy(const DeviceDescription &device_description,
                          uint64 registers_per_thread,
                          uint64 shared_memory_per_block,
-                         const ThreadDim &thread_dims, CUfunction func);
+                         const ThreadDim &thread_dims, GpuFunctionHandle func);
 
   int CompareOccupancy(int *initial_blocks,
                        const DeviceDescription &device_description,
                        uint64 registers_per_thread,
                        uint64 shared_memory_per_block,
-                       const ThreadDim &thread_dims, CUfunction func);
+                       const ThreadDim &thread_dims, GpuFunctionHandle func);
 
   void *Allocate(uint64 size) override;
 
@@ -244,7 +244,7 @@ class GpuExecutor : public internal::StreamExecutorInterface {
   // data: User-provided callback provided to HostCallback() above, captured
   //       as a std::function<void()>. Allocated/initialized inside
   //       HostCallback() and owned and deleted by this call.
-  static void InternalHostCallback(CUstream stream, CUresult status,
+  static void InternalHostCallback(GpuStreamHandle stream, GpuStatus status,
                                    void *data);
 
   // Collects metadata for the specified kernel.
@@ -256,11 +256,11 @@ class GpuExecutor : public internal::StreamExecutorInterface {
   void VlogOccupancyInfo(const KernelBase &kernel, const ThreadDim &thread_dims,
                          const BlockDim &block_dims);
 
-  bool LoadModuleFromCuBin(const char *cubin, CUmodule *module)
+  bool LoadModuleFromCuBin(const char *cubin, GpuModuleHandle *module)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
   // Loads the PTX text `ptx` as a CUDA module.  `ptx` must be null terminated.
-  bool LoadModuleFromPtx(const char *ptx, CUmodule *module)
+  bool LoadModuleFromPtx(const char *ptx, GpuModuleHandle *module)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
   bool UnloadGpuBinary(const void *gpu_binary)
@@ -273,7 +273,7 @@ class GpuExecutor : public internal::StreamExecutorInterface {
   std::unordered_map<const KernelBase *, const void *> kernel_to_gpu_binary_
       GUARDED_BY(in_memory_modules_mu_);
   // GPU binary (PTX or CUBIN) -> {CUDA module, reference count}.
-  std::unordered_map<const void *, std::pair<CUmodule, uint64>>
+  std::unordered_map<const void *, std::pair<GpuModuleHandle, uint64>>
       gpu_binary_to_module_ GUARDED_BY(in_memory_modules_mu_);
 
   // Guards the launched kernel set.
@@ -281,11 +281,11 @@ class GpuExecutor : public internal::StreamExecutorInterface {
 
   // Keeps track of the set of launched kernels. Currently used to suppress the
   // occupancy check on subsequent launches.
-  std::set<CUfunction> launched_kernels_ GUARDED_BY(launched_kernels_mu_);
+  std::set<GpuFunctionHandle> launched_kernels_ GUARDED_BY(launched_kernels_mu_);
 
   // Handle for the CUDA device being operated on. Immutable
   // post-initialization.
-  CUdevice device_;
+  GpuDeviceHandle device_;
 
   // Handle for session with the library/driver. Immutable post-initialization.
   GpuContext* context_;
