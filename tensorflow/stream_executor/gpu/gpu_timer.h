@@ -13,11 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// Defines the GpuTimer type - the ROCM-specific implementation of the generic
+// Defines the GpuTimer type - the CUDA-specific implementation of the generic
 // StreamExecutor Timer interface.
 
-#ifndef TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_TIMER_H_
-#define TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_TIMER_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_TIMER_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_TIMER_H_
 
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
@@ -37,8 +37,9 @@ class GpuTimer : public internal::TimerInterface {
   explicit GpuTimer(GPUExecutor *parent)
       : parent_(parent), start_event_(nullptr), stop_event_(nullptr) {}
 
-  // Note: teardown is explicitly handled in this API by a call to
+  // Note: teardown needs to be explicitly handled in this API by a call to
   // StreamExecutor::DeallocateTimer(), which invokes Destroy().
+  // TODO(csigg): Change to RAII.
   ~GpuTimer() override {}
 
   // Allocates the platform-specific pieces of the timer, called as part of
@@ -86,4 +87,4 @@ struct GpuTimerDeleter {
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_TIMER_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_TIMER_H_

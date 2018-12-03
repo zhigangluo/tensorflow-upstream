@@ -23,7 +23,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/gpu/gpu_event.h"
 #include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 #include "tensorflow/stream_executor/gpu/gpu_stream.h"
-#include "tensorflow/stream_executor/rocm/rocm_timer.h"
+#include "tensorflow/stream_executor/gpu/gpu_timer.h"
 #include "tensorflow/stream_executor/dso_loader.h"
 #include "tensorflow/stream_executor/kernel_cache_config.h"
 #include "tensorflow/stream_executor/lib/env.h"
