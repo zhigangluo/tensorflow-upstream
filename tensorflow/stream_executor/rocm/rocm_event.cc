@@ -22,28 +22,28 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-ROCMEvent::ROCMEvent(GPUExecutor* parent)
-    : parent_(parent), rocm_event_(nullptr) {}
+GpuEvent::GpuEvent(GPUExecutor* parent)
+    : parent_(parent), gpu_event_(nullptr) {}
 
-ROCMEvent::~ROCMEvent() {}
+GpuEvent::~GpuEvent() {}
 
-port::Status ROCMEvent::Init() {
-  return GPUDriver::CreateEvent(parent_->gpu_context(), &rocm_event_,
+port::Status GpuEvent::Init() {
+  return GPUDriver::CreateEvent(parent_->gpu_context(), &gpu_event_,
                                  GPUDriver::EventFlags::kDisableTiming);
 }
 
-port::Status ROCMEvent::Destroy() {
-  return GPUDriver::DestroyEvent(parent_->gpu_context(), &rocm_event_);
+port::Status GpuEvent::Destroy() {
+  return GPUDriver::DestroyEvent(parent_->gpu_context(), &gpu_event_);
 }
 
-port::Status ROCMEvent::Record(GPUStream* stream) {
-  return GPUDriver::RecordEvent(parent_->gpu_context(), rocm_event_,
+port::Status GpuEvent::Record(GPUStream* stream) {
+  return GPUDriver::RecordEvent(parent_->gpu_context(), gpu_event_,
                                  stream->gpu_stream());
 }
 
-Event::Status ROCMEvent::PollForStatus() {
+Event::Status GpuEvent::PollForStatus() {
   port::StatusOr<hipError_t> status =
-      GPUDriver::QueryEvent(parent_->gpu_context(), rocm_event_);
+      GPUDriver::QueryEvent(parent_->gpu_context(), gpu_event_);
   if (!status.ok()) {
     LOG(ERROR) << "Error polling for event status: "
                << status.status().error_message();
@@ -62,8 +62,8 @@ Event::Status ROCMEvent::PollForStatus() {
   }
 }
 
-GPUEventHandle ROCMEvent::rocm_event() {
-  return rocm_event_;
+GPUEventHandle GpuEvent::gpu_event() {
+  return gpu_event_;
 }
 
 }  // namespace gpu

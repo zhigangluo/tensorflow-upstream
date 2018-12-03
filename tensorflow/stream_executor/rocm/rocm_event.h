@@ -24,13 +24,13 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-// ROCMEvent wraps a GPUEventHandle in the platform-independent EventInterface
+// GpuEvent wraps a GPUEventHandle in the platform-independent EventInterface
 // interface.
-class ROCMEvent : public internal::EventInterface {
+class GpuEvent : public internal::EventInterface {
  public:
-  explicit ROCMEvent(GPUExecutor* parent);
+  explicit GpuEvent(GPUExecutor* parent);
 
-  ~ROCMEvent() override;
+  ~GpuEvent() override;
 
   // Populates the ROCM-platform-specific elements of this object.
   port::Status Init();
@@ -46,14 +46,14 @@ class ROCMEvent : public internal::EventInterface {
   Event::Status PollForStatus();
 
   // The underlying ROCM event element.
-  GPUEventHandle rocm_event();
+  GPUEventHandle gpu_event();
 
  private:
   // The Executor used to which this object and GPUEventHandle are bound.
   GPUExecutor* parent_;
 
   // The underlying ROCM event element.
-  GPUEventHandle rocm_event_;
+  GPUEventHandle gpu_event_;
 };
 
 }  // namespace gpu

@@ -78,9 +78,9 @@ hipFuncCache_t AsROCMCacheConfig(KernelCacheConfig config) {
   }
 }
 
-static ROCMEvent *AsROCMEvent(Event *event) {
+static GpuEvent *AsGpuEvent(Event *event) {
   DCHECK(event != nullptr);
-  return static_cast<ROCMEvent *>(event->implementation());
+  return static_cast<GpuEvent *>(event->implementation());
 }
 
 
@@ -605,21 +605,21 @@ bool GPUExecutor::HostCallback(Stream *stream,
 }
 
 port::Status GPUExecutor::AllocateEvent(Event *event) {
-  return AsROCMEvent(event)->Init();
+  return AsGpuEvent(event)->Init();
 }
 
 port::Status GPUExecutor::DeallocateEvent(Event *event) {
-  return AsROCMEvent(event)->Destroy();
+  return AsGpuEvent(event)->Destroy();
 }
 
 port::Status GPUExecutor::RecordEvent(Stream *stream, Event *event) {
-  return AsROCMEvent(event)->Record(AsGPUStream(stream));
+  return AsGpuEvent(event)->Record(AsGPUStream(stream));
 }
 
 port::Status GPUExecutor::WaitForEvent(Stream *stream, Event *event) {
   if (GPUDriver::WaitStreamOnEvent(context_,
                                     AsGPUStream(stream)->gpu_stream(),
-                                    AsROCMEvent(event)->rocm_event())) {
+                                    AsGpuEvent(event)->gpu_event())) {
     return port::Status::OK();
   } else {
     return port::Status{
@@ -630,7 +630,7 @@ port::Status GPUExecutor::WaitForEvent(Stream *stream, Event *event) {
 }
 
 Event::Status GPUExecutor::PollForEventStatus(Event *event) {
-  return AsROCMEvent(event)->PollForStatus();
+  return AsGpuEvent(event)->PollForStatus();
 }
 
 bool GPUExecutor::AllocateStream(Stream *stream) {
@@ -869,7 +869,7 @@ bool GPUExecutor::SupportsRng() const { return true; }
 
 std::unique_ptr<internal::EventInterface>
 GPUExecutor::CreateEventImplementation() {
-  return std::unique_ptr<internal::EventInterface>(new ROCMEvent(this));
+  return std::unique_ptr<internal::EventInterface>(new GpuEvent(this));
 }
 
 std::unique_ptr<internal::KernelInterface>

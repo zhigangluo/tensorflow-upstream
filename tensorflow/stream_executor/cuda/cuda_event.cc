@@ -22,28 +22,28 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-CUDAEvent::CUDAEvent(GPUExecutor* parent)
-    : parent_(parent), cuda_event_(nullptr) {}
+GpuEvent::GpuEvent(GPUExecutor* parent)
+    : parent_(parent), gpu_event_(nullptr) {}
 
-CUDAEvent::~CUDAEvent() {}
+GpuEvent::~GpuEvent() {}
 
-port::Status CUDAEvent::Init() {
-  return GPUDriver::CreateEvent(parent_->gpu_context(), &cuda_event_,
+port::Status GpuEvent::Init() {
+  return GPUDriver::CreateEvent(parent_->gpu_context(), &gpu_event_,
                                  GPUDriver::EventFlags::kDisableTiming);
 }
 
-port::Status CUDAEvent::Destroy() {
-  return GPUDriver::DestroyEvent(parent_->gpu_context(), &cuda_event_);
+port::Status GpuEvent::Destroy() {
+  return GPUDriver::DestroyEvent(parent_->gpu_context(), &gpu_event_);
 }
 
-port::Status CUDAEvent::Record(GPUStream* stream) {
-  return GPUDriver::RecordEvent(parent_->gpu_context(), cuda_event_,
+port::Status GpuEvent::Record(GPUStream* stream) {
+  return GPUDriver::RecordEvent(parent_->gpu_context(), gpu_event_,
                                  stream->gpu_stream());
 }
 
-Event::Status CUDAEvent::PollForStatus() {
+Event::Status GpuEvent::PollForStatus() {
   port::StatusOr<CUresult> status =
-      GPUDriver::QueryEvent(parent_->gpu_context(), cuda_event_);
+      GPUDriver::QueryEvent(parent_->gpu_context(), gpu_event_);
   if (!status.ok()) {
     LOG(ERROR) << "Error polling for event status: "
                << status.status().error_message();
@@ -62,8 +62,8 @@ Event::Status CUDAEvent::PollForStatus() {
   }
 }
 
-GPUEventHandle CUDAEvent::cuda_event() {
-  return cuda_event_;
+GPUEventHandle GpuEvent::gpu_event() {
+  return gpu_event_;
 }
 
 }  // namespace gpu
