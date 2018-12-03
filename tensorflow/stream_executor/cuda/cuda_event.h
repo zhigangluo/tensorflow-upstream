@@ -16,7 +16,7 @@ limitations under the License.
 #ifndef TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_EVENT_H_
 #define TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_EVENT_H_
 
-#include "tensorflow/stream_executor/cuda/cuda_driver.h"
+#include "tensorflow/stream_executor/gpu/gpu_driver.h"
 #include "tensorflow/stream_executor/cuda/cuda_stream.h"
 #include "tensorflow/stream_executor/event.h"
 #include "tensorflow/stream_executor/lib/status.h"

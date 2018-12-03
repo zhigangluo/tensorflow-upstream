@@ -15,8 +15,8 @@ limitations under the License.
 
 // CUDA userspace driver library wrapper functionality.
 
-#ifndef TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_DRIVER_H_
-#define TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_DRIVER_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_DRIVER_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_DRIVER_H_
 
 #include <stddef.h>
 #include "tensorflow/stream_executor/platform/port.h"
@@ -494,4 +494,4 @@ class ScopedActivateContext {
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_DRIVER_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_DRIVER_H_

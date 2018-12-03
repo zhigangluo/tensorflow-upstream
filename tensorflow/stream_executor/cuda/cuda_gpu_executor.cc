@@ -27,7 +27,7 @@ limitations under the License.
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "tensorflow/stream_executor/cuda/cuda_diagnostics.h"
-#include "tensorflow/stream_executor/cuda/cuda_driver.h"
+#include "tensorflow/stream_executor/gpu/gpu_driver.h"
 #include "tensorflow/stream_executor/cuda/cuda_event.h"
 #include "tensorflow/stream_executor/cuda/cuda_platform_id.h"
 #include "tensorflow/stream_executor/cuda/cuda_stream.h"

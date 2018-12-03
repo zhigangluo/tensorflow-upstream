@@ -20,7 +20,7 @@ limitations under the License.
 #define TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_TIMER_H_
 
 #include "tensorflow/stream_executor/stream_executor_internal.h"
-#include "tensorflow/stream_executor/cuda/cuda_driver.h"
+#include "tensorflow/stream_executor/gpu/gpu_driver.h"
 #include "tensorflow/stream_executor/cuda/cuda_gpu_executor.h"
 
 namespace stream_executor {
