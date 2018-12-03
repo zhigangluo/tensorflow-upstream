@@ -22,17 +22,17 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-GpuContext* ExtractGpuContext(CUDAExecutor *cuda_exec);
-CUDAExecutor *ExtractCudaExecutor(StreamExecutor *stream_exec);
+GpuContext* ExtractGpuContext(GpuExecutor *cuda_exec);
+GpuExecutor *ExtractGpuExecutor(StreamExecutor *stream_exec);
 
 ScopedActivateExecutorContext::ScopedActivateExecutorContext(
-    CUDAExecutor *cuda_exec):
+    GpuExecutor *cuda_exec):
       driver_scoped_activate_context_(
           new ScopedActivateContext{ExtractGpuContext(cuda_exec)}) { }
 
 ScopedActivateExecutorContext::ScopedActivateExecutorContext(
     StreamExecutor *stream_exec)
-    : ScopedActivateExecutorContext(ExtractCudaExecutor(stream_exec)) {}
+    : ScopedActivateExecutorContext(ExtractGpuExecutor(stream_exec)) {}
 
 ScopedActivateExecutorContext::~ScopedActivateExecutorContext() {
   delete static_cast<ScopedActivateContext *>(driver_scoped_activate_context_);

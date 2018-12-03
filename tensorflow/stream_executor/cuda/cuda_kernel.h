@@ -49,11 +49,11 @@ class CUDAKernel : public internal::KernelInterface {
                  preferred_cache_config_(KernelCacheConfig::kNoPreference) {}
 
   // Note that the function is unloaded when the module is unloaded, and the
-  // module that the function is contained in is owned by the CUDAExecutor.
+  // module that the function is contained in is owned by the GpuExecutor.
   ~CUDAKernel() override {}
 
   // As arity cannot be reflected upon using the CUDA API, the arity is
-  // explicitly set during the CUDAExecutor::GetKernel initialization process.
+  // explicitly set during the GpuExecutor::GetKernel initialization process.
   void set_arity(unsigned arity) { arity_ = arity; }
   unsigned Arity() const override { return arity_; }
 
@@ -70,7 +70,7 @@ class CUDAKernel : public internal::KernelInterface {
   // CUDA supports setting the preferred cache configuration of a CUfunction
   // (more-or-less equivalent to a CUDAKernel). We support this via the below
   // functions; users can set a preference, and that is applied when the kernel
-  // is [lazy-]loaded (in CUDAExecutor::Launch). The alternative would be to
+  // is [lazy-]loaded (in GpuExecutor::Launch). The alternative would be to
   // load the kernel & set the preference when the user calls the setter below;
   // either approach is valid.
   // Sets the current kernel cache configuration preference.

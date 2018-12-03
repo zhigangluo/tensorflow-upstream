@@ -31,14 +31,14 @@ class StreamExecutor;
 
 namespace gpu {
 
-class CUDAExecutor;
+class GpuExecutor;
 class ScopedActivateContext;
 
 // Activates a CUDA context within an enclosing scope.
 class ScopedActivateExecutorContext {
  public:
   // Form that takes a CUDA executor implementation.
-  explicit ScopedActivateExecutorContext(CUDAExecutor* cuda_exec);
+  explicit ScopedActivateExecutorContext(GpuExecutor* cuda_exec);
 
   // Form that takes a pImpl executor and extracts a CUDA implementation --
   // fatal failure if it is not CUDA inside.

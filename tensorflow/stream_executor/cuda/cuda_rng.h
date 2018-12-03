@@ -35,7 +35,7 @@ namespace gpu {
 // Opaque and unique identifier for the cuRAND plugin.
 extern const PluginId kCuRandPlugin;
 
-class CUDAExecutor;
+class GpuExecutor;
 
 // CUDA-platform implementation of the random number generation support
 // interface.
@@ -43,7 +43,7 @@ class CUDAExecutor;
 // Thread-safe post-initialization.
 class CUDARng : public rng::RngSupport {
  public:
-  explicit CUDARng(CUDAExecutor *parent);
+  explicit CUDARng(GpuExecutor *parent);
 
   // Retrieves a curand library generator handle. This is necessary for
   // enqueuing random number generation work onto the device.
@@ -86,9 +86,9 @@ class CUDARng : public rng::RngSupport {
   // mutex that guards the cuRAND handle for this device.
   mutex mu_;
 
-  // CUDAExecutor which instantiated this CUDARng.
+  // GpuExecutor which instantiated this CUDARng.
   // Immutable post-initialization.
-  CUDAExecutor *parent_;
+  GpuExecutor *parent_;
 
   // cuRANDalibrary handle on the device.
   curandGenerator_t rng_ GUARDED_BY(mu_);

@@ -28,7 +28,7 @@ namespace gpu {
 // interface.
 class CUDAEvent : public internal::EventInterface {
  public:
-  explicit CUDAEvent(CUDAExecutor* parent);
+  explicit CUDAEvent(GpuExecutor* parent);
 
   ~CUDAEvent() override;
 
@@ -50,7 +50,7 @@ class CUDAEvent : public internal::EventInterface {
 
  private:
   // The Executor used to which this object and CUevent are bound.
-  CUDAExecutor* parent_;
+  GpuExecutor* parent_;
 
   // The underlying CUDA event element.
   CUevent cuda_event_;

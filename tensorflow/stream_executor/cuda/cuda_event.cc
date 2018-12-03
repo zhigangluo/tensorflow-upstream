@@ -22,7 +22,7 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-CUDAEvent::CUDAEvent(CUDAExecutor* parent)
+CUDAEvent::CUDAEvent(GpuExecutor* parent)
     : parent_(parent), cuda_event_(nullptr) {}
 
 CUDAEvent::~CUDAEvent() {}

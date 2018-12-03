@@ -70,7 +70,7 @@ namespace wrap {
 #define STREAM_EXECUTOR_CURAND_WRAP(__name)                         \
   struct WrapperShim__##__name {                                    \
     template <typename... Args>                                     \
-    curandStatus_t operator()(CUDAExecutor *parent, Args... args) { \
+    curandStatus_t operator()(GpuExecutor *parent, Args... args) { \
       gpu::ScopedActivateExecutorContext sac{parent};              \
       return ::__name(args...);                                     \
     }                                                               \
@@ -141,7 +141,7 @@ string TypeString<std::complex<double>>() {
   return "std::complex<double>";
 }
 
-CUDARng::CUDARng(CUDAExecutor *parent) : parent_(parent), rng_(nullptr) {}
+CUDARng::CUDARng(GpuExecutor *parent) : parent_(parent), rng_(nullptr) {}
 
 CUDARng::~CUDARng() {
   if (rng_ != nullptr) {
@@ -312,8 +312,8 @@ void initialize_curand() {
       PluginRegistry::Instance()->RegisterFactory<PluginRegistry::RngFactory>(
           gpu::kCudaPlatformId, gpu::kCuRandPlugin, "cuRAND",
           [](internal::StreamExecutorInterface *parent) -> rng::RngSupport * {
-            gpu::CUDAExecutor *cuda_executor =
-                dynamic_cast<gpu::CUDAExecutor *>(parent);
+            gpu::GpuExecutor *cuda_executor =
+                dynamic_cast<gpu::GpuExecutor *>(parent);
             if (cuda_executor == nullptr) {
               LOG(ERROR)
                   << "Attempting to initialize an instance of the cuRAND "

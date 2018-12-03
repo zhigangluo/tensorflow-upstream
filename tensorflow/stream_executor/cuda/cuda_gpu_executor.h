@@ -41,11 +41,11 @@ namespace gpu {
 
 // CUDA-platform implementation of the platform-agnostic
 // StreamExecutorInferface.
-class CUDAExecutor : public internal::StreamExecutorInterface {
+class GpuExecutor : public internal::StreamExecutorInterface {
  public:
   // sub_platform indicates the subplatform used in this executor; it must
   // be a CUDA type.
-  explicit CUDAExecutor(const PluginConfig &plugin_config)
+  explicit GpuExecutor(const PluginConfig &plugin_config)
       : device_(0),
         context_(nullptr),
         device_ordinal_(0),
@@ -56,7 +56,7 @@ class CUDAExecutor : public internal::StreamExecutorInterface {
   // See the corresponding StreamExecutor methods for method comments on the
   // following overrides.
 
-  ~CUDAExecutor() override;
+  ~GpuExecutor() override;
 
   port::Status Init(int device_ordinal, DeviceOptions device_options) override;
 
@@ -303,7 +303,7 @@ class CUDAExecutor : public internal::StreamExecutorInterface {
   // The plugin configuration associated with this instance.
   PluginConfig plugin_config_;
 
-  SE_DISALLOW_COPY_AND_ASSIGN(CUDAExecutor);
+  SE_DISALLOW_COPY_AND_ASSIGN(GpuExecutor);
 };
 
 }  // namespace gpu
