@@ -468,10 +468,6 @@ class CUDADriver {
       CudaContext* context, CUfunction kernel, int threads_per_block,
       size_t dynamic_shared_memory_bytes);
 
-  // Returns the current context set in CUDA. This is done by calling the cuda
-  // driver (e.g., this value is not our cached view of the current context).
-  static CUcontext CurrentContextOrDie();
-
   // Seam for injecting an error at CUDA initialization time for testing
   // purposes.
   static bool driver_inject_init_error_;

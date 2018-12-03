@@ -138,11 +138,22 @@ string ToString(CUresult result) {
   return absl::StrCat(error_name, ": ", error_string);
 }
 
+// Returns the current context set in CUDA. This is done by calling the cuda
+// driver (e.g., this value is not our cached view of the current context).
+static CUcontext CurrentContextOrDie() {
+  CUcontext current = nullptr;
+  CUresult result = cuCtxGetCurrent(&current);
+  if (result != CUDA_SUCCESS) {
+    LOG(FATAL) << "failed to query current context: " << ToString(result);
+  }
+  return current;
+}
+
 // Returns the current context and checks that it is in the set of CUDA contexts
 // created by StreamExecutor (to ensure that the CUDA runtime didn't create a
 // context behind our backs).
 CUcontext CurrentContext() {
-  CUcontext current = CUDADriver::CurrentContextOrDie();
+  CUcontext current = CurrentContextOrDie();
   if (current != nullptr && !CreatedContexts::Has(current)) {
     LOG(FATAL) << "current context was not created by the StreamExecutor "
                   "cuda_driver API: "
@@ -422,7 +433,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
     }
   }
 
-  former_context = CUDADriver::CurrentContextOrDie();
+  former_context = CurrentContextOrDie();
   res = cuDevicePrimaryCtxRetain(&new_context, device);
   if (former_context != nullptr) {
     CUdevice former_device;
@@ -1561,15 +1572,6 @@ static port::StatusOr<T> GetSimpleAttribute(CUdevice device,
   }
 
   return max_blocks;
-}
-
-/* static */ CUcontext CUDADriver::CurrentContextOrDie() {
-  CUcontext current = nullptr;
-  CUresult result = cuCtxGetCurrent(&current);
-  if (result != CUDA_SUCCESS) {
-    LOG(FATAL) << "failed to query current context: " << ToString(result);
-  }
-  return current;
 }
 
 }  // namespace gpu
