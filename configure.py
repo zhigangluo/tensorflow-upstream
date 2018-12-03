@@ -1612,6 +1612,8 @@ def main():
       set_trisycl_include_dir(environ_cp)
 
   set_action_env_var(environ_cp, 'TF_NEED_ROCM', 'ROCm', False)
+  if (environ_cp.get('TF_NEED_ROCM') == '1'):
+    set_action_env_var(environ_cp, 'TF_NEED_ROCM_GPU_TRACER', 'ROCm GPU Tracer', False)
   if (environ_cp.get('TF_NEED_ROCM') == '1' and
       'LD_LIBRARY_PATH' in environ_cp and
       environ_cp.get('LD_LIBRARY_PATH') != '1'):

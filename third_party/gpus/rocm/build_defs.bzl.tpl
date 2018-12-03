@@ -44,3 +44,11 @@ def if_rocm_is_configured(x):
     if rocm_is_configured():
       return x
     return []
+
+def roctracer_is_configured():
+    return %{roctracer_is_configured}
+
+def if_roctracer_is_configured(x):
+    if roctracer_is_configured():
+      return x
+    return []

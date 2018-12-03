@@ -140,6 +140,10 @@ def _host_compiler_includes(repository_ctx, cc):
     # define TENSORFLOW_USE_ROCM
     entries.append("  unfiltered_cxx_flag: \"-DTENSORFLOW_USE_ROCM\"")
 
+    if _enable_roctracer(repository_ctx):
+        # define TENSORFLOW_USE_ROCM
+        entries.append("  unfiltered_cxx_flag: \"-DTENSORFLOW_USE_ROCM_GPU_TRACER=1\"")
+
     return "\n".join(entries)
 
 def _rocm_include_path(repository_ctx, rocm_config):
@@ -179,8 +183,9 @@ def _rocm_include_path(repository_ctx, rocm_config):
     # Add MIOpen headers
     inc_dirs.append("/opt/rocm/miopen/include")
 
-    # Add rocTracer headers
-    inc_dirs.append("/opt/rocm/roctracer/include")
+    if _enable_roctracer(repository_ctx):
+        # Add rocTracer headers
+        inc_dirs.append("/opt/rocm/roctracer/include")
 
     # Add hcc headers
     inc_dirs.append("/opt/rocm/hcc/include")
@@ -200,6 +205,12 @@ def _enable_rocm(repository_ctx):
     if "TF_NEED_ROCM" in repository_ctx.os.environ:
         enable_rocm = repository_ctx.os.environ["TF_NEED_ROCM"].strip()
         return enable_rocm == "1"
+    return False
+
+def _enable_roctracer(repository_ctx):
+    if "TF_NEED_ROCM_GPU_TRACER" in repository_ctx.os.environ:
+        enable_rocm_gpu_tracer = repository_ctx.os.environ["TF_NEED_ROCM_GPU_TRACER"].strip()
+        return enable_rocm_gpu_tracer == "1"
     return False
 
 def _rocm_toolkit_path(repository_ctx):
@@ -366,7 +377,7 @@ def _find_libs(repository_ctx, rocm_config):
       _find_rocm_lib.
     """
     cpu_value = rocm_config.cpu_value
-    return {
+    rocm_libs = {
         "hip": _find_rocm_lib(
             "hip_hcc",
             repository_ctx,
@@ -397,12 +408,14 @@ def _find_libs(repository_ctx, rocm_config):
             cpu_value,
             rocm_config.rocm_toolkit_path + "/miopen",
         ),
-        "roctracer": _find_rocm_lib(
+    }
+    if _enable_roctracer(repository_ctx):
+        rocm_libs["roctracer"] = _find_rocm_lib(
             "roctracer64",
             repository_ctx,
             cpu_value,
-            rocm_config.rocm_toolkit_path + "/roctracer"),
-    }
+            rocm_config.rocm_toolkit_path + "/roctracer")
+    return rocm_libs
 
 def _get_rocm_config(repository_ctx):
     """Detects and returns information about the ROCm installation on the system.
@@ -474,22 +487,26 @@ def _create_dummy_repository(repository_ctx):
         "rocm:build_defs.bzl",
         {
             "%{rocm_is_configured}": "False",
+            "%{roctracer_is_configured}": "False",
             "%{rocm_extra_copts}": "[]",
         },
     )
+    rocm_lib_dict = {
+        "%{hip_lib}": _lib_name("hip", cpu_value),
+        "%{rocblas_lib}": _lib_name("rocblas", cpu_value),
+        "%{miopen_lib}": _lib_name("miopen", cpu_value),
+        "%{rocfft_lib}": _lib_name("rocfft", cpu_value),
+        "%{hiprand_lib}": _lib_name("hiprand", cpu_value),
+        "%{rocm_include_genrules}": "",
+        "%{rocm_headers}": "",
+    }
+    if _enable_roctracer(repository_ctx):
+        rocm_lib_dict["%{roctracer_lib}"] = _lib_name("roctracer", cpu_value)
+
     _tpl(
         repository_ctx,
         "rocm:BUILD",
-        {
-            "%{hip_lib}": _lib_name("hip", cpu_value),
-            "%{rocblas_lib}": _lib_name("rocblas", cpu_value),
-            "%{miopen_lib}": _lib_name("miopen", cpu_value),
-            "%{rocfft_lib}": _lib_name("rocfft", cpu_value),
-            "%{hiprand_lib}": _lib_name("hiprand", cpu_value),
-            "%{roctracer_lib}": _lib_name("roctracer", cpu_value),
-            "%{rocm_include_genrules}": "",
-            "%{rocm_headers}": "",
-        },
+        rocm_lib_dict,
     )
 
     # Create dummy files for the ROCm toolkit since they are still required by
@@ -672,12 +689,14 @@ def _create_local_rocm_repository(repository_ctx):
         "rocm/include/miopen",
         "miopen-include",
     ))
-    genrules.append(_symlink_genrule_for_dir(
-        repository_ctx,
-        rocm_toolkit_path + "/roctracer",
-        "rocm/include/roctracer",
-        "roctracer-include",
-    ))
+
+    if _enable_roctracer(repository_ctx):
+        genrules.append(_symlink_genrule_for_dir(
+            repository_ctx,
+            rocm_toolkit_path + "/roctracer",
+            "rocm/include/roctracer",
+            "roctracer-include",
+        ))
 
     rocm_libs = _find_libs(repository_ctx, rocm_config)
     rocm_lib_src = []
@@ -700,34 +719,44 @@ def _create_local_rocm_repository(repository_ctx):
     ).splitlines()
 
     # Set up BUILD file for rocm/
+    rocm_config_dict = {
+        "%{rocm_is_configured}": "True",
+        "%{roctracer_is_configured}": "False",
+        "%{rocm_extra_copts}": _compute_rocm_extra_copts(
+            repository_ctx,
+            rocm_config.amdgpu_targets,
+        ),
+    }
+    if _enable_roctracer(repository_ctx):
+        rocm_config_dict["%{roctracer_is_configured}"] = "True"
+        rocm_config_dict["%{rocm_extra_copts}"] += "-DTENSORFLOW_USE_ROCM_GPU_TRACER=1"
+
     _tpl(
         repository_ctx,
         "rocm:build_defs.bzl",
-        {
-            "%{rocm_is_configured}": "True",
-            "%{rocm_extra_copts}": _compute_rocm_extra_copts(
-                repository_ctx,
-                rocm_config.amdgpu_targets,
-            ),
-        },
+        rocm_config_dict,
     )
+
+    rocm_lib_dict = {
+        "%{hip_lib}": rocm_libs["hip"].file_name,
+        "%{rocblas_lib}": rocm_libs["rocblas"].file_name,
+        "%{rocfft_lib}": rocm_libs["rocfft"].file_name,
+        "%{hiprand_lib}": rocm_libs["hiprand"].file_name,
+        "%{miopen_lib}": rocm_libs["miopen"].file_name,
+        "%{rocm_include_genrules}": "\n".join(genrules),
+        "%{rocm_headers}": ('":rocm-include",\n' +
+                            '":rocfft-include",\n' +
+                            '":rocblas-include",\n' +
+                            '":miopen-include",\n'),
+    }
+    if _enable_roctracer(repository_ctx):
+        rocm_lib_dict["%{roctracer_lib}"] = rocm_libs["roctracer"].file_name
+        rocm_lib_dict["%{rocm_headers}"] += '":roctracer-include",\n'
+
     _tpl(
         repository_ctx,
         "rocm:BUILD",
-        {
-            "%{hip_lib}": rocm_libs["hip"].file_name,
-            "%{rocblas_lib}": rocm_libs["rocblas"].file_name,
-            "%{rocfft_lib}": rocm_libs["rocfft"].file_name,
-            "%{hiprand_lib}": rocm_libs["hiprand"].file_name,
-            "%{miopen_lib}": rocm_libs["miopen"].file_name,
-            "%{roctracer_lib}": rocm_libs["roctracer"].file_name,
-            "%{rocm_include_genrules}": "\n".join(genrules),
-            "%{rocm_headers}": ('":rocm-include",\n' +
-                                '":rocfft-include",\n' +
-                                '":rocblas-include",\n' +
-                                '":miopen-include",\n' +
-                                '":roctracer-include",'),
-        },
+        rocm_lib_dict,
     )
 
     # Set up crosstool/
@@ -781,6 +810,7 @@ def _create_remote_rocm_repository(repository_ctx, remote_config_repo):
         "rocm:build_defs.bzl",
         {
             "%{rocm_is_configured}": "True",
+            "%{roctracer_is_configured}": "False",
             "%{rocm_extra_copts}": _compute_rocm_extra_copts(
                 repository_ctx,  #_compute_capabilities(repository_ctx)
             ),

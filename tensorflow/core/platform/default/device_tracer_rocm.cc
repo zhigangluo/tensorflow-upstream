@@ -15,7 +15,7 @@ limitations under the License.
 
 #include "tensorflow/core/platform/device_tracer.h"
 
-#if TENSORFLOW_USE_ROCM
+#if TENSORFLOW_USE_ROCM && TENSORFLOW_USE_ROCM_GPUTRACER
 
 #include <stdlib.h>
 #include <memory>
@@ -543,4 +543,4 @@ std::unique_ptr<DeviceTracer> CreateDeviceTracer() {
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_USE_ROCM
+#endif  // TENSORFLOW_USE_ROCM && TENSORFLOW_USE_ROCM_GPU_TRACER
