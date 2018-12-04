@@ -13,13 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// Common helper functions used for dealing with ROCM API datatypes.
+// Common helper functions used for dealing with CUDA API datatypes.
 //
 // These are typically placed here for use by multiple source components (for
 // example, BLAS and executor components).
 
-#ifndef TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_HELPERS_H_
-#define TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_HELPERS_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_HELPERS_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_HELPERS_H_
 
 #include <stddef.h>
 #include <complex>
@@ -32,7 +32,7 @@ class DeviceMemory;
 namespace gpu {
 
 // Converts a const DeviceMemory reference to its underlying typed pointer in
-// ROCM
+// CUDA
 // device memory.
 template <typename T>
 const T *GpuMemory(const DeviceMemory<T> &mem) {
@@ -40,7 +40,7 @@ const T *GpuMemory(const DeviceMemory<T> &mem) {
 }
 
 // Converts a (non-const) DeviceMemory pointer reference to its underlying typed
-// pointer in ROCM device memory.
+// pointer in CUDA device memory.
 template <typename T>
 T *GpuMemoryMutable(DeviceMemory<T> *mem) {
   return static_cast<T *>(mem->opaque());
@@ -56,7 +56,7 @@ static_assert(sizeof(std::complex<double>) == sizeof(GPUDoubleComplexType),
 static_assert(offsetof(GPUDoubleComplexType, x) == 0,
               "The real part of GPUDoubleComplexType should appear first.");
 
-// Type traits to get ROCM complex types from std::complex<>.
+// Type traits to get CUDA complex types from std::complex<>.
 
 template <typename T>
 struct GpuComplexT {
@@ -99,4 +99,4 @@ inline GPUDoubleComplexType GpuComplexValue(std::complex<double> val) {
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_ROCM_ROCM_HELPERS_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_HELPERS_H_
