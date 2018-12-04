@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_EVENT_H_
-#define TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_EVENT_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_EVENT_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_EVENT_H_
 
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
 #include "tensorflow/stream_executor/cuda/cuda_stream.h"
@@ -59,4 +59,4 @@ class GpuEvent : public internal::EventInterface {
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_EVENT_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_EVENT_H_
