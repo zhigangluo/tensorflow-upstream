@@ -16,8 +16,8 @@ limitations under the License.
 // Defines the GpuStream type - the CUDA-specific implementation of the generic
 // StreamExecutor Stream interface.
 
-#ifndef TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_STREAM_H_
-#define TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_STREAM_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_STREAM_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_STREAM_H_
 
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
 #include "tensorflow/stream_executor/platform/thread_annotations.h"
@@ -90,4 +90,4 @@ GpuStreamHandle AsGpuStreamValue(Stream *stream);
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_STREAM_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_STREAM_H_
