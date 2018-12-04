@@ -553,8 +553,8 @@ bool CUDAFft::DoFftInternal(Stream *stream, fft::Plan *plan, FuncT cufftExec,
   }
 
   auto ret = cufftExec(parent_, cuda_fft_plan->GetPlan(),
-                       CUDAComplex(const_cast<InputT *>(CUDAMemory(input))),
-                       CUDAComplex(CUDAMemoryMutable(output)));
+                       GpuComplex(const_cast<InputT *>(GpuMemory(input))),
+                       GpuComplex(GpuMemoryMutable(output)));
 
   if (ret != CUFFT_SUCCESS) {
     LOG(ERROR) << "failed to run cuFFT routine: " << ret;
@@ -580,8 +580,8 @@ bool CUDAFft::DoFftWithDirectionInternal(Stream *stream, fft::Plan *plan,
   }
 
   auto ret = cufftExec(parent_, cuda_fft_plan->GetPlan(),
-                       CUDAComplex(const_cast<InputT *>(CUDAMemory(input))),
-                       CUDAComplex(CUDAMemoryMutable(output)),
+                       GpuComplex(const_cast<InputT *>(GpuMemory(input))),
+                       GpuComplex(GpuMemoryMutable(output)),
                        cuda_fft_plan->GetFftDirection());
 
   if (ret != CUFFT_SUCCESS) {

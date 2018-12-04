@@ -24,8 +24,7 @@ limitations under the License.
 #include <stddef.h>
 #include <complex>
 
-#include "cuda/include/cuComplex.h"
-#include "cuda/include/cuda.h"
+#include "tensorflow/stream_executor/gpu/gpu_types.h"
 
 namespace stream_executor {
 
@@ -38,64 +37,64 @@ namespace gpu {
 // CUDA
 // device memory.
 template <typename T>
-const T *CUDAMemory(const DeviceMemory<T> &mem) {
+const T *GpuMemory(const DeviceMemory<T> &mem) {
   return static_cast<const T *>(mem.opaque());
 }
 
 // Converts a (non-const) DeviceMemory pointer reference to its underlying typed
 // pointer in CUDA device memory.
 template <typename T>
-T *CUDAMemoryMutable(DeviceMemory<T> *mem) {
+T *GpuMemoryMutable(DeviceMemory<T> *mem) {
   return static_cast<T *>(mem->opaque());
 }
 
-static_assert(sizeof(std::complex<float>) == sizeof(cuComplex),
-              "std::complex<float> and cuComplex should have the same size");
-static_assert(offsetof(cuComplex, x) == 0,
-              "The real part of cuComplex should appear first.");
-static_assert(sizeof(std::complex<double>) == sizeof(cuDoubleComplex),
-              "std::complex<double> and cuDoubleComplex should have the same "
+static_assert(sizeof(std::complex<float>) == sizeof(GpuComplexType),
+              "std::complex<float> and GpuComplexType should have the same size");
+static_assert(offsetof(GpuComplexType, x) == 0,
+              "The real part of GpuComplexType should appear first.");
+static_assert(sizeof(std::complex<double>) == sizeof(GpuDoubleComplexType),
+              "std::complex<double> and GpuDoubleComplexType should have the same "
               "size");
-static_assert(offsetof(cuDoubleComplex, x) == 0,
-              "The real part of cuDoubleComplex should appear first.");
+static_assert(offsetof(GpuDoubleComplexType, x) == 0,
+              "The real part of GpuDoubleComplexType should appear first.");
 
 // Type traits to get CUDA complex types from std::complex<>.
 
 template <typename T>
-struct CUDAComplexT {
+struct GpuComplexT {
   typedef T type;
 };
 
 template <>
-struct CUDAComplexT<std::complex<float>> {
-  typedef cuComplex type;
+struct GpuComplexT<std::complex<float>> {
+  typedef GpuComplexType type;
 };
 
 template <>
-struct CUDAComplexT<std::complex<double>> {
-  typedef cuDoubleComplex type;
+struct GpuComplexT<std::complex<double>> {
+  typedef GpuDoubleComplexType type;
 };
 
 // Converts pointers of std::complex<> to pointers of
-// cuComplex/cuDoubleComplex. No type conversion for non-complex types.
+// GpuComplexType/GpuDoubleComplexType. No type conversion for non-complex types.
 
 template <typename T>
-inline const typename CUDAComplexT<T>::type *CUDAComplex(const T *p) {
-  return reinterpret_cast<const typename CUDAComplexT<T>::type *>(p);
+inline const typename GpuComplexT<T>::type *GpuComplex(const T *p) {
+  return reinterpret_cast<const typename GpuComplexT<T>::type *>(p);
 }
 
 template <typename T>
-inline typename CUDAComplexT<T>::type *CUDAComplex(T *p) {
-  return reinterpret_cast<typename CUDAComplexT<T>::type *>(p);
+inline typename GpuComplexT<T>::type *GpuComplex(T *p) {
+  return reinterpret_cast<typename GpuComplexT<T>::type *>(p);
 }
 
 // Converts values of std::complex<float/double> to values of
-// cuComplex/cuDoubleComplex.
-inline cuComplex CUDAComplexValue(std::complex<float> val) {
+// GpuComplexType/GpuDoubleComplexType.
+inline GpuComplexType GpuComplexValue(std::complex<float> val) {
   return {val.real(), val.imag()};
 }
 
-inline cuDoubleComplex CUDAComplexValue(std::complex<double> val) {
+inline GpuDoubleComplexType GpuComplexValue(std::complex<double> val) {
   return {val.real(), val.imag()};
 }
 

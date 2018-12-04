@@ -19,9 +19,16 @@ limitations under the License.
 #define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_TYPES_H_
 
 #if TENSORFLOW_USE_ROCM
+
 // #include "rocm/include/hip/hip_runtime.h"
+// #include "rocm/include/hip/hip_complex.h"
+
 #else // CUDA
+
 #include "cuda/include/cuda.h"
+#include "cuda/include/cuComplex.h"
+#include "cuda/include/cuda.h"
+
 #endif
 
 namespace stream_executor {
@@ -41,6 +48,8 @@ namespace gpu {
 // using GpuStatus = hipError_t;
 // using GpuFuncCachePreference = hipFuncCache_t;
 // using GpuSharedMemConfig = hipSharedMemConfig;
+// using GpuComplexType = hipComplex;
+// using GpuDoubleComplexType = hipDoubleComplex;
 
 #else // CUDA
 
@@ -56,6 +65,8 @@ using GpuModuleHandle = CUmodule;
 using GpuStatus = CUresult;
 using GpuFuncCachePreference = CUfunc_cache;
 using GpuSharedMemConfig = CUsharedconfig;
+using GpuComplexType = cuComplex;
+using GpuDoubleComplexType = cuDoubleComplex;
 
 #endif
 

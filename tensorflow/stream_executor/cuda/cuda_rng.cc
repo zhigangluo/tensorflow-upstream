@@ -205,11 +205,11 @@ bool CUDARng::DoPopulateRandUniformInternal(Stream *stream,
   if (std::is_same<T, float>::value ||
       std::is_same<T, std::complex<float>>::value) {
     ret = wrap::curandGenerateUniform(
-        parent_, rng_, reinterpret_cast<float *>(CUDAMemoryMutable(v)),
+        parent_, rng_, reinterpret_cast<float *>(GpuMemoryMutable(v)),
         element_count);
   } else {
     ret = wrap::curandGenerateUniformDouble(
-        parent_, rng_, reinterpret_cast<double *>(CUDAMemoryMutable(v)),
+        parent_, rng_, reinterpret_cast<double *>(GpuMemoryMutable(v)),
         element_count);
   }
   if (ret != CURAND_STATUS_SUCCESS) {
@@ -253,7 +253,7 @@ bool CUDARng::DoPopulateRandGaussianInternal(Stream *stream, ElemT mean,
 
   uint64 element_count = v->ElementCount();
   curandStatus_t ret =
-      func(parent_, rng_, CUDAMemoryMutable(v), element_count, mean, stddev);
+      func(parent_, rng_, GpuMemoryMutable(v), element_count, mean, stddev);
 
   if (ret != CURAND_STATUS_SUCCESS) {
     LOG(ERROR) << "failed to do gaussian generation of " << v->ElementCount()
