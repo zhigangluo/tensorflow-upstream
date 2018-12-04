@@ -27,7 +27,6 @@ limitations under the License.
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
 #include "tensorflow/stream_executor/platform/port.h"
 #include "tensorflow/stream_executor/platform/logging.h"
-#include "cuda/include/cuda.h"
 
 #ifdef PLATFORMS_GPUS_CUDA_DYNAMIC_LIBCUDA_DYNAMIC_LIBCUDA_H_
 #error \
@@ -42,33 +41,33 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-// Wraps a CUfunction to implement the platform-independent KernelInterface.
-class CUDAKernel : public internal::KernelInterface {
+// Wraps a GpuFunctionHandle to implement the platform-independent KernelInterface.
+class GpuKernel : public internal::KernelInterface {
  public:
-  CUDAKernel() : cuda_function_(nullptr), arity_(0),
+  GpuKernel() : gpu_function_(nullptr), arity_(0),
                  preferred_cache_config_(KernelCacheConfig::kNoPreference) {}
 
   // Note that the function is unloaded when the module is unloaded, and the
   // module that the function is contained in is owned by the GpuExecutor.
-  ~CUDAKernel() override {}
+  ~GpuKernel() override {}
 
   // As arity cannot be reflected upon using the CUDA API, the arity is
   // explicitly set during the GpuExecutor::GetKernel initialization process.
   void set_arity(unsigned arity) { arity_ = arity; }
   unsigned Arity() const override { return arity_; }
 
-  // Returns the CUfunction value for passing to the CUDA API.
-  CUfunction AsCUDAFunctionValue() const {
-    DCHECK(cuda_function_ != nullptr);
-    return const_cast<CUfunction>(cuda_function_);
+  // Returns the GpuFunctionHandle value for passing to the CUDA API.
+  GpuFunctionHandle AsGpuFunctionHandle() const {
+    DCHECK(gpu_function_ != nullptr);
+    return const_cast<GpuFunctionHandle>(gpu_function_);
   }
 
-  // Returns the slot that the CUfunction is stored within for this object,
-  // for the CUDA API which wants to load into a CUfunction*.
-  CUfunction *cuda_function_ptr() { return &cuda_function_; }
+  // Returns the slot that the GpuFunctionHandle is stored within for this object,
+  // for the CUDA API which wants to load into a GpuFunctionHandle*.
+  GpuFunctionHandle *gpu_function_ptr() { return &gpu_function_; }
 
-  // CUDA supports setting the preferred cache configuration of a CUfunction
-  // (more-or-less equivalent to a CUDAKernel). We support this via the below
+  // CUDA supports setting the preferred cache configuration of a GpuFunctionHandle
+  // (more-or-less equivalent to a GpuKernel). We support this via the below
   // functions; users can set a preference, and that is applied when the kernel
   // is [lazy-]loaded (in GpuExecutor::Launch). The alternative would be to
   // load the kernel & set the preference when the user calls the setter below;
@@ -85,24 +84,10 @@ class CUDAKernel : public internal::KernelInterface {
 
   // Returns the current kernel cache configuration preference as a
   // CUfunc_cache.
-  CUfunc_cache GetCUDACacheConfig() const {
-    switch (preferred_cache_config_) {
-      case KernelCacheConfig::kNoPreference:
-        return CU_FUNC_CACHE_PREFER_NONE;
-      case KernelCacheConfig::kPreferShared:
-        return CU_FUNC_CACHE_PREFER_SHARED;
-      case KernelCacheConfig::kPreferL1:
-        return CU_FUNC_CACHE_PREFER_L1;
-      case KernelCacheConfig::kPreferEqual:
-        return CU_FUNC_CACHE_PREFER_EQUAL;
-      default:
-        LOG(FATAL) << "Unknown KernelCacheConfig"
-                   << static_cast<int32>(preferred_cache_config_);
-    }
-  }
+  GpuFuncCachePreference GetGpuCacheConfig() const;
 
  private:
-  CUfunction cuda_function_;  // Wrapped CUDA kernel handle.
+  GpuFunctionHandle gpu_function_;  // Wrapped CUDA kernel handle.
   unsigned arity_;            // Number of formal parameters the kernel takes.
 
   // Preferred (but not required) cache configuration for this kernel.
@@ -111,14 +96,14 @@ class CUDAKernel : public internal::KernelInterface {
 
 // Given a platform-independent kernel datatype, returns the (const) internal
 // CUDA platform implementation pointer.
-inline const CUDAKernel *AsCUDAKernel(const KernelBase *kernel) {
-  return static_cast<const CUDAKernel *>(kernel->implementation());
+inline const GpuKernel *AsGpuKernel(const KernelBase *kernel) {
+  return static_cast<const GpuKernel *>(kernel->implementation());
 }
 
 // Given a platform-independent kernel datatype, returns the (non-const)
 // internal CUDA platform implementation pointer.
-inline CUDAKernel *AsCUDAKernel(KernelBase *kernel) {
-  return static_cast<CUDAKernel *>(kernel->implementation());
+inline GpuKernel *AsGpuKernel(KernelBase *kernel) {
+  return static_cast<GpuKernel *>(kernel->implementation());
 }
 
 }  // namespace gpu

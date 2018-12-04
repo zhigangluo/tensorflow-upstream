@@ -28,7 +28,7 @@ limitations under the License.
 #include "absl/strings/string_view.h"
 #include "tensorflow/stream_executor/cuda/cuda_diagnostics.h"
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
-#include "tensorflow/stream_executor/cuda/cuda_event.h"
+#include "tensorflow/stream_executor/gpu/gpu_event.h"
 #include "tensorflow/stream_executor/cuda/cuda_platform_id.h"
 #include "tensorflow/stream_executor/cuda/cuda_stream.h"
 #include "tensorflow/stream_executor/cuda/cuda_timer.h"
@@ -250,7 +250,7 @@ bool GpuExecutor::LoadModuleFromPtx(const char *ptx, CUmodule *module) {
 
 bool GpuExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
                              KernelBase *kernel) {
-  CUDAKernel *cuda_kernel = AsCUDAKernel(kernel);
+  GpuKernel *cuda_kernel = AsGpuKernel(kernel);
   CUmodule module;
   const string *kernelname;
 
@@ -291,7 +291,7 @@ bool GpuExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
   }
   VLOG(2) << "getting function " << *kernelname << " from module " << module;
   if (!GpuDriver::GetModuleFunction(context_, module, kernelname->c_str(),
-                                     cuda_kernel->cuda_function_ptr())) {
+                                     cuda_kernel->gpu_function_ptr())) {
     return false;
   }
 
@@ -383,18 +383,18 @@ bool GpuExecutor::UnloadModule(ModuleHandle module_handle) {
   return UnloadGpuBinary(gpu_binary);
 }
 
-bool GpuExecutor::GetKernelMetadata(CUDAKernel *cuda_kernel,
+bool GpuExecutor::GetKernelMetadata(GpuKernel *cuda_kernel,
                                      KernelMetadata *kernel_metadata) {
   int value;
   if (!GpuDriver::FuncGetAttribute(CU_FUNC_ATTRIBUTE_NUM_REGS,
-                                    *cuda_kernel->cuda_function_ptr(),
+                                    *cuda_kernel->gpu_function_ptr(),
                                     &value)) {
     return false;
   }
   kernel_metadata->set_registers_per_thread(value);
 
   if (!GpuDriver::FuncGetAttribute(CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES,
-                                    *cuda_kernel->cuda_function_ptr(),
+                                    *cuda_kernel->gpu_function_ptr(),
                                     &value)) {
     return false;
   }
@@ -408,8 +408,8 @@ bool GpuExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
                           const KernelArgsArrayBase &args) {
   CHECK_EQ(kernel.Arity(), args.number_of_arguments());
   CUstream custream = AsCUDAStreamValue(stream);
-  const CUDAKernel *cuda_kernel = AsCUDAKernel(&kernel);
-  CUfunction cufunc = cuda_kernel->AsCUDAFunctionValue();
+  const GpuKernel *cuda_kernel = AsGpuKernel(&kernel);
+  CUfunction cufunc = cuda_kernel->AsGpuFunctionHandle();
 
   // Only perform/print the occupancy check once.  Even just checking to see
   // whether we've done an occupancy check on this kernel before isn't free
@@ -426,7 +426,7 @@ bool GpuExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
 
   if (cuda_kernel->GetPreferredCacheConfig() !=
       KernelCacheConfig::kNoPreference) {
-    GpuDriver::FuncSetCacheConfig(cufunc, cuda_kernel->GetCUDACacheConfig());
+    GpuDriver::FuncSetCacheConfig(cufunc, cuda_kernel->GetGpuCacheConfig());
   }
 
   void **kernel_params = const_cast<void **>(args.argument_addresses().data());
@@ -470,8 +470,8 @@ void GpuExecutor::VlogOccupancyInfo(const KernelBase &kernel,
   const DeviceDescription &device_description =
       kernel.parent()->GetDeviceDescription();
 
-  const CUDAKernel *cuda_kernel = AsCUDAKernel(&kernel);
-  CUfunction cufunc = cuda_kernel->AsCUDAFunctionValue();
+  const GpuKernel *cuda_kernel = AsGpuKernel(&kernel);
+  CUfunction cufunc = cuda_kernel->AsGpuFunctionHandle();
 
   int blocks_per_sm = CalculateOccupancy(device_description, regs_per_thread,
                                          smem_per_block, thread_dims, cufunc);
@@ -932,7 +932,7 @@ GpuExecutor::CreateEventImplementation() {
 
 std::unique_ptr<internal::KernelInterface>
 GpuExecutor::CreateKernelImplementation() {
-  return std::unique_ptr<internal::KernelInterface>(new CUDAKernel());
+  return std::unique_ptr<internal::KernelInterface>(new GpuKernel());
 }
 
 std::unique_ptr<internal::StreamInterface>

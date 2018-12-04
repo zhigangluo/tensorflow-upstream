@@ -248,7 +248,7 @@ class GpuExecutor : public internal::StreamExecutorInterface {
                                    void *data);
 
   // Collects metadata for the specified kernel.
-  bool GetKernelMetadata(CUDAKernel *cuda_kernel,
+  bool GetKernelMetadata(GpuKernel *cuda_kernel,
                          KernelMetadata *kernel_metadata);
 
   // Prints to VLOG(2) information about the kernel's occupancy and how it might
