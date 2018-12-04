@@ -110,11 +110,13 @@ class GpuDriver {
   // Allocates a unified memory space of size bytes associated with the given
   // context via cuMemAllocManaged.
   // https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html#group__CUDA__MEM_1gb347ded34dc326af404aa02af5388a32
+  // (supported on CUDA only)
   static void* UnifiedMemoryAllocate(GpuContext* context, uint64 bytes);
 
   // Deallocates a unified memory space of size bytes associated with the given
   // context via cuMemFree.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html#group__CUDA__MEM_1g89b3f154e17cc89b6eea277dbdf5c93a
+  // (supported on CUDA only)
   static void UnifiedMemoryDeallocate(GpuContext* context, void* location);
 
   // Allocates page-locked and CUDA-registered memory on the host via
@@ -157,7 +159,7 @@ class GpuDriver {
   // calling thread. Current documentation on contexts and their influence on
   // userspace processes is given here:
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__CTX.html#group__CUDA__CTX_1g65dc0012348bc84810e2103a40d8e2cf
-  static port::Status CreateContext(GpuDeviceHandle device,
+  static port::Status CreateContext(int device_ordinal, GpuDeviceHandle device,
                                     const DeviceOptions& device_options,
                                     GpuContext** context);
 
@@ -205,13 +207,21 @@ class GpuDriver {
 
   // Loads ptx_contents with the CUDA driver's PTX JIT and stores the resulting
   // handle in "module". Any error logs that are produced are logged internally.
+  // (supported on CUDA only)
   static bool LoadPtx(GpuContext* context, const char *ptx_contents,
                       GpuModuleHandle *module);
 
   // Loads cubin_bytes with the CUDA driver's blob loading interface and stores
   // the resulting handle in "module".
+  // (supported on CUDA only)
   static port::Status LoadCubin(GpuContext* context, const char *cubin_bytes,
                                 GpuModuleHandle *module);
+
+  // Loads HSACO with the ROCM runtime and stores the resulting handle in
+  // "module". Any error logs that are produced are logged internally.
+  // (supported on ROCm only)
+  static bool LoadHsaco(GpuContext* context, const char* hsaco_contents,
+                        GpuModuleHandle* module);
 
   // Retrieves a named kernel from a loaded module, and places the resulting
   // handle into function (outparam) on success. Neither kernel_name nor
@@ -375,8 +385,13 @@ class GpuDriver {
   // Returns the compute capability for the device; i.e (3, 5).
   // This is currently done via the deprecated device API.
   // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__DEVICE__DEPRECATED.html#group__CUDA__DEVICE__DEPRECATED_1ge2091bbac7e1fb18c2821612115607ea
+  // (supported on CUDA only)
   static port::Status GetComputeCapability(int *cc_major, int *cc_minor,
                                            GpuDeviceHandle device);
+
+  // Returns Gpu ISA version for the device; i.e 803, 900.
+  // (supported on ROCm only)
+  static port::Status GetGpuISAVersion(int* version, GpuDeviceHandle device);
 
   // Returns the number of multiprocessors on the device (note that the device
   // may be multi-GPU-per-board).

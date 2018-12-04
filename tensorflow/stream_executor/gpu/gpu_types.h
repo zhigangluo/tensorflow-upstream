@@ -20,8 +20,8 @@ limitations under the License.
 
 #if TENSORFLOW_USE_ROCM
 
-// #include "rocm/include/hip/hip_runtime.h"
-// #include "rocm/include/hip/hip_complex.h"
+#include "rocm/include/hip/hip_complex.h"
+#include "rocm/include/hip/hip_runtime.h"
 
 #else // CUDA
 
@@ -36,20 +36,20 @@ namespace gpu {
 
 #if TENSORFLOW_USE_ROCM
 
-// using GpuStreamHandle = hipStream_t;
-// using GpuEventHandle = hipEvent_t;
-// using GpuFunctionHandle = hipFunction_t;
-// using GpuFunctionAttribute = hipDeviceAttribute_t;  // not a typo!
-// using GpuDeviceHandle = hipDevice_t;
-// using GpuDevicePtr = hipDeviceptr_t;
-// using GpuDeviceAttribute = hipDeviceAttribute_t;
-// using GpuDeviceProperty = hipDeviceProp_t;
-// using GpuModuleHandle = hipModule_t;
-// using GpuStatus = hipError_t;
-// using GpuFuncCachePreference = hipFuncCache_t;
-// using GpuSharedMemConfig = hipSharedMemConfig;
-// using GpuComplexType = hipComplex;
-// using GpuDoubleComplexType = hipDoubleComplex;
+using GpuStreamHandle = hipStream_t;
+using GpuEventHandle = hipEvent_t;
+using GpuFunctionHandle = hipFunction_t;
+using GpuFunctionAttribute = hipDeviceAttribute_t;  // not a typo!
+using GpuDeviceHandle = hipDevice_t;
+using GpuDevicePtr = hipDeviceptr_t;
+using GpuDeviceAttribute = hipDeviceAttribute_t;
+using GpuDeviceProperty = hipDeviceProp_t;
+using GpuModuleHandle = hipModule_t;
+using GpuStatus = hipError_t;
+using GpuFuncCachePreference = hipFuncCache_t;
+using GpuSharedMemConfig = hipSharedMemConfig;
+using GpuComplexType = hipComplex;
+using GpuDoubleComplexType = hipDoubleComplex;
 
 #else // CUDA
 

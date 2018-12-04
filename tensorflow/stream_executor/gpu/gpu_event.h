@@ -46,7 +46,7 @@ class GpuEvent : public internal::EventInterface {
   Event::Status PollForStatus();
 
   // The underlying CUDA event element.
-  const GpuEventHandle& gpu_event();
+  GpuEventHandle gpu_event();
 
  private:
   // The Executor used to which this object and GpuEventHandle are bound.

@@ -23,28 +23,28 @@ namespace stream_executor {
 namespace gpu {
 
 bool GpuStream::Init() {
-  if (!GpuDriver::CreateStream(parent_->cuda_context(), &gpu_stream_)) {
+  if (!GpuDriver::CreateStream(parent_->gpu_context(), &gpu_stream_)) {
     return false;
   }
-  return GpuDriver::CreateEvent(parent_->cuda_context(), &completed_event_,
-                                 GpuDriver::EventFlags::kDisableTiming)
+  return GpuDriver::CreateEvent(parent_->gpu_context(), &completed_event_,
+                                GpuDriver::EventFlags::kDisableTiming)
       .ok();
 }
 
 void GpuStream::Destroy() {
   if (completed_event_ != nullptr) {
     port::Status status =
-        GpuDriver::DestroyEvent(parent_->cuda_context(), &completed_event_);
+        GpuDriver::DestroyEvent(parent_->gpu_context(), &completed_event_);
     if (!status.ok()) {
       LOG(ERROR) << status.error_message();
     }
   }
 
-  GpuDriver::DestroyStream(parent_->cuda_context(), &gpu_stream_);
+  GpuDriver::DestroyStream(parent_->gpu_context(), &gpu_stream_);
 }
 
 bool GpuStream::IsIdle() const {
-  return GpuDriver::IsStreamIdle(parent_->cuda_context(), gpu_stream_);
+  return GpuDriver::IsStreamIdle(parent_->gpu_context(), gpu_stream_);
 }
 
 GpuStream *AsGpuStream(Stream *stream) {

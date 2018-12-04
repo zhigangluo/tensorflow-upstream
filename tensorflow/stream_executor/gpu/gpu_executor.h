@@ -45,12 +45,13 @@ class GpuExecutor : public internal::StreamExecutorInterface {
  public:
   // sub_platform indicates the subplatform used in this executor; it must
   // be a CUDA type.
-  explicit GpuExecutor(const PluginConfig &plugin_config)
+  explicit GpuExecutor(const PluginConfig& plugin_config)
       : device_(0),
         context_(nullptr),
         device_ordinal_(0),
         cc_major_(0),
         cc_minor_(0),
+        version_(0),
         plugin_config_(plugin_config) {}
 
   // See the corresponding StreamExecutor methods for method comments on the
@@ -62,6 +63,7 @@ class GpuExecutor : public internal::StreamExecutorInterface {
 
   bool GetKernel(const MultiKernelLoaderSpec &spec,
                  KernelBase *kernel) override;
+  // (supported on CUDA only)
   void UnloadKernel(const KernelBase *kernel) override;
   bool LoadModule(const MultiModuleLoaderSpec &spec,
                   ModuleHandle *module_handle) override;
@@ -71,11 +73,13 @@ class GpuExecutor : public internal::StreamExecutorInterface {
               const BlockDim &block_dims, const KernelBase &k,
               const KernelArgsArrayBase &args) override;
 
+  // (supported on CUDA only)
   int CalculateOccupancy(const DeviceDescription &device_description,
                          uint64 registers_per_thread,
                          uint64 shared_memory_per_block,
                          const ThreadDim &thread_dims, GpuFunctionHandle func);
 
+  // (supported on CUDA only)
   int CompareOccupancy(int *initial_blocks,
                        const DeviceDescription &device_description,
                        uint64 registers_per_thread,
@@ -229,16 +233,25 @@ class GpuExecutor : public internal::StreamExecutorInterface {
 
   void *GpuContextHack() override;
 
-  GpuContext* cuda_context();
+  GpuContext* gpu_context();
 
  private:
   // Attempts to find a more specific version of the file indicated by
   // filename by looking for compute-capability-specific suffixed versions; i.e.
   // looking for "foo.ptx" will check to see if "foo.ptx.cc30.ptx" is present if
   // we're on a compute capability 3.0 machine.
+  // (supported on CUDA only)
   bool FindOnDiskForComputeCapability(absl::string_view filename,
                                       absl::string_view canonical_suffix,
                                       string *found_filename) const;
+
+  // Attempts to find a more specific version of the file indicated by
+  // filename by looking for AMDGPU ISA-specific suffixed versions.
+  // (supported on ROCm only)
+
+  bool FindOnDiskForISAVersion(absl::string_view filename,
+                               absl::string_view canonical_suffix,
+                               string* found_filename) const;
 
   // Host callback landing routine invoked by CUDA.
   // data: User-provided callback provided to HostCallback() above, captured
@@ -256,23 +269,41 @@ class GpuExecutor : public internal::StreamExecutorInterface {
   void VlogOccupancyInfo(const KernelBase &kernel, const ThreadDim &thread_dims,
                          const BlockDim &block_dims);
 
+  // (supported on CUDA only)
   bool LoadModuleFromCuBin(const char *cubin, GpuModuleHandle *module)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
   // Loads the PTX text `ptx` as a CUDA module.  `ptx` must be null terminated.
+  // (supported on CUDA only)
   bool LoadModuleFromPtx(const char *ptx, GpuModuleHandle *module)
+      EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
+
+  // (supported on ROCm only)
+  bool LoadModuleFromHsaco(const char* hsaco, GpuModuleHandle* module)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
   bool UnloadGpuBinary(const void *gpu_binary)
       EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
 
+  // Guards the on-disk-module mapping.
+  mutex disk_modules_mu_;
+
+  // Mapping from filename to GPUModuleHandle, if it was already retrieved.
+  // Multiple GPUFunctionHandle are usually obtained from a single
+  // GPUModuleHandle so we attempt to hit in this mapping first, before
+  // retrieving it.
+  std::map<string, GpuModuleHandle> disk_modules_ GUARDED_BY(disk_modules_mu_);
+
   // Guards the in-memory-module mapping.
   mutex in_memory_modules_mu_;
+
+  std::map<const char*, GpuModuleHandle> in_memory_modules_
+      GUARDED_BY(in_memory_modules_mu_);
 
   // Kernel -> loaded GPU binary. Many kernels may load the same binary.
   std::unordered_map<const KernelBase *, const void *> kernel_to_gpu_binary_
       GUARDED_BY(in_memory_modules_mu_);
-  // GPU binary (PTX or CUBIN) -> {CUDA module, reference count}.
+  // GPU binary (PTX or CUBIN or HSACO) -> {CUDA module, reference count}.
   std::unordered_map<const void *, std::pair<GpuModuleHandle, uint64>>
       gpu_binary_to_module_ GUARDED_BY(in_memory_modules_mu_);
 
@@ -299,6 +330,9 @@ class GpuExecutor : public internal::StreamExecutorInterface {
 
   // The minor verion of the compute capability for device_.
   int cc_minor_;
+
+  // GPU ISA version for device_.
+  int version_;
 
   // The plugin configuration associated with this instance.
   PluginConfig plugin_config_;

@@ -404,8 +404,8 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
 }
 
 /* static */ port::Status GpuDriver::CreateContext(
-    CUdevice device, const DeviceOptions &device_options,
-    GpuContext **context) {
+    int device_ordinal, CUdevice device, const DeviceOptions& device_options,
+    GpuContext** context) {
   *context = nullptr;
 
   int flags = 0;
@@ -662,6 +662,13 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   notification.WaitForNotification();
 
   return ret;
+}
+
+/* static */ bool GpuDriver::LoadHsaco(GpuContext* context,
+                                       const char* hsaco_contents,
+                                       CUmodule* module) {
+  LOG(ERROR) << "Feature not supported on CUDA platform (LoadHsaco)";
+  return false;
 }
 
 /* static */ bool GpuDriver::SynchronousMemsetUint8(GpuContext* context,
@@ -1328,6 +1335,13 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
       port::error::INTERNAL,
       port::Printf("failed to get compute capability for device: %s; %d",
                    ToString(result).c_str(), device));
+}
+
+/* static */ port::Status GpuDriver::GetGpuISAVersion(int* version,
+                                                      CUdevice device) {
+  return port::Status{
+      port::error::INTERNAL,
+      "Feature not supported on CUDA platform (GetGpuISAVersion)"};
 }
 
 // Helper function that turns the integer output of cuDeviceGetAttribute to type

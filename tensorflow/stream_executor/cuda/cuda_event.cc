@@ -28,22 +28,22 @@ GpuEvent::GpuEvent(GpuExecutor* parent)
 GpuEvent::~GpuEvent() {}
 
 port::Status GpuEvent::Init() {
-  return GpuDriver::CreateEvent(parent_->cuda_context(), &gpu_event_,
-                                 GpuDriver::EventFlags::kDisableTiming);
+  return GpuDriver::CreateEvent(parent_->gpu_context(), &gpu_event_,
+                                GpuDriver::EventFlags::kDisableTiming);
 }
 
 port::Status GpuEvent::Destroy() {
-  return GpuDriver::DestroyEvent(parent_->cuda_context(), &gpu_event_);
+  return GpuDriver::DestroyEvent(parent_->gpu_context(), &gpu_event_);
 }
 
 port::Status GpuEvent::Record(GpuStream* stream) {
-  return GpuDriver::RecordEvent(parent_->cuda_context(), gpu_event_,
-                                 stream->gpu_stream());
+  return GpuDriver::RecordEvent(parent_->gpu_context(), gpu_event_,
+                                stream->gpu_stream());
 }
 
 Event::Status GpuEvent::PollForStatus() {
   port::StatusOr<CUresult> status =
-      GpuDriver::QueryEvent(parent_->cuda_context(), gpu_event_);
+      GpuDriver::QueryEvent(parent_->gpu_context(), gpu_event_);
   if (!status.ok()) {
     LOG(ERROR) << "Error polling for event status: "
                << status.status().error_message();

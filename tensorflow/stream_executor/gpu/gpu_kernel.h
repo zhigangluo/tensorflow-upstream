@@ -28,16 +28,6 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform/port.h"
 #include "tensorflow/stream_executor/platform/logging.h"
 
-#ifdef PLATFORMS_GPUS_CUDA_DYNAMIC_LIBCUDA_DYNAMIC_LIBCUDA_H_
-#error \
-    "No driver calls in this file, wrap driver functionality in cuda_driver.cc."
-#endif
-
-#ifdef __CUDA_RUNTIME_H__
-#error \
-    "CUDA runtime being included into CUDA GPU executor; should be driver only."
-#endif
-
 namespace stream_executor {
 namespace gpu {
 

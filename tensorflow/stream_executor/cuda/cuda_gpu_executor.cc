@@ -109,7 +109,7 @@ static CUdeviceptr AsCudaDevicePtr(DeviceMemoryBase *gpu_mem) {
 
 GpuContext* ExtractGpuContext(GpuExecutor *cuda_exec) {
   CHECK(cuda_exec != nullptr);
-  return cuda_exec->cuda_context();
+  return cuda_exec->gpu_context();
 }
 
 GpuExecutor *ExtractGpuExecutor(StreamExecutor *stream_exec) {
@@ -138,7 +138,8 @@ port::Status GpuExecutor::Init(int device_ordinal,
     return status;
   }
 
-  status = GpuDriver::CreateContext(device_, device_options, &context_);
+  status = GpuDriver::CreateContext(device_ordinal_, device_, device_options,
+                                    &context_);
   if (!status.ok()) {
     return status;
   }
@@ -172,6 +173,13 @@ bool GpuExecutor::FindOnDiskForComputeCapability(
   return false;
 }
 
+bool GpuExecutor::FindOnDiskForISAVersion(absl::string_view filename,
+                                          absl::string_view canonical_suffix,
+                                          string* found_filename) const {
+  LOG(ERROR)
+      << "Feature not supported on CUDA platform (FindOnDiskForISAVersion)";
+  return false;
+}
 // Returns the path to the running executable.
 // N.B. Derived from //knowledge/smalltalk/background_kb.cc
 // Arg: strip_exe: if true, remove the name of the executable itself from the
@@ -246,6 +254,11 @@ bool GpuExecutor::LoadModuleFromPtx(const char *ptx, CUmodule *module) {
   }
   gpu_binary_to_module_[ptx] = {*module, module_refcount};
   return true;
+}
+
+bool GpuExecutor::LoadModuleFromHsaco(const char* hsaco, CUmodule* module) {
+  LOG(ERROR) << "Feature not supported on CUDA platform (LoadModuleFromHsaco)";
+  return false;
 }
 
 bool GpuExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
@@ -947,7 +960,7 @@ GpuExecutor::GetTimerImplementation() {
 
 void *GpuExecutor::GpuContextHack() { return context_; }
 
-GpuContext* GpuExecutor::cuda_context() { return context_; }
+GpuContext* GpuExecutor::gpu_context() { return context_; }
 
 // Attempts to read the NUMA node corresponding to the GPU device's PCI bus out
 // of SysFS. Returns -1 if it cannot.

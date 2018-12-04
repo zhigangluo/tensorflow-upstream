@@ -59,7 +59,7 @@ class GpuStream : public internal::StreamInterface {
   // Retrieves an event which indicates that all work enqueued into the stream
   // has completed. Ownership of the event is not transferred to the caller, the
   // event is owned by this stream.
-  CUevent* completed_event() { return &completed_event_; }
+  GpuEventHandle* completed_event() { return &completed_event_; }
 
   // Returns the GpuStreamHandle value for passing to the CUDA API.
   //
@@ -77,7 +77,7 @@ class GpuStream : public internal::StreamInterface {
   GpuStreamHandle gpu_stream_;  // Wrapped CUDA stream handle.
 
   // Event that indicates this stream has completed.
-  CUevent completed_event_ = nullptr;
+  GpuEventHandle completed_event_ = nullptr;
 };
 
 // Helper functions to simplify extremely common flows.
