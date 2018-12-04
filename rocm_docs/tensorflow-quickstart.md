@@ -175,6 +175,8 @@ cd benchmarks
 python3 ./scripts/tf_cnn_benchmarks/tf_cnn_benchmarks.py --model=resnet50 --num_gpus=1
 ```
 
+Wasn't that easy?  
+
 ## FAQs & tips
 
 ### Temp workaround:  Solutions when running out of memory
