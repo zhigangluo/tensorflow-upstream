@@ -62,7 +62,7 @@ Event::Status GpuEvent::PollForStatus() {
   }
 }
 
-const CUevent& GpuEvent::gpu_event() {
+CUevent GpuEvent::gpu_event() {
   return gpu_event_;
 }
 
