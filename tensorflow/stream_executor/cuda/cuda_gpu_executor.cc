@@ -87,9 +87,9 @@ static GpuEvent *AsGpuEvent(Event *event) {
 
 // Given a platform-independent timer datatype, returns the internal CUDA
 // platform implementation pointer.
-static CUDATimer *AsCUDATimer(Timer *timer) {
+static GpuTimer *AsGpuTimer(Timer *timer) {
   DCHECK(timer != nullptr);
-  return static_cast<CUDATimer *>(timer->implementation());
+  return static_cast<GpuTimer *>(timer->implementation());
 }
 
 // Given const GPU memory, returns a libcuda device pointer datatype, suitable
@@ -724,11 +724,11 @@ void GpuExecutor::DeallocateStream(Stream *stream) {
 }
 
 bool GpuExecutor::AllocateTimer(Timer *timer) {
-  return AsCUDATimer(timer)->Init();
+  return AsGpuTimer(timer)->Init();
 }
 
 void GpuExecutor::DeallocateTimer(Timer *timer) {
-  AsCUDATimer(timer)->Destroy();
+  AsGpuTimer(timer)->Destroy();
 }
 
 bool GpuExecutor::CreateStreamDependency(Stream *dependent, Stream *other) {
@@ -747,11 +747,11 @@ bool GpuExecutor::CreateStreamDependency(Stream *dependent, Stream *other) {
 }
 
 bool GpuExecutor::StartTimer(Stream *stream, Timer *timer) {
-  return AsCUDATimer(timer)->Start(AsGpuStream(stream));
+  return AsGpuTimer(timer)->Start(AsGpuStream(stream));
 }
 
 bool GpuExecutor::StopTimer(Stream *stream, Timer *timer) {
-  return AsCUDATimer(timer)->Stop(AsGpuStream(stream));
+  return AsGpuTimer(timer)->Stop(AsGpuStream(stream));
 }
 
 port::Status GpuExecutor::BlockHostUntilDone(Stream *stream) {
@@ -942,7 +942,7 @@ GpuExecutor::GetStreamImplementation() {
 
 std::unique_ptr<internal::TimerInterface>
 GpuExecutor::GetTimerImplementation() {
-  return std::unique_ptr<internal::TimerInterface>(new CUDATimer(this));
+  return std::unique_ptr<internal::TimerInterface>(new GpuTimer(this));
 }
 
 void *GpuExecutor::GpuContextHack() { return context_; }

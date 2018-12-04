@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// Defines the CUDATimer type - the CUDA-specific implementation of the generic
+// Defines the GpuTimer type - the CUDA-specific implementation of the generic
 // StreamExecutor Timer interface.
 
 #ifndef TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_TIMER_H_
@@ -29,18 +29,18 @@ namespace gpu {
 class GpuExecutor;
 class GpuStream;
 
-// Wraps a pair of CUevents in order to satisfy the platform-independent
+// Wraps a pair of GpuEventHandles in order to satisfy the platform-independent
 // TimerInferface -- both a start and a stop event are present which may be
 // recorded in a stream.
-class CUDATimer : public internal::TimerInterface {
+class GpuTimer : public internal::TimerInterface {
  public:
-  explicit CUDATimer(GpuExecutor *parent)
+  explicit GpuTimer(GpuExecutor *parent)
       : parent_(parent), start_event_(nullptr), stop_event_(nullptr) {}
 
   // Note: teardown needs to be explicitly handled in this API by a call to
   // StreamExecutor::DeallocateTimer(), which invokes Destroy().
   // TODO(csigg): Change to RAII.
-  ~CUDATimer() override {}
+  ~GpuTimer() override {}
 
   // Allocates the platform-specific pieces of the timer, called as part of
   // StreamExecutor::AllocateTimer().
@@ -71,14 +71,14 @@ class CUDATimer : public internal::TimerInterface {
 
  private:
   GpuExecutor *parent_;
-  CUevent start_event_;  // Event recorded to indicate the "start" timestamp
+  GpuEventHandle start_event_;  // Event recorded to indicate the "start" timestamp
                          // executing in a stream.
-  CUevent stop_event_;   // Event recorded to indicate the "stop" timestamp
+  GpuEventHandle stop_event_;   // Event recorded to indicate the "stop" timestamp
                          // executing in a stream.
 };
 
-struct TimerDeleter {
-  void operator()(CUDATimer *t) {
+struct GpuTimerDeleter {
+  void operator()(GpuTimer *t) {
     t->Destroy();
     delete t;
   }
