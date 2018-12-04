@@ -15,7 +15,7 @@ limitations under the License.
 
 #ifdef GOOGLE_CUDA
 #include "cuda/include/cuda.h"
-#include "tensorflow/stream_executor/cuda/cuda_activation.h"
+#include "tensorflow/stream_executor/gpu/gpu_activation.h"
 #endif  // GOOGLE_CUDA
 
 #include "tensorflow/core/common_runtime/gpu/gpu_cudamalloc_allocator.h"

@@ -24,7 +24,7 @@ limitations under the License.
 #include "absl/base/casts.h"
 #include "absl/container/inlined_vector.h"
 #include "absl/strings/str_cat.h"
-#include "tensorflow/stream_executor/cuda/cuda_diagnostics.h"
+#include "tensorflow/stream_executor/gpu/gpu_diagnostics.h"
 #include "tensorflow/stream_executor/lib/env.h"
 #include "tensorflow/stream_executor/lib/error.h"
 #include "tensorflow/stream_executor/lib/human_readable.h"
@@ -78,7 +78,7 @@ namespace {
 //
 // CUDA-runtime-created contexts are avoided, if triple angle
 // brace launches are required, by using the scoped activations in
-// cuda_activation.h.
+// gpu/gpu_activation.h.
 class CreatedContexts {
  public:
   // Returns whether context is a member of the live set.

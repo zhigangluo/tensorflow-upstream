@@ -20,8 +20,8 @@ limitations under the License.
 // Having this file separate from gpu/gpu_executor.h means that dependent
 // code does not also have to depend on cuda.h.
 
-#ifndef TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_ACTIVATION_H_
-#define TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_ACTIVATION_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_ACTIVATION_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_ACTIVATION_H_
 
 #include "tensorflow/stream_executor/platform/port.h"
 
@@ -58,4 +58,4 @@ class ScopedActivateExecutorContext {
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_ACTIVATION_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_ACTIVATION_H_
