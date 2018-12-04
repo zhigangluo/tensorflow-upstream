@@ -81,8 +81,8 @@ namespace wrap {
       return f;                                                           \
     }                                                                     \
     template <typename... Args>                                           \
-    cufftResult operator()(GpuExecutor *parent, Args... args) {          \
-      gpu::ScopedActivateExecutorContext sac{parent};                    \
+    cufftResult operator()(GpuExecutor *parent, Args... args) {  	  \
+      gpu::ScopedActivateExecutorContext sac{parent};                     \
       return DynLoad()(args...);                                          \
     }                                                                     \
   } __name;                                                               \

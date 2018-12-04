@@ -294,8 +294,8 @@ namespace wrap {
       return f;                                                           \
     }                                                                     \
     template <typename... Args>                                           \
-    cublasStatus_t operator()(GpuExecutor* parent, Args... args) {       \
-      gpu::ScopedActivateExecutorContext sac{parent};                    \
+    cublasStatus_t operator()(GpuExecutor* parent, Args... args) {        \
+      gpu::ScopedActivateExecutorContext sac{parent};                     \
       return DynLoad()(args...);                                          \
     }                                                                     \
   } __name;                                                               \

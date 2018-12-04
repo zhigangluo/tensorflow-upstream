@@ -98,8 +98,8 @@ namespace wrap {
       return f;                                                           \
     }                                                                     \
     template <typename... Args>                                           \
-    curandStatus_t operator()(GpuExecutor *parent, Args... args) {       \
-      gpu::ScopedActivateExecutorContext sac{parent};                    \
+    curandStatus_t operator()(GpuExecutor *parent, Args... args) {        \
+      gpu::ScopedActivateExecutorContext sac{parent};                     \
       return DynLoad()(args...);                                          \
     }                                                                     \
   } __name;                                                               \
