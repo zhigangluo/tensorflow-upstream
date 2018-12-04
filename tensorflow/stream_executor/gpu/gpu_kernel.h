@@ -19,8 +19,8 @@ limitations under the License.
 // The notions from the StreamExecutor basically correspond to the CUDA streams
 // programming model provided by the libcuda.so driver APIs, so we don't have
 // to do much more than wrap the calls to the libraries appropriately.
-#ifndef TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_KERNEL_H_
-#define TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_KERNEL_H_
+#ifndef TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_KERNEL_H_
+#define TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_KERNEL_H_
 
 #include "tensorflow/stream_executor/kernel_cache_config.h"
 #include "tensorflow/stream_executor/stream_executor_internal.h"
@@ -109,4 +109,4 @@ inline GpuKernel *AsGpuKernel(KernelBase *kernel) {
 }  // namespace gpu
 }  // namespace stream_executor
 
-#endif  // TENSORFLOW_STREAM_EXECUTOR_CUDA_CUDA_KERNEL_H_
+#endif  // TENSORFLOW_STREAM_EXECUTOR_GPU_GPU_KERNEL_H_
