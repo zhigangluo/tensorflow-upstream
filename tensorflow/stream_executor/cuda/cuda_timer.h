@@ -27,7 +27,7 @@ namespace stream_executor {
 namespace gpu {
 
 class GpuExecutor;
-class CUDAStream;
+class GpuStream;
 
 // Wraps a pair of CUevents in order to satisfy the platform-independent
 // TimerInferface -- both a start and a stop event are present which may be
@@ -51,10 +51,10 @@ class CUDATimer : public internal::TimerInterface {
   void Destroy();
 
   // Records the "timer start" event at the current point in the stream.
-  bool Start(CUDAStream *stream);
+  bool Start(GpuStream *stream);
 
   // Records the "timer stop" event at the current point in the stream.
-  bool Stop(CUDAStream *stream);
+  bool Stop(GpuStream *stream);
 
   // Returns the elapsed time, in milliseconds, between the start and stop
   // events.

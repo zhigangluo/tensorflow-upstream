@@ -407,7 +407,7 @@ bool GpuExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
                           const BlockDim &block_dims, const KernelBase &kernel,
                           const KernelArgsArrayBase &args) {
   CHECK_EQ(kernel.Arity(), args.number_of_arguments());
-  CUstream custream = AsCUDAStreamValue(stream);
+  CUstream custream = AsGpuStreamValue(stream);
   const GpuKernel *cuda_kernel = AsGpuKernel(&kernel);
   CUfunction cufunc = cuda_kernel->AsGpuFunctionHandle();
 
@@ -623,7 +623,7 @@ bool GpuExecutor::Memset(Stream *stream, DeviceMemoryBase *location,
           << " and pattern " << std::hex << pattern;
   return GpuDriver::AsynchronousMemsetUint8(
       context_, AsCudaDevicePtr(location), pattern, size,
-      AsCUDAStreamValue(stream));
+      AsGpuStreamValue(stream));
 }
 
 bool GpuExecutor::Memset32(Stream *stream, DeviceMemoryBase *location,
@@ -635,21 +635,21 @@ bool GpuExecutor::Memset32(Stream *stream, DeviceMemoryBase *location,
         size % 4 == 0);
   return GpuDriver::AsynchronousMemsetUint32(
       context_, AsCudaDevicePtr(location), pattern, size / 4,
-      AsCUDAStreamValue(stream));
+      AsGpuStreamValue(stream));
 }
 
 bool GpuExecutor::Memcpy(Stream *stream, void *host_dst,
                           const DeviceMemoryBase &gpu_src, uint64 size) {
   return GpuDriver::AsynchronousMemcpyD2H(context_, host_dst,
                                            AsCudaDevicePtr(gpu_src), size,
-                                           AsCUDAStreamValue(stream));
+                                           AsGpuStreamValue(stream));
 }
 
 bool GpuExecutor::Memcpy(Stream *stream, DeviceMemoryBase *gpu_dst,
                           const void *host_src, uint64 size) {
   return GpuDriver::AsynchronousMemcpyH2D(context_, AsCudaDevicePtr(gpu_dst),
                                            host_src, size,
-                                           AsCUDAStreamValue(stream));
+                                           AsGpuStreamValue(stream));
 }
 
 bool GpuExecutor::MemcpyDeviceToDevice(Stream *stream,
@@ -658,7 +658,7 @@ bool GpuExecutor::MemcpyDeviceToDevice(Stream *stream,
                                         uint64 size) {
   return GpuDriver::AsynchronousMemcpyD2D(context_, AsCudaDevicePtr(gpu_dst),
                                            AsCudaDevicePtr(gpu_src), size,
-                                           AsCUDAStreamValue(stream));
+                                           AsGpuStreamValue(stream));
 }
 
 bool GpuExecutor::HostCallback(Stream *stream,
@@ -669,7 +669,7 @@ bool GpuExecutor::HostCallback(Stream *stream,
       LOG(WARNING) << "Host callback failed: " << s;
     }
   });
-  return GpuDriver::AddStreamCallback(context_, AsCUDAStreamValue(stream),
+  return GpuDriver::AddStreamCallback(context_, AsGpuStreamValue(stream),
                                        InternalHostCallback, callback_ptr);
 }
 
@@ -691,12 +691,12 @@ port::Status GpuExecutor::DeallocateEvent(Event *event) {
 }
 
 port::Status GpuExecutor::RecordEvent(Stream *stream, Event *event) {
-  return AsGpuEvent(event)->Record(AsCUDAStream(stream));
+  return AsGpuEvent(event)->Record(AsGpuStream(stream));
 }
 
 port::Status GpuExecutor::WaitForEvent(Stream *stream, Event *event) {
   if (GpuDriver::WaitStreamOnEvent(context_,
-                                    AsCUDAStream(stream)->cuda_stream(),
+                                    AsGpuStream(stream)->gpu_stream(),
                                     AsGpuEvent(event)->gpu_event())) {
     return port::Status::OK();
   } else {
@@ -712,11 +712,11 @@ Event::Status GpuExecutor::PollForEventStatus(Event *event) {
 }
 
 bool GpuExecutor::AllocateStream(Stream *stream) {
-  return AsCUDAStream(stream)->Init();
+  return AsGpuStream(stream)->Init();
 }
 
 void GpuExecutor::DeallocateStream(Stream *stream) {
-  CUDAStream *cuda_stream = AsCUDAStream(stream);
+  GpuStream *cuda_stream = AsGpuStream(stream);
   if (!cuda_stream->IsIdle()) {
     LOG(ERROR) << "Deallocating stream with pending work";
   }
@@ -732,9 +732,9 @@ void GpuExecutor::DeallocateTimer(Timer *timer) {
 }
 
 bool GpuExecutor::CreateStreamDependency(Stream *dependent, Stream *other) {
-  CUevent other_completed_event = *AsCUDAStream(other)->completed_event();
+  CUevent other_completed_event = *AsGpuStream(other)->completed_event();
   bool ok = GpuDriver::RecordEvent(context_, other_completed_event,
-                                    AsCUDAStreamValue(other))
+                                    AsGpuStreamValue(other))
       .ok();
   if (!ok) {
     LOG(ERROR) << "failed to record completion event; "
@@ -742,20 +742,20 @@ bool GpuExecutor::CreateStreamDependency(Stream *dependent, Stream *other) {
     return false;
   }
 
-  return GpuDriver::WaitStreamOnEvent(context_, AsCUDAStreamValue(dependent),
+  return GpuDriver::WaitStreamOnEvent(context_, AsGpuStreamValue(dependent),
                                        other_completed_event);
 }
 
 bool GpuExecutor::StartTimer(Stream *stream, Timer *timer) {
-  return AsCUDATimer(timer)->Start(AsCUDAStream(stream));
+  return AsCUDATimer(timer)->Start(AsGpuStream(stream));
 }
 
 bool GpuExecutor::StopTimer(Stream *stream, Timer *timer) {
-  return AsCUDATimer(timer)->Stop(AsCUDAStream(stream));
+  return AsCUDATimer(timer)->Stop(AsGpuStream(stream));
 }
 
 port::Status GpuExecutor::BlockHostUntilDone(Stream *stream) {
-  return GpuDriver::SynchronizeStream(context_, AsCUDAStreamValue(stream));
+  return GpuDriver::SynchronizeStream(context_, AsGpuStreamValue(stream));
 }
 
 blas::BlasSupport *GpuExecutor::CreateBlas() {
@@ -937,7 +937,7 @@ GpuExecutor::CreateKernelImplementation() {
 
 std::unique_ptr<internal::StreamInterface>
 GpuExecutor::GetStreamImplementation() {
-  return std::unique_ptr<internal::StreamInterface>(new CUDAStream(this));
+  return std::unique_ptr<internal::StreamInterface>(new GpuStream(this));
 }
 
 std::unique_ptr<internal::TimerInterface>
