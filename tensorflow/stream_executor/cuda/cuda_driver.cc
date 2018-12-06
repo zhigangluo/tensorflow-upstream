@@ -140,7 +140,7 @@ string ToString(CUresult result) {
 
 // Returns the current context set in CUDA. This is done by calling the cuda
 // driver (e.g., this value is not our cached view of the current context).
-static CUcontext CurrentContextOrDie() {
+/* static */ CUcontext CurrentContextOrDie() {
   CUcontext current = nullptr;
   CUresult result = cuCtxGetCurrent(&current);
   if (result != CUDA_SUCCESS) {

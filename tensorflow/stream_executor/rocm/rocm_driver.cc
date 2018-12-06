@@ -24,15 +24,16 @@ limitations under the License.
 #include "absl/base/casts.h"
 #include "absl/container/inlined_vector.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "tensorflow/stream_executor/gpu/gpu_diagnostics.h"
 #include "tensorflow/stream_executor/lib/env.h"
 #include "tensorflow/stream_executor/lib/error.h"
 #include "tensorflow/stream_executor/lib/human_readable.h"
 #include "tensorflow/stream_executor/lib/notification.h"
-#include "tensorflow/stream_executor/lib/threadpool.h"
 #include "tensorflow/stream_executor/lib/stacktrace.h"
 #include "tensorflow/stream_executor/lib/static_threadlocal.h"
 #include "tensorflow/stream_executor/lib/stringprintf.h"
+#include "tensorflow/stream_executor/lib/threadpool.h"
 #include "tensorflow/stream_executor/platform/logging.h"
 #include "tensorflow/stream_executor/platform/mutex.h"
 #include "tensorflow/stream_executor/platform/port.h"
@@ -372,7 +373,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
 /* static */ bool GpuDriver::FuncGetAttribute(hipDeviceAttribute_t attribute,
                                                hipFunction_t func,
                                                int *attribute_value) {
-  // ROCM TODO properly implement this feature in HIP
+  // TODO(ROCm) properly implement this feature in HIP
   hipError_t res = hipSuccess;
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to query kernel attribute. kernel: " << func
@@ -510,7 +511,11 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   void * pointer = absl::bit_cast<void *>(location);
   unsigned char valueC = static_cast<unsigned char>(value);
   uint32_t value32 = (valueC << 24) | (valueC << 16) | (valueC << 8) | (valueC) ;
-  assert (value32 == value); // if mismatch this indicates case where hipMemsetAsyc can't emulate hipMemSetD32
+  if (value32 != value) {
+    //  mismatch indicates case where hipMemsetAsyc can't emulate hipMemSetD32
+    LOG(ERROR) << "failed to memset memory";
+    return false;
+  }
   hipError_t res =
       hipMemset(pointer, static_cast<int>(value), uint32_count*4);
   if (res != hipSuccess) {
@@ -546,7 +551,11 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   // FIXME - need to set a 32-bit value here
   unsigned char valueC = static_cast<unsigned char>(value);
   uint32_t value32 = (valueC << 24) | (valueC << 16) | (valueC << 8) | (valueC) ;
-  assert (value32 == value); // if mismatch this indicates case where hipMemsetAsyc can't emulate hipMemSetD32
+  if (value32 != value) {
+    // mismatch indicates case where hipMemsetAsyc can't emulate hipMemSetD32
+    LOG(ERROR) << "failed to memset memory";
+    return false;
+  }
   hipError_t res =
       hipMemsetAsync(pointer, value, uint32_count*4, stream);
   if (res != hipSuccess) {
@@ -759,13 +768,13 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
     case hipErrorNotInitialized:
       return port::Status{
           port::error::FAILED_PRECONDITION,
-          port::Printf("error destroying ROCM event in device %d: %s",
-                       context->device_ordinal(), ToString(res).c_str())};
+          absl::StrFormat("error destroying ROCM event in device %d: %s",
+                          context->device_ordinal(), ToString(res).c_str())};
     default:
       return port::Status{
           port::error::INTERNAL,
-          port::Printf("error destroying ROCM event in device %d: %s",
-                       context->device_ordinal(), ToString(res).c_str())};
+          absl::StrFormat("error destroying ROCM event in device %d: %s",
+                          context->device_ordinal(), ToString(res).c_str())};
   }
 }
 
@@ -781,13 +790,13 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
     case hipErrorNotInitialized:
       return port::Status{
           port::error::FAILED_PRECONDITION,
-          port::Printf("error recording ROCM event on stream %p: %s", stream,
-                       ToString(res).c_str())};
+          absl::StrFormat("error recording ROCM event on stream %p: %s", stream,
+                          ToString(res).c_str())};
     default:
       return port::Status{
           port::error::INVALID_ARGUMENT,
-          port::Printf("error recording ROCM event on stream %p: %s", stream,
-                       ToString(res).c_str())};
+          absl::StrFormat("error recording ROCM event on stream %p: %s", stream,
+                          ToString(res).c_str())};
   }
 }
 
@@ -798,7 +807,7 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   if (res != hipSuccess && res != hipErrorNotReady) {
     return port::Status{
         port::error::INTERNAL,
-        port::Printf("failed to query event: %s", ToString(res).c_str())};
+        absl::StrFormat("failed to query event: %s", ToString(res).c_str())};
   }
 
   return res;
@@ -888,10 +897,10 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   hipError_t res = hipMemcpyDtoH(host_dst, gpu_src, size);
   if (res != hipSuccess) {
     return port::InternalError(
-        port::Printf("failed to synchronous memcpy from device to host: %s; "
-                     "host dst: %p; Gpu src: %p; size: %llu=0x%llx",
-                     ToString(res).c_str(), host_dst,
-                     absl::bit_cast<void *>(gpu_src), size, size));
+        absl::StrFormat("failed to synchronous memcpy from device to host: %s; "
+                        "host dst: %p; Gpu src: %p; size: %llu=0x%llx",
+                        ToString(res).c_str(), host_dst,
+                        absl::bit_cast<void*>(gpu_src), size, size));
   }
   VLOG(2) << "successfully sync memcpy'd d2h of " << size << " bytes to "
           << host_dst;
@@ -904,10 +913,10 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   ScopedActivateContext activation{context};
   hipError_t res = hipMemcpyHtoD(gpu_dst, const_cast<void*>(host_src), size);
   if (res != hipSuccess) {
-    return port::InternalError(port::Printf(
+    return port::InternalError(absl::StrFormat(
         "failed to synchronous memcpy from host to device: %s; Gpu dst: %p;"
         " host src: %p; size: %llu=0x%llx",
-        ToString(res).c_str(), absl::bit_cast<void *>(gpu_dst), host_src, size,
+        ToString(res).c_str(), absl::bit_cast<void*>(gpu_dst), host_src, size,
         size));
   }
   VLOG(2) << "successfully enqueued sync memcpy h2d of " << size << " bytes";
@@ -920,11 +929,11 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   ScopedActivateContext activation{context};
   hipError_t res = hipMemcpyDtoD(gpu_dst, gpu_src, size);
   if (res != hipSuccess) {
-    return port::InternalError(port::Printf(
+    return port::InternalError(absl::StrFormat(
         "failed to synchronous memcpy from host to device: %s; Gpu dst: %p; "
         "Gpu src: %p; size: %llu=0x%llx",
-        ToString(res).c_str(), absl::bit_cast<void *>(gpu_dst),
-        absl::bit_cast<void *>(gpu_src), size, size));
+        ToString(res).c_str(), absl::bit_cast<void*>(gpu_dst),
+        absl::bit_cast<void*>(gpu_src), size, size));
   }
   VLOG(2) << "successfully sync memcpy'd d2d of " << size << " bytes";
   return port::Status::OK();
@@ -938,10 +947,11 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   ScopedActivateContext activation{context};
   hipError_t res = hipMemcpyDtoHAsync(host_dst, gpu_src, size, stream);
   if (res != hipSuccess) {
-    LOG(ERROR) << port::Printf(
+    LOG(ERROR) << absl::StrFormat(
         "failed to enqueue async memcpy from device to host: %s; host dst: %p; "
         "Gpu src: %p; size: %llu=0x%llx",
-        ToString(res).c_str(), host_dst, absl::bit_cast<void *>(gpu_src), size, size);
+        ToString(res).c_str(), host_dst, absl::bit_cast<void*>(gpu_src), size,
+        size);
     return false;
   }
   VLOG(2) << "successfully enqueued async memcpy d2h of " << size
@@ -958,10 +968,11 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   ScopedActivateContext activation{context};
   hipError_t res = hipMemcpyHtoDAsync(gpu_dst, const_cast<void*>(host_src), size, stream);
   if (res != hipSuccess) {
-    LOG(ERROR) << port::Printf(
+    LOG(ERROR) << absl::StrFormat(
         "failed to enqueue async memcpy from host to device: %s; Gpu dst: %p; "
         "host src: %p; size: %llu=0x%llx",
-        ToString(res).c_str(), absl::bit_cast<void *>(gpu_dst), host_src, size, size);
+        ToString(res).c_str(), absl::bit_cast<void*>(gpu_dst), host_src, size,
+        size);
     return false;
   }
   VLOG(2) << "successfully enqueued async memcpy h2d of " << size << " bytes"
@@ -977,14 +988,15 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   ScopedActivateContext activation{context};
   hipError_t result = hipMemcpyDtoDAsync(gpu_dst, gpu_src, size, stream);
   if (result != hipSuccess) {
-    LOG(ERROR) << port::Printf(
+    LOG(ERROR) << absl::StrFormat(
         "failed to enqueue async memcpy from device to device: %s"
         "; Gpu dst: %p on %s %s"
         "; Gpu src: %p on %s %s"
         "; can access? %s; size: %llu=0x%llx",
-        ToString(result).c_str(), absl::bit_cast<void *>(gpu_dst),
+        ToString(result).c_str(), absl::bit_cast<void*>(gpu_dst),
         ROCMPointerToMemorySpaceString(gpu_dst).c_str(),
-        ROCMPointerToDeviceString(gpu_dst).c_str(), absl::bit_cast<void *>(gpu_src),
+        ROCMPointerToDeviceString(gpu_dst).c_str(),
+        absl::bit_cast<void*>(gpu_src),
         ROCMPointerToMemorySpaceString(gpu_src).c_str(),
         ROCMPointerToDeviceString(gpu_src).c_str(),
         ROCMPointersToCanAccessString(gpu_src, gpu_dst).c_str(), size, size);
@@ -1044,8 +1056,9 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
                                                            hipDevice_t device) {
   return port::Status(
       port::error::INTERNAL,
-      port::Printf("failed to get compute capability for device: %d (unsupported API on AMD Gpus)",
-                   device));
+      absl::StrFormat("failed to get compute capability for device: %d "
+                      "(unsupported API on AMD Gpus)",
+                      device));
 }
 
 /* static */port::Status GpuDriver::GetPointerAddressRange(hipDeviceptr_t dptr,
@@ -1057,16 +1070,16 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
     // We differentiate between "this pointer is unknown" (return here) and
     // "there was an internal error while performing this operation" (return
     // below).
-    return port::Status{
-        port::error::NOT_FOUND,
-        port::Printf("not a device pointer %p; %s",
-                     reinterpret_cast<void*>(dptr), ToString(result).c_str())};
+    return port::Status{port::error::NOT_FOUND,
+                        absl::StrFormat("not a device pointer %p; %s",
+                                        reinterpret_cast<void*>(dptr),
+                                        ToString(result).c_str())};
   }
 
   return port::Status{
       port::error::INTERNAL,
-      port::Printf("failed to get pointer into for device pointer %p; %s",
-                   reinterpret_cast<void*>(dptr), ToString(result).c_str())};
+      absl::StrFormat("failed to get pointer into for device pointer %p; %s",
+                      reinterpret_cast<void*>(dptr), ToString(result).c_str())};
 }
 
 /* static */ port::StatusOr<MemorySpace> GpuDriver::GetPointerMemorySpace(
@@ -1123,7 +1136,8 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   *version = 0;
   return port::Status{
       port::error::INTERNAL,
-      port::Printf("failed to determine AMDGpu ISA version for device %d", device)};
+      absl::StrFormat("failed to determine AMDGpu ISA version for device %d",
+                      device)};
 }
 
 // Helper function that turns the integer output of hipDeviceGetAttribute to type
@@ -1242,7 +1256,7 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
 /* static */ bool GpuDriver::IsEccEnabled(hipDevice_t device, bool *result) {
   int value = -1;
   hipError_t res = hipSuccess;
-  // ROCM TODO implement this feature in HIP
+  // TODO(ROCm) implement this feature in HIP
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to query ECC status: " << ToString(res);
     return false;
@@ -1326,9 +1340,9 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
       result != hipErrorPeerAccessAlreadyEnabled) {
     return port::Status{
         port::error::INTERNAL,
-        port::Printf("failed to enable peer access from %d to %d: %s",
-                     from->device_ordinal(), to->device_ordinal(),
-                     ToString(result).c_str())};
+        absl::StrFormat("failed to enable peer access from %d to %d: %s",
+                        from->device_ordinal(), to->device_ordinal(),
+                        ToString(result).c_str())};
   }
 
   return port::Status::OK();
@@ -1341,12 +1355,12 @@ static port::StatusOr<T> GetSimpleAttribute(hipDevice_t device,
 
   int max_blocks = 0;
   hipError_t result = hipSuccess;
-  // ROCM TODO implement this feature in HIP
+  // TODO(ROCm) implement this feature in HIP
   if (result != hipSuccess) {
     return port::Status{
         port::error::INTERNAL,
-        port::Printf("failed to calculate occupancy of kernel %p: %s", kernel,
-                     ToString(result).c_str())};
+        absl::StrFormat("failed to calculate occupancy of kernel %p: %s",
+                        kernel, ToString(result).c_str())};
   }
 
   return max_blocks;

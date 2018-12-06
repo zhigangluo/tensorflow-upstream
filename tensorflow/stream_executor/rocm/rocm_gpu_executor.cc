@@ -18,18 +18,19 @@ limitations under the License.
 #include <unistd.h>
 #include "absl/base/casts.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
+#include "tensorflow/stream_executor/dso_loader.h"
 #include "tensorflow/stream_executor/gpu/gpu_diagnostics.h"
 #include "tensorflow/stream_executor/gpu/gpu_driver.h"
 #include "tensorflow/stream_executor/gpu/gpu_event.h"
-#include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 #include "tensorflow/stream_executor/gpu/gpu_stream.h"
 #include "tensorflow/stream_executor/gpu/gpu_timer.h"
-#include "tensorflow/stream_executor/dso_loader.h"
 #include "tensorflow/stream_executor/kernel_cache_config.h"
 #include "tensorflow/stream_executor/lib/env.h"
 #include "tensorflow/stream_executor/lib/error.h"
 #include "tensorflow/stream_executor/lib/initialize.h"
 #include "tensorflow/stream_executor/lib/mathutil.h"
+#include "tensorflow/stream_executor/lib/numbers.h"
 #include "tensorflow/stream_executor/lib/path.h"
 #include "tensorflow/stream_executor/lib/process_state.h"
 #include "tensorflow/stream_executor/lib/ptr_util.h"
@@ -40,11 +41,11 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform/logging.h"
 #include "tensorflow/stream_executor/platform/port.h"
 #include "tensorflow/stream_executor/plugin_registry.h"
+#include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 #include "tensorflow/stream_executor/stream.h"
 #include "tensorflow/stream_executor/stream_executor_internal.h"
 #include "tensorflow/stream_executor/stream_executor_pimpl.h"
 #include "tensorflow/stream_executor/timer.h"
-#include "tensorflow/stream_executor/lib/numbers.h"
 
 #ifdef PLATFORMS_GPUS_ROCM_DYNAMIC_LIBROCM_DYNAMIC_LIBROCM_H_
 #error \
@@ -273,10 +274,10 @@ bool GpuExecutor::GetKernel(const MultiKernelLoaderSpec &spec,
 bool GpuExecutor::GetKernelMetadata(GpuKernel* rocm_kernel,
                                      KernelMetadata* kernel_metadata) {
   int value = 0;
-  // ROCM TODO implement this feature in HIP
+  // TODO(ROCm) implement this feature in HIP
   kernel_metadata->set_registers_per_thread(value);
 
-  // ROCM TODO implement this feature in HIP
+  // TODO(ROCm) implement this feature in HIP
   kernel_metadata->set_shared_memory_bytes(value);
 
   return true;
@@ -365,7 +366,7 @@ bool GpuExecutor::LoadModule(const MultiModuleLoaderSpec& spec,
   // In GpuExecutor we store the pointer to the  HSACO binary  as
   // ModuleHandle::id().
   hipModule_t hip_module = nullptr;
-  // TODO: Need  generic term instead of cubin/cuda/ptx
+  // TODO(ROCm): Need  generic term instead of cubin/cuda/ptx
   if (spec.has_cuda_cubin_in_memory()) {
     mutex_lock lock{in_memory_modules_mu_};
     if (!LoadModuleFromHsaco(
@@ -419,7 +420,7 @@ bool GpuExecutor::LoadModuleFromHsaco(const char* hsaco, hipModule_t* module) {
 void GpuExecutor::VlogOccupancyInfo(const KernelBase &kernel,
                                      const ThreadDim &thread_dims,
                                      const BlockDim &block_dims) {
-  // ROCM TODO implement this feature in HIP
+  // TODO(ROCm) implement this feature in HIP
 }
 
 void *GpuExecutor::Allocate(uint64 size) {
@@ -598,8 +599,8 @@ port::Status GpuExecutor::WaitForEvent(Stream *stream, Event *event) {
   } else {
     return port::Status{
         port::error::INTERNAL,
-        port::Printf("error recording waiting for ROCM event on stream %p",
-                     stream)};
+        absl::StrFormat("error recording waiting for ROCM event on stream %p",
+                        stream)};
   }
 }
 
@@ -871,7 +872,7 @@ GpuContext* GpuExecutor::gpu_context() { return context_; }
 // For anything more complicated/prod-focused than this, you'll likely want to
 // turn to gsys' topology modeling.
 static int TryToReadNumaNode(const string &pci_bus_id, int device_ordinal) {
-  // ROCM TODO implement this feature in HIP
+  // TODO(ROCm) implement this feature in HIP
   return 1;
 }
 
@@ -881,7 +882,7 @@ DeviceDescription *GpuExecutor::PopulateDeviceDescription() const {
   {
     int driver_version = 0;
     (void)GpuDriver::GetDriverVersion(&driver_version);
-    string augmented_driver_version = port::Printf(
+    string augmented_driver_version = absl::StrFormat(
         "%d (%s)", driver_version,
         DriverVersionStatusToString(Diagnostician::FindDsoVersion()).c_str());
     builder.set_driver_version(augmented_driver_version);

@@ -71,6 +71,7 @@ cc_library(
         "//tensorflow/core:lib",
         "//tensorflow/core:ptr_util",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
         "@local_config_cuda//cuda:cuda_headers",
         "@local_config_rocm//rocm:rocm_headers",
     ] + if_static([":stream_executor_impl"]),

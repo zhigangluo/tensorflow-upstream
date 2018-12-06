@@ -31,20 +31,21 @@ limitations under the License.
 
 #include "absl/container/inlined_vector.h"
 #include "absl/strings/str_cat.h"
-#include "tensorflow/stream_executor/lib/process_state.h"
+#include "absl/strings/str_format.h"
 #include "tensorflow/stream_executor/lib/error.h"
+#include "tensorflow/stream_executor/lib/numbers.h"
+#include "tensorflow/stream_executor/lib/process_state.h"
 #include "tensorflow/stream_executor/lib/status.h"
 #include "tensorflow/stream_executor/lib/str_util.h"
 #include "tensorflow/stream_executor/lib/stringprintf.h"
 #include "tensorflow/stream_executor/platform/logging.h"
-#include "tensorflow/stream_executor/lib/numbers.h"
-#include "tensorflow/stream_executor/lib/str_util.h"
 
 namespace stream_executor {
 namespace gpu {
 
 string DriverVersionToString(DriverVersion version) {
-  return port::Printf("%d.%d.%d", std::get<0>(version), std::get<1>(version), std::get<2>(version));
+  return absl::StrFormat("%d.%d.%d", std::get<0>(version), std::get<1>(version),
+                         std::get<2>(version));
 }
 
 string DriverVersionStatusToString(port::StatusOr<DriverVersion> version) {
@@ -58,10 +59,10 @@ string DriverVersionStatusToString(port::StatusOr<DriverVersion> version) {
 port::StatusOr<DriverVersion> StringToDriverVersion(const string &value) {
   std::vector<string> pieces = port::Split(value, '.');
   if (pieces.size() != 2 && pieces.size() != 3) {
-    return port::Status{
-        port::error::INVALID_ARGUMENT,
-        port::Printf("expected %%d.%%d or %%d.%%d.%%d form for driver version; got \"%s\"",
-                     value.c_str())};
+    return port::Status{port::error::INVALID_ARGUMENT,
+                        absl::StrFormat("expected %%d.%%d or %%d.%%d.%%d form "
+                                        "for driver version; got \"%s\"",
+                                        value.c_str())};
   }
 
   int major;
@@ -70,23 +71,23 @@ port::StatusOr<DriverVersion> StringToDriverVersion(const string &value) {
   if (!port::safe_strto32(pieces[0], &major)) {
     return port::Status{
         port::error::INVALID_ARGUMENT,
-        port::Printf("could not parse major version number \"%s\" as an "
-                     "integer from string \"%s\"",
-                     pieces[0].c_str(), value.c_str())};
+        absl::StrFormat("could not parse major version number \"%s\" as an "
+                        "integer from string \"%s\"",
+                        pieces[0].c_str(), value.c_str())};
   }
   if (!port::safe_strto32(pieces[1], &minor)) {
     return port::Status{
         port::error::INVALID_ARGUMENT,
-        port::Printf("could not parse minor version number \"%s\" as an "
-                     "integer from string \"%s\"",
-                     pieces[1].c_str(), value.c_str())};
+        absl::StrFormat("could not parse minor version number \"%s\" as an "
+                        "integer from string \"%s\"",
+                        pieces[1].c_str(), value.c_str())};
   }
   if (pieces.size() == 3 && !port::safe_strto32(pieces[2], &patch)) {
     return port::Status{
-      port::error::INVALID_ARGUMENT,
-      port::Printf("could not parse patch version number \"%s\" as an "
-                     "integer from string \"%s\"",
-                   pieces[2].c_str(), value.c_str())};
+        port::error::INVALID_ARGUMENT,
+        absl::StrFormat("could not parse patch version number \"%s\" as an "
+                        "integer from string \"%s\"",
+                        pieces[2].c_str(), value.c_str())};
   }
 
   DriverVersion result{major, minor, patch};
