@@ -14,7 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "rocm/include/hiprand/hiprand.h"
-#include "tensorflow/stream_executor/rocm/rocm_rng.h"
+#include "tensorflow/stream_executor/gpu/gpu_rng.h"
 
 #include "tensorflow/stream_executor/gpu/gpu_activation.h"
 #include "tensorflow/stream_executor/gpu/gpu_executor.h"
@@ -57,7 +57,7 @@ std::ostream &operator<<(std::ostream &in, const hiprandStatus_t &status) {
 namespace stream_executor {
 namespace gpu {
 
-PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kHipRandPlugin);
+PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kGpuRandPlugin);
 
 namespace wrap {
 
@@ -82,38 +82,15 @@ PERFTOOLS_GPUTOOLS_HIPRAND_WRAP(hiprandGenerateNormalDouble);
 
 }  // namespace wrap
 
-template <typename T>
-string TypeString();
+GpuRng::GpuRng(GpuExecutor *parent) : parent_(parent), rng_(nullptr) {}
 
-template <>
-string TypeString<float>() {
-  return "float";
-}
-
-template <>
-string TypeString<double>() {
-  return "double";
-}
-
-template <>
-string TypeString<std::complex<float>>() {
-  return "std::complex<float>";
-}
-
-template <>
-string TypeString<std::complex<double>>() {
-  return "std::complex<double>";
-}
-
-ROCMRng::ROCMRng(GpuExecutor *parent) : parent_(parent), rng_(nullptr) {}
-
-ROCMRng::~ROCMRng() {
+GpuRng::~GpuRng() {
   if (rng_ != nullptr) {
     wrap::hiprandDestroyGenerator(parent_, rng_);
   }
 }
 
-bool ROCMRng::Init() {
+bool GpuRng::Init() {
   mutex_lock lock{mu_};
   CHECK(rng_ == nullptr);
 
@@ -128,7 +105,7 @@ bool ROCMRng::Init() {
   return true;
 }
 
-bool ROCMRng::SetStream(Stream *stream) {
+bool GpuRng::SetStream(Stream *stream) {
   hiprandStatus_t ret =
     wrap::hiprandSetStream(parent_, rng_, AsGpuStreamValue(stream));
   if (ret != HIPRAND_STATUS_SUCCESS) {
@@ -148,7 +125,7 @@ constexpr bool ComplexIsConsecutiveFloats() {
 }
 
 template <typename T>
-bool ROCMRng::DoPopulateRandUniformInternal(Stream *stream,
+bool GpuRng::DoPopulateRandUniformInternal(Stream *stream,
                                             DeviceMemory<T> *v) {
   mutex_lock lock{mu_};
   static_assert(ComplexIsConsecutiveFloats(),
@@ -186,26 +163,26 @@ bool ROCMRng::DoPopulateRandUniformInternal(Stream *stream,
   return true;
 }
 
-bool ROCMRng::DoPopulateRandUniform(Stream *stream, DeviceMemory<float> *v) {
+bool GpuRng::DoPopulateRandUniform(Stream *stream, DeviceMemory<float> *v) {
   return DoPopulateRandUniformInternal(stream, v);
 }
 
-bool ROCMRng::DoPopulateRandUniform(Stream *stream, DeviceMemory<double> *v) {
+bool GpuRng::DoPopulateRandUniform(Stream *stream, DeviceMemory<double> *v) {
   return DoPopulateRandUniformInternal(stream, v);
 }
 
-bool ROCMRng::DoPopulateRandUniform(Stream *stream,
+bool GpuRng::DoPopulateRandUniform(Stream *stream,
                                     DeviceMemory<std::complex<float>> *v) {
   return DoPopulateRandUniformInternal(stream, v);
 }
 
-bool ROCMRng::DoPopulateRandUniform(Stream *stream,
+bool GpuRng::DoPopulateRandUniform(Stream *stream,
                                     DeviceMemory<std::complex<double>> *v) {
   return DoPopulateRandUniformInternal(stream, v);
 }
 
 template <typename ElemT, typename FuncT>
-bool ROCMRng::DoPopulateRandGaussianInternal(Stream *stream, ElemT mean,
+bool GpuRng::DoPopulateRandGaussianInternal(Stream *stream, ElemT mean,
                                              ElemT stddev,
                                              DeviceMemory<ElemT> *v,
                                              FuncT func) {
@@ -228,19 +205,19 @@ bool ROCMRng::DoPopulateRandGaussianInternal(Stream *stream, ElemT mean,
   return true;
 }
 
-bool ROCMRng::DoPopulateRandGaussian(Stream *stream, float mean, float stddev,
+bool GpuRng::DoPopulateRandGaussian(Stream *stream, float mean, float stddev,
                                      DeviceMemory<float> *v) {
   return DoPopulateRandGaussianInternal(stream, mean, stddev, v,
                                         wrap::hiprandGenerateNormal);
 }
 
-bool ROCMRng::DoPopulateRandGaussian(Stream *stream, double mean, double stddev,
+bool GpuRng::DoPopulateRandGaussian(Stream *stream, double mean, double stddev,
                                      DeviceMemory<double> *v) {
   return DoPopulateRandGaussianInternal(stream, mean, stddev, v,
                                         wrap::hiprandGenerateNormalDouble);
 }
 
-bool ROCMRng::SetSeed(Stream *stream, const uint8 *seed, uint64 seed_bytes) {
+bool GpuRng::SetSeed(Stream *stream, const uint8 *seed, uint64 seed_bytes) {
   mutex_lock lock{mu_};
   CHECK(rng_ != nullptr);
 
@@ -278,7 +255,7 @@ REGISTER_MODULE_INITIALIZER(register_hiprand, {
   se::port::Status status =
       se::PluginRegistry::Instance()
           ->RegisterFactory<se::PluginRegistry::RngFactory>(
-              se::gpu::kROCmPlatformId, se::gpu::kHipRandPlugin, "hipRAND",
+              se::gpu::kROCmPlatformId, se::gpu::kGpuRandPlugin, "hipRAND",
               [](se::internal::StreamExecutorInterface
                      *parent) -> se::rng::RngSupport * {
                 se::gpu::GpuExecutor *rocm_executor =
@@ -290,7 +267,7 @@ REGISTER_MODULE_INITIALIZER(register_hiprand, {
                   return nullptr;
                 }
 
-                se::gpu::ROCMRng *rng = new se::gpu::ROCMRng(rocm_executor);
+                se::gpu::GpuRng *rng = new se::gpu::GpuRng(rocm_executor);
                 if (!rng->Init()) {
                   // Note: Init() will log a more specific error.
                   delete rng;
@@ -306,5 +283,5 @@ REGISTER_MODULE_INITIALIZER(register_hiprand, {
 
   se::PluginRegistry::Instance()->SetDefaultFactory(se::gpu::kROCmPlatformId,
                                                      se::PluginKind::kRng,
-                                                     se::gpu::kHipRandPlugin);
+                                                     se::gpu::kGpuRandPlugin);
 });

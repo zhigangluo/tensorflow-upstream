@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/stream_executor/cuda/cuda_rng.h"
+#include "tensorflow/stream_executor/gpu/gpu_rng.h"
 
 #include "tensorflow/stream_executor/gpu/gpu_activation.h"
 #include "tensorflow/stream_executor/gpu/gpu_executor.h"
@@ -62,7 +62,7 @@ std::ostream &operator<<(std::ostream &in, const curandStatus_t &status) {
 namespace stream_executor {
 namespace gpu {
 
-PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kCuRandPlugin);
+PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kGpuRandPlugin);
 
 namespace wrap {
 
@@ -118,38 +118,15 @@ STREAM_EXECUTOR_CURAND_WRAP(curandGenerateNormalDouble);
 
 }  // namespace wrap
 
-template <typename T>
-string TypeString();
+GpuRng::GpuRng(GpuExecutor *parent) : parent_(parent), rng_(nullptr) {}
 
-template <>
-string TypeString<float>() {
-  return "float";
-}
-
-template <>
-string TypeString<double>() {
-  return "double";
-}
-
-template <>
-string TypeString<std::complex<float>>() {
-  return "std::complex<float>";
-}
-
-template <>
-string TypeString<std::complex<double>>() {
-  return "std::complex<double>";
-}
-
-CUDARng::CUDARng(GpuExecutor *parent) : parent_(parent), rng_(nullptr) {}
-
-CUDARng::~CUDARng() {
+GpuRng::~GpuRng() {
   if (rng_ != nullptr) {
     wrap::curandDestroyGenerator(parent_, rng_);
   }
 }
 
-bool CUDARng::Init() {
+bool GpuRng::Init() {
   mutex_lock lock(mu_);
   CHECK(rng_ == nullptr);
 
@@ -164,7 +141,7 @@ bool CUDARng::Init() {
   return true;
 }
 
-bool CUDARng::SetStream(Stream *stream) {
+bool GpuRng::SetStream(Stream *stream) {
   curandStatus_t ret =
       wrap::curandSetStream(parent_, rng_, AsGpuStreamValue(stream));
   if (ret != CURAND_STATUS_SUCCESS) {
@@ -184,7 +161,7 @@ constexpr bool ComplexIsConsecutiveFloats() {
 }
 
 template <typename T>
-bool CUDARng::DoPopulateRandUniformInternal(Stream *stream,
+bool GpuRng::DoPopulateRandUniformInternal(Stream *stream,
                                             DeviceMemory<T> *v) {
   mutex_lock lock(mu_);
   static_assert(ComplexIsConsecutiveFloats(),
@@ -222,26 +199,26 @@ bool CUDARng::DoPopulateRandUniformInternal(Stream *stream,
   return true;
 }
 
-bool CUDARng::DoPopulateRandUniform(Stream *stream, DeviceMemory<float> *v) {
+bool GpuRng::DoPopulateRandUniform(Stream *stream, DeviceMemory<float> *v) {
   return DoPopulateRandUniformInternal(stream, v);
 }
 
-bool CUDARng::DoPopulateRandUniform(Stream *stream, DeviceMemory<double> *v) {
+bool GpuRng::DoPopulateRandUniform(Stream *stream, DeviceMemory<double> *v) {
   return DoPopulateRandUniformInternal(stream, v);
 }
 
-bool CUDARng::DoPopulateRandUniform(Stream *stream,
+bool GpuRng::DoPopulateRandUniform(Stream *stream,
                                     DeviceMemory<std::complex<float>> *v) {
   return DoPopulateRandUniformInternal(stream, v);
 }
 
-bool CUDARng::DoPopulateRandUniform(Stream *stream,
+bool GpuRng::DoPopulateRandUniform(Stream *stream,
                                     DeviceMemory<std::complex<double>> *v) {
   return DoPopulateRandUniformInternal(stream, v);
 }
 
 template <typename ElemT, typename FuncT>
-bool CUDARng::DoPopulateRandGaussianInternal(Stream *stream, ElemT mean,
+bool GpuRng::DoPopulateRandGaussianInternal(Stream *stream, ElemT mean,
                                              ElemT stddev,
                                              DeviceMemory<ElemT> *v,
                                              FuncT func) {
@@ -264,19 +241,19 @@ bool CUDARng::DoPopulateRandGaussianInternal(Stream *stream, ElemT mean,
   return true;
 }
 
-bool CUDARng::DoPopulateRandGaussian(Stream *stream, float mean, float stddev,
+bool GpuRng::DoPopulateRandGaussian(Stream *stream, float mean, float stddev,
                                      DeviceMemory<float> *v) {
   return DoPopulateRandGaussianInternal(stream, mean, stddev, v,
                                         wrap::curandGenerateNormal);
 }
 
-bool CUDARng::DoPopulateRandGaussian(Stream *stream, double mean, double stddev,
+bool GpuRng::DoPopulateRandGaussian(Stream *stream, double mean, double stddev,
                                      DeviceMemory<double> *v) {
   return DoPopulateRandGaussianInternal(stream, mean, stddev, v,
                                         wrap::curandGenerateNormalDouble);
 }
 
-bool CUDARng::SetSeed(Stream *stream, const uint8 *seed, uint64 seed_bytes) {
+bool GpuRng::SetSeed(Stream *stream, const uint8 *seed, uint64 seed_bytes) {
   mutex_lock lock(mu_);
   CHECK(rng_ != nullptr);
 
@@ -310,7 +287,7 @@ bool CUDARng::SetSeed(Stream *stream, const uint8 *seed, uint64 seed_bytes) {
 void initialize_curand() {
   port::Status status =
       PluginRegistry::Instance()->RegisterFactory<PluginRegistry::RngFactory>(
-          gpu::kCudaPlatformId, gpu::kCuRandPlugin, "cuRAND",
+          gpu::kCudaPlatformId, gpu::kGpuRandPlugin, "cuRAND",
           [](internal::StreamExecutorInterface *parent) -> rng::RngSupport * {
             gpu::GpuExecutor *cuda_executor =
                 dynamic_cast<gpu::GpuExecutor *>(parent);
@@ -321,7 +298,7 @@ void initialize_curand() {
               return nullptr;
             }
 
-            gpu::CUDARng *rng = new gpu::CUDARng(cuda_executor);
+            gpu::GpuRng *rng = new gpu::GpuRng(cuda_executor);
             if (!rng->Init()) {
               // Note: Init() will log a more specific error.
               delete rng;
@@ -336,7 +313,7 @@ void initialize_curand() {
   }
 
   PluginRegistry::Instance()->SetDefaultFactory(
-      gpu::kCudaPlatformId, PluginKind::kRng, gpu::kCuRandPlugin);
+      gpu::kCudaPlatformId, PluginKind::kRng, gpu::kGpuRandPlugin);
 }
 
 }  // namespace stream_executor

@@ -20,14 +20,20 @@ limitations under the License.
 
 #if TENSORFLOW_USE_ROCM
 
-#include "rocm/include/hip/hip_complex.h"
 #include "rocm/include/hip/hip_runtime.h"
+#include "rocm/include/hip/hip_complex.h"
+#include "rocm/include/hiprand/hiprand.h"
 
 #else // CUDA
 
 #include "cuda/include/cuda.h"
 #include "cuda/include/cuComplex.h"
-#include "cuda/include/cuda.h"
+
+// cannot include curand.h here
+//   because it triggers the #error in cuda/cuda_gpu_executor.cc
+//     (because curand.h includes cuda_runtime.h)
+// so explicitly adding the lone typedef we need from that file
+typedef struct curandGenerator_st *curandGenerator_t;
 
 #endif
 
@@ -50,7 +56,8 @@ using GpuFuncCachePreference = hipFuncCache_t;
 using GpuSharedMemConfig = hipSharedMemConfig;
 using GpuComplexType = hipComplex;
 using GpuDoubleComplexType = hipDoubleComplex;
-
+using GpuRngHandle = hiprandGenerator_t;
+ 
 #else // CUDA
 
 using GpuStreamHandle = CUstream;
@@ -67,6 +74,7 @@ using GpuFuncCachePreference = CUfunc_cache;
 using GpuSharedMemConfig = CUsharedconfig;
 using GpuComplexType = cuComplex;
 using GpuDoubleComplexType = cuDoubleComplex;
+using GpuRngHandle = curandGenerator_t;
 
 #endif
 
