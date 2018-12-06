@@ -25,17 +25,19 @@ namespace gpu {
 
 bool GpuTimer::Init() {
   CHECK(start_event_ == nullptr && stop_event_ == nullptr);
-  if (!GpuDriver::CreateEvent(parent_->gpu_context(), &start_event_,
-                               GpuDriver::EventFlags::kDefault)
-           .ok()) {
+  GpuContext* context = parent_->gpu_context();
+  port::Status status = GpuDriver::CreateEvent(
+      context, &start_event_, GpuDriver::EventFlags::kDefault);
+  if (!status.ok()) {
+    LOG(ERROR) << status;
     return false;
   }
 
-  if (!GpuDriver::CreateEvent(parent_->gpu_context(), &stop_event_,
-                               GpuDriver::EventFlags::kDefault)
-           .ok()) {
-    port::Status status =
-        GpuDriver::DestroyEvent(parent_->gpu_context(), &start_event_);
+  status = GpuDriver::CreateEvent(context, &stop_event_,
+                                   GpuDriver::EventFlags::kDefault);
+  if (!status.ok()) {
+    LOG(ERROR) << status;
+    status = GpuDriver::DestroyEvent(context, &start_event_);
     if (!status.ok()) {
       LOG(ERROR) << status;
     }
@@ -47,13 +49,13 @@ bool GpuTimer::Init() {
 }
 
 void GpuTimer::Destroy() {
-  port::Status status =
-      GpuDriver::DestroyEvent(parent_->gpu_context(), &start_event_);
+  GpuContext* context = parent_->gpu_context();
+  port::Status status = GpuDriver::DestroyEvent(context, &start_event_);
   if (!status.ok()) {
     LOG(ERROR) << status;
   }
 
-  status = GpuDriver::DestroyEvent(parent_->gpu_context(), &stop_event_);
+  status = GpuDriver::DestroyEvent(context, &stop_event_);
   if (!status.ok()) {
     LOG(ERROR) << status;
   }
@@ -62,24 +64,29 @@ void GpuTimer::Destroy() {
 float GpuTimer::GetElapsedMilliseconds() const {
   CHECK(start_event_ != nullptr && stop_event_ != nullptr);
   // TODO(leary) provide a way to query timer resolution?
-  // ROCM docs say a resolution of about 0.5us
+  // CUDA docs say a resolution of about 0.5us
   float elapsed_milliseconds = NAN;
-  (void)GpuDriver::GetEventElapsedTime(parent_->gpu_context(),
-                                        &elapsed_milliseconds, start_event_,
-                                        stop_event_);
+  (void)GpuDriver::GetEventElapsedTime(
+      parent_->gpu_context(), &elapsed_milliseconds, start_event_, stop_event_);
   return elapsed_milliseconds;
 }
 
-bool GpuTimer::Start(GpuStream *stream) {
-  return GpuDriver::RecordEvent(parent_->gpu_context(), start_event_,
-                                 stream->gpu_stream())
-      .ok();
+bool GpuTimer::Start(GpuStream* stream) {
+  port::Status status = GpuDriver::RecordEvent(
+      parent_->gpu_context(), start_event_, stream->gpu_stream());
+  if (!status.ok()) {
+    LOG(ERROR) << status;
+  }
+  return status.ok();
 }
 
-bool GpuTimer::Stop(GpuStream *stream) {
-  return GpuDriver::RecordEvent(parent_->gpu_context(), stop_event_,
-                                 stream->gpu_stream())
-      .ok();
+bool GpuTimer::Stop(GpuStream* stream) {
+  port::Status status = GpuDriver::RecordEvent(
+      parent_->gpu_context(), stop_event_, stream->gpu_stream());
+  if (!status.ok()) {
+    LOG(ERROR) << status;
+  }
+  return status.ok();
 }
 
 }  // namespace gpu

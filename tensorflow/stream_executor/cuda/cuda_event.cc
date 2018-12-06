@@ -22,25 +22,6 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-GpuEvent::GpuEvent(GpuExecutor* parent)
-    : parent_(parent), gpu_event_(nullptr) {}
-
-GpuEvent::~GpuEvent() {}
-
-port::Status GpuEvent::Init() {
-  return GpuDriver::CreateEvent(parent_->gpu_context(), &gpu_event_,
-                                GpuDriver::EventFlags::kDisableTiming);
-}
-
-port::Status GpuEvent::Destroy() {
-  return GpuDriver::DestroyEvent(parent_->gpu_context(), &gpu_event_);
-}
-
-port::Status GpuEvent::Record(GpuStream* stream) {
-  return GpuDriver::RecordEvent(parent_->gpu_context(), gpu_event_,
-                                stream->gpu_stream());
-}
-
 Event::Status GpuEvent::PollForStatus() {
   port::StatusOr<CUresult> status =
       GpuDriver::QueryEvent(parent_->gpu_context(), gpu_event_);
@@ -60,10 +41,6 @@ Event::Status GpuEvent::PollForStatus() {
                 << status.ValueOrDie();
       return Event::Status::kError;
   }
-}
-
-CUevent GpuEvent::gpu_event() {
-  return gpu_event_;
 }
 
 }  // namespace gpu

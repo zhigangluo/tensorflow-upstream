@@ -1,4 +1,4 @@
-/* Copyright 2018 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,25 +22,27 @@ limitations under the License.
 namespace stream_executor {
 namespace gpu {
 
-Event::Status GpuEvent::PollForStatus() {
-  port::StatusOr<hipError_t> status =
-      GpuDriver::QueryEvent(parent_->gpu_context(), gpu_event_);
-  if (!status.ok()) {
-    LOG(ERROR) << "Error polling for event status: "
-               << status.status().error_message();
-    return Event::Status::kError;
-  }
+GpuEvent::GpuEvent(GpuExecutor* parent)
+    : parent_(parent), gpu_event_(nullptr) {}
 
-  switch (status.ValueOrDie()) {
-    case hipSuccess:
-      return Event::Status::kComplete;
-    case hipErrorNotReady:
-      return Event::Status::kPending;
-    default:
-      LOG(INFO) << "Error condition returned for event status: "
-                << status.ValueOrDie();
-      return Event::Status::kError;
-  }
+GpuEvent::~GpuEvent() {}
+
+port::Status GpuEvent::Init() {
+  return GpuDriver::CreateEvent(parent_->gpu_context(), &gpu_event_,
+                                GpuDriver::EventFlags::kDisableTiming);
+}
+
+port::Status GpuEvent::Destroy() {
+  return GpuDriver::DestroyEvent(parent_->gpu_context(), &gpu_event_);
+}
+
+port::Status GpuEvent::Record(GpuStream* stream) {
+  return GpuDriver::RecordEvent(parent_->gpu_context(), gpu_event_,
+                                stream->gpu_stream());
+}
+
+GpuEventHandle GpuEvent::gpu_event() {
+  return gpu_event_;
 }
 
 }  // namespace gpu

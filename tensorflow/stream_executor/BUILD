@@ -90,6 +90,7 @@ cc_library(
         glob(
             [
                 "cuda/*.cc",
+                "gpu/*.cc",
             ],
             exclude = [
                 "cuda/*_test.cc",
@@ -126,6 +127,7 @@ cc_library(
         glob(
             [
                 "rocm/*.cc",
+                "gpu/*.cc",
             ],
             exclude = [
                 "rocm/rocm_platform_id.cc",
