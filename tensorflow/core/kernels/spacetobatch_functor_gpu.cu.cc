@@ -22,7 +22,7 @@ limitations under the License.
 #include "tensorflow/core/kernels/spacetobatch_functor.h"
 
 #include "tensorflow/core/framework/register_types.h"
-#include "tensorflow/core/util/cuda_kernel_helper.h"
+#include "tensorflow/core/util/gpu_kernel_helper.h"
 
 namespace tensorflow {
 

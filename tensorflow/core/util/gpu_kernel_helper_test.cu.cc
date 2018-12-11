@@ -18,7 +18,7 @@ limitations under the License.
 
 #include <numeric>
 #include "tensorflow/core/platform/test.h"
-#include "tensorflow/core/util/cuda_kernel_helper.h"
+#include "tensorflow/core/util/gpu_kernel_helper.h"
 
 #define CUDA_EXPECT_SUCCESS                                 \
   {                                                         \

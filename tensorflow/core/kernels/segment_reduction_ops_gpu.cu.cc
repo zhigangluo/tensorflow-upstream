@@ -17,13 +17,13 @@ limitations under the License.
 
 #define EIGEN_USE_GPU
 
-// We need to include cuda_kernel_helper.h before segment_reduction_ops.h
+// We need to include gpu_kernel_helper.h before segment_reduction_ops.h
 // See comment in segment_reduction_ops.h for more details.
-#include "tensorflow/core/util/cuda_kernel_helper.h"
+#include "tensorflow/core/util/gpu_kernel_helper.h"
 
 #include "tensorflow/core/kernels/segment_reduction_ops.h"
 #include "tensorflow/core/framework/register_types.h"
-#include "tensorflow/core/util/cuda_device_functions.h"
+#include "tensorflow/core/util/gpu_device_functions.h"
 
 
 namespace tensorflow {
