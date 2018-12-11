@@ -74,7 +74,11 @@ py_test(
     size = "small",
     srcs = ["checkpoint_input_pipeline_hook_test.py"],
     srcs_version = "PY2AND3",
-    tags = ["no_pip"],
+    tags = [
+        "no_pip",
+        "no_windows",
+        "notsan",
+    ],
     deps = [
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:constant_op",
@@ -313,6 +317,7 @@ py_test(
     srcs_version = "PY2AND3",
     tags = [
         "no_pip",
+        "no_windows",
         "notap",
     ],
     deps = [
@@ -355,9 +360,13 @@ py_test(
     size = "small",
     srcs = ["matching_files_dataset_serialization_test.py"],
     srcs_version = "PY2AND3",
+    tags = [
+        "no_windows",
+    ],
     deps = [
         ":dataset_serialization_test_base",
         "//tensorflow/python:client_testlib",
+        "//tensorflow/python/data/experimental/ops:matching_files",
         "//tensorflow/python/data/ops:dataset_ops",
         "//third_party/py/numpy",
     ],
@@ -651,6 +660,7 @@ py_test(
         "//tensorflow/python:array_ops",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:framework_ops",
+        "//tensorflow/python/data/experimental/ops:stats_aggregator",
         "//tensorflow/python/data/experimental/ops:stats_ops",
         "//tensorflow/python/data/ops:dataset_ops",
     ],

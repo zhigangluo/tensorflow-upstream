@@ -73,6 +73,14 @@ class RangeDatasetOp : public DatasetOpKernel {
                              step_, ")::Dataset");
     }
 
+    int64 Cardinality() const override {
+      if (step_ > 0) {
+        return std::max(0LL, (stop_ - start_ - 1) / step_ + 1);
+      } else {
+        return std::max(0LL, (start_ - stop_ - 1) / -step_ + 1);
+      }
+    }
+
    protected:
     Status AsGraphDefInternal(SerializationContext* ctx,
                               DatasetGraphDefBuilder* b,
@@ -104,9 +112,8 @@ class RangeDatasetOp : public DatasetOpKernel {
           *end_of_sequence = true;
           return Status::OK();
         }
-        out_tensors->emplace_back(ctx->allocator({}), DT_INT64,
-                                  TensorShape({}));
-        out_tensors->back().scalar<int64>()() = next_;
+        out_tensors->reserve(1);
+        out_tensors->emplace_back(next_);
         *end_of_sequence = false;
         next_ += dataset()->step_;
 

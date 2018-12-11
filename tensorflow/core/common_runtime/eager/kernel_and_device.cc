@@ -84,6 +84,15 @@ Status KernelAndDevice::Run(ScopedStepContainer* step_container,
                              tensorflow::HOST_MEMORY);
   }
 
+  gtl::InlinedVector<DeviceContext*, 4> input_device_contexts;
+  for (int i = 0; i < inputs->size(); i++) {
+    DeviceContext* device_context = nullptr;
+    if (device_->tensorflow_gpu_device_info() != nullptr) {
+      device_context = device_->tensorflow_gpu_device_info()->default_context;
+    }
+    input_device_contexts.push_back(device_context);
+  }
+
   OpKernelContext::Params params;
   params.device = device_;
   params.frame_iter = FrameAndIter(0, 0);
@@ -110,6 +119,9 @@ Status KernelAndDevice::Run(ScopedStepContainer* step_container,
   }
 
   params.step_container = step_container;
+  params.collective_executor =
+      collective_executor_ ? collective_executor_->get() : nullptr;
+  params.input_device_contexts = &input_device_contexts;
 
   OpKernelContext context(&params);
 
@@ -154,6 +166,14 @@ Status KernelAndDevice::Run(ScopedStepContainer* step_container,
     step_stats_collector->Finalize();
   }
   return Status::OK();
+}
+
+tensorflow::Device* KernelAndDevice::OutputDevice(int idx) const {
+  if (device_ != nullptr &&
+      kernel_->output_memory_types()[idx] == HOST_MEMORY) {
+    return nullptr;
+  }
+  return device_;
 }
 
 }  // namespace tensorflow
