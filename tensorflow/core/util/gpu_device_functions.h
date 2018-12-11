@@ -28,9 +28,9 @@ limitations under the License.
 
 #include <algorithm>
 #include <complex>
-#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "cuda/include/cuda.h"
 #include "tensorflow/core/platform/types.h"
+#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 
 namespace tensorflow {
 
@@ -492,7 +492,6 @@ __device__ inline Eigen::half CudaAtomicAdd(Eigen::half* ptr,
   return detail::CudaAtomicCasHelper(
       ptr, [value](Eigen::half a) { return a + value; });
 }
-
 
 #if __CUDA_ARCH__ < 600
 __device__ inline double CudaAtomicAdd(double* ptr, double value) {

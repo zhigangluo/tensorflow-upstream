@@ -21,10 +21,9 @@ limitations under the License.
 // See comment in segment_reduction_ops.h for more details.
 #include "tensorflow/core/util/gpu_kernel_helper.h"
 
-#include "tensorflow/core/kernels/segment_reduction_ops.h"
 #include "tensorflow/core/framework/register_types.h"
+#include "tensorflow/core/kernels/segment_reduction_ops.h"
 #include "tensorflow/core/util/gpu_device_functions.h"
-
 
 namespace tensorflow {
 

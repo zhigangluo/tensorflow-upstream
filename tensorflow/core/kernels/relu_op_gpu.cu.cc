@@ -19,12 +19,12 @@ limitations under the License.
 
 #include <stdio.h>
 
-#include "third_party/eigen3/Eigen/Core"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/tensor_types.h"
 #include "tensorflow/core/kernels/relu_op_functor.h"
 #include "tensorflow/core/util/gpu_kernel_helper.h"
 #include "tensorflow/core/util/gpu_launch_config.h"
+#include "third_party/eigen3/Eigen/Core"
 
 namespace tensorflow {
 
