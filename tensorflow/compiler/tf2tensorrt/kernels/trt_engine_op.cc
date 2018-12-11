@@ -333,7 +333,7 @@ void TRTEngineOp::ExecuteCalibration(OpKernelContext* ctx,
     input_data.emplace(StrCat(kInputPHName, i), data_address);
   }
   VLOG(2) << "Filled map for sending";
-  // copied from cuda_kernel_helper since it seems only valid in *.cu.cc files
+  // copied from gpu_kernel_helper since it seems only valid in *.cu.cc files
   const cudaStream_t* stream = CHECK_NOTNULL(
       reinterpret_cast<const cudaStream_t*>(ctx->op_device_context()
                                                 ->stream()
@@ -501,7 +501,7 @@ bool TRTEngineOp::ExecuteTrtEngine(OpKernelContext* ctx,
         return kRetry;
     }
   }
-  // Copied from cuda_kernel_helper since it seems only valid in *.cu.cc files
+  // Copied from gpu_kernel_helper since it seems only valid in *.cu.cc files
   const cudaStream_t* stream = CHECK_NOTNULL(
       reinterpret_cast<const cudaStream_t*>(ctx->op_device_context()
                                                 ->stream()
