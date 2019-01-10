@@ -30,7 +30,7 @@ namespace tensorflow {
 // Get the Dnn workspace limit from the environment variable, which is in MB.
 // Return the workspace memory limit in bytes. If no value is set, return the
 // default value.
-int64 GetDnnWorkspaceLimit(const string& envvar_in_mb,
+/*int64 GetDnnWorkspaceLimit(const string& envvar_in_mb,
                            int64 default_value_in_bytes);
 
 // A class to provide scratch-space allocator for Stream-Executor Cudnn
@@ -78,7 +78,7 @@ class DnnScratchAllocator : public se::ScratchAllocator {
   OpKernelContext* context_;
   std::vector<Tensor> allocated_tensors_;
 };
-
+*/
 // Encapsulate all the shape information that is used in both forward and
 // backward conv operations.
 class ConvParameters {

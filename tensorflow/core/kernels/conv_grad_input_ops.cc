@@ -1046,7 +1046,6 @@ void LaunchConv2DBackpropInputOp<GPUDevice, T>::operator()(
                                                algorithm_config);
   }
 
-  DnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize, ctx);
   bool cudnn_launch_status =
       stream
           ->ThenConvolveBackwardDataWithAlgorithm(
