@@ -3413,6 +3413,25 @@ bool CudnnSupport::DoConvolve(
 
 bool CudnnSupport::DoConvolve(
     Stream* stream, const dnn::BatchDescriptor& batch_descriptor,
+    const DeviceMemory<float>& input_data,
+    const dnn::FilterDescriptor& filter_descriptor,
+    const DeviceMemory<float>& filter_data,
+    const dnn::ConvolutionDescriptor& convolution_descriptor,
+    const dnn::BatchDescriptor& output_descriptor,
+    DeviceMemory<float>* output_data, const dnn::AlgorithmDesc& algorithm_desc,
+    DeviceMemory<uint8>* scratch_memory,
+    dnn::ProfileResult* output_profile_result) {
+  return IsStatusOk(
+      DoConvolveImpl(stream, batch_descriptor, input_data, filter_descriptor,
+                     filter_data, convolution_descriptor, output_descriptor,
+                     output_data,
+                     GetConvAccumulatorType(dnn::DataType::kFloat),
+                     algorithm_desc, scratch_memory, output_profile_result),
+      /*report_error=*/!output_profile_result);
+}
+
+bool CudnnSupport::DoConvolve(
+    Stream* stream, const dnn::BatchDescriptor& batch_descriptor,
     const DeviceMemory<Eigen::half>& input_data,
     const dnn::FilterDescriptor& filter_descriptor,
     const DeviceMemory<Eigen::half>& filter_data,
