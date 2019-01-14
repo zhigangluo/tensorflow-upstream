@@ -2885,7 +2885,7 @@ port::Status CudnnSupport::DoPrepareForConvolution(
 }
 
 template <class T>
-port::Status CudnnSupport::PrepareForConvolutionImpl(
+port::Status CudnnSupport::DoConvolveImpl(
     Stream* stream, const dnn::BatchDescriptor& input_descriptor,
     const DeviceMemory<T>& input_data,
     const dnn::FilterDescriptor& filter_descriptor,
@@ -3392,24 +3392,6 @@ port::Status CudnnSupport::DoBatchNormalizationBackwardImpl(
   return port::Status::OK();
 }
 
-bool CudnnSupport::PrepareForConvolution(
-    Stream* stream, const dnn::BatchDescriptor& batch_descriptor,
-    const DeviceMemory<float>& input_data,
-    const dnn::FilterDescriptor& filter_descriptor,
-    const DeviceMemory<float>& filter_data,
-    const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::BatchDescriptor& output_descriptor,
-    DeviceMemory<float>* output_data, const dnn::AlgorithmDesc& algorithm_desc,
-    DeviceMemory<uint8>* scratch_memory,
-    dnn::ProfileResult* output_profile_result) {
-  return IsStatusOk(
-      DoConvolveImpl(stream, batch_descriptor, input_data, filter_descriptor,
-                     filter_data, convolution_descriptor, output_descriptor,
-                     output_data, GetConvAccumulatorType(dnn::DataType::kFloat),
-                     algorithm_desc, scratch_memory, output_profile_result),
-      /*report_error=*/!output_profile_result);
-}
-
 bool CudnnSupport::DoConvolve(
     Stream* stream, const dnn::BatchDescriptor& batch_descriptor,
     const DeviceMemory<double>& input_data,
@@ -3576,7 +3558,7 @@ bool CudnnSupport::DoTransformTensor(Stream* stream,
 }
 
 template <class T>
-port::Status CudnnSupport::PrepareForConvolutionBackwardDataImpl(
+port::Status CudnnSupport::DoConvolveBackwardDataImpl(
     Stream* stream, const dnn::FilterDescriptor& filter_descriptor,
     const DeviceMemory<T>& filter_data,
     const dnn::BatchDescriptor& output_descriptor,
@@ -3675,7 +3657,7 @@ port::Status CudnnSupport::PrepareForConvolutionBackwardDataImpl(
   return port::Status::OK();
 }
 
-bool CudnnSupport::PrepareForConvolutionBackwardData(
+bool CudnnSupport::DoConvolveBackwardData(
     Stream* stream, const dnn::FilterDescriptor& filter_descriptor,
     const DeviceMemory<double>& filter_data,
     const dnn::BatchDescriptor& output_descriptor,
@@ -3687,7 +3669,7 @@ bool CudnnSupport::PrepareForConvolutionBackwardData(
     DeviceMemory<uint8>* scratch_memory,
     dnn::ProfileResult* output_profile_result) {
   return IsStatusOk(
-      PrepareForConvolutionBackwardDataImpl(
+      DoConvolveBackwardDataImpl(
           stream, filter_descriptor, filter_data, output_descriptor,
           backward_output_data, convolution_descriptor, input_descriptor,
           backward_input_data, GetConvAccumulatorType(dnn::DataType::kDouble),
@@ -3695,7 +3677,7 @@ bool CudnnSupport::PrepareForConvolutionBackwardData(
       /*report_error=*/!output_profile_result);
 }
 
-bool CudnnSupport::PrepareForConvolutionBackwardData(
+bool CudnnSupport::DoConvolveBackwardData(
     Stream* stream, const dnn::FilterDescriptor& filter_descriptor,
     const DeviceMemory<float>& filter_data,
     const dnn::BatchDescriptor& output_descriptor,
@@ -3707,7 +3689,7 @@ bool CudnnSupport::PrepareForConvolutionBackwardData(
     DeviceMemory<uint8>* scratch_memory,
     dnn::ProfileResult* output_profile_result) {
   return IsStatusOk(
-      PrepareForConvolutionBackwardDataImpl(
+      DoConvolveBackwardDataImpl(
           stream, filter_descriptor, filter_data, output_descriptor,
           backward_output_data, convolution_descriptor, input_descriptor,
           backward_input_data, GetConvAccumulatorType(dnn::DataType::kFloat),
@@ -3715,7 +3697,7 @@ bool CudnnSupport::PrepareForConvolutionBackwardData(
       /*report_error=*/!output_profile_result);
 }
 
-bool CudnnSupport::PrepareForConvolutionBackwardData(
+bool CudnnSupport::DoConvolveBackwardData(
     Stream* stream, const dnn::FilterDescriptor& filter_descriptor,
     const DeviceMemory<Eigen::half>& filter_data,
     const dnn::BatchDescriptor& output_descriptor,
@@ -3727,7 +3709,7 @@ bool CudnnSupport::PrepareForConvolutionBackwardData(
     DeviceMemory<uint8>* scratch_memory,
     dnn::ProfileResult* output_profile_result) {
   return IsStatusOk(
-      PrepareForConvolutionBackwardDataImpl(
+      DoConvolveBackwardDataImpl(
           stream, filter_descriptor, filter_data, output_descriptor,
           backward_output_data, convolution_descriptor, input_descriptor,
           backward_input_data, GetConvAccumulatorType(dnn::DataType::kHalf),
@@ -3736,7 +3718,7 @@ bool CudnnSupport::PrepareForConvolutionBackwardData(
 }
 
 template <class T>
-port::Status CudnnSupport::PrepareForConvolutionBackwardFilterImpl(
+port::Status CudnnSupport::DoConvolveBackwardFilterImpl(
     Stream* stream, const dnn::BatchDescriptor& input_descriptor,
     const DeviceMemory<T>& input_data,
     const dnn::BatchDescriptor& output_descriptor,
@@ -3872,7 +3854,7 @@ port::Status CudnnSupport::PrepareForConvolutionBackwardFilterImpl(
   return port::Status::OK();
 }
 
-bool CudnnSupport::PrepareForConvolutionBackwardFilter(
+bool CudnnSupport::DoConvolveBackwardFilter(
     Stream* stream, const dnn::BatchDescriptor& input_descriptor,
     const DeviceMemory<double>& input_data,
     const dnn::BatchDescriptor& output_descriptor,
@@ -3884,7 +3866,7 @@ bool CudnnSupport::PrepareForConvolutionBackwardFilter(
     DeviceMemory<uint8>* scratch_memory,
     dnn::ProfileResult* output_profile_result) {
   return IsStatusOk(
-      PrepareForConvolutionBackwardFilterImpl(
+      DoConvolveBackwardFilterImpl(
           stream, input_descriptor, input_data, output_descriptor,
           backward_output_data, convolution_descriptor, filter_descriptor,
           backward_filter_data, GetConvAccumulatorType(dnn::DataType::kDouble),
@@ -3892,7 +3874,7 @@ bool CudnnSupport::PrepareForConvolutionBackwardFilter(
       /*report_error=*/!output_profile_result);
 }
 
-bool CudnnSupport::PrepareForConvolutionBackwardFilter(
+bool CudnnSupport::DoConvolveBackwardFilter(
     Stream* stream, const dnn::BatchDescriptor& input_descriptor,
     const DeviceMemory<float>& input_data,
     const dnn::BatchDescriptor& output_descriptor,
@@ -3912,26 +3894,6 @@ bool CudnnSupport::PrepareForConvolutionBackwardFilter(
       /*report_error=*/!output_profile_result);
 }
 
-bool CudnnSupport::PrepareForConvolutionBackwardFilter(
-    Stream* stream, const dnn::BatchDescriptor& input_descriptor,
-    const DeviceMemory<Eigen::half>& input_data,
-    const dnn::BatchDescriptor& output_descriptor,
-    DeviceMemory<Eigen::half> backward_output_data,
-    const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::FilterDescriptor& filter_descriptor,
-    DeviceMemory<Eigen::half>* backward_filter_data,
-    const dnn::AlgorithmDesc& algorithm_desc,
-    DeviceMemory<uint8>* scratch_memory,
-    dnn::ProfileResult* output_profile_result) {
-  return IsStatusOk(
-      PrepareForConvolutionBackwardFilterImpl(
-          stream, input_descriptor, input_data, output_descriptor,
-          backward_output_data, convolution_descriptor, filter_descriptor,
-          backward_filter_data, GetConvAccumulatorType(dnn::DataType::kHalf),
-          algorithm_desc, scratch_memory, output_profile_result),
-      /*report_error=*/!output_profile_result);
-}
-
 bool CudnnSupport::DoConvolveBackwardFilter(
     Stream* stream, const dnn::BatchDescriptor& input_descriptor,
     const DeviceMemory<Eigen::half>& input_data,
@@ -3943,16 +3905,13 @@ bool CudnnSupport::DoConvolveBackwardFilter(
     const dnn::AlgorithmDesc& algorithm_desc,
     DeviceMemory<uint8>* scratch_memory,
     dnn::ProfileResult* output_profile_result) {
-  dnn::DataType acc_type =
-      CudnnEnvVar<ConvDoFP32ComputationFP16Input>::IsEnabled()
-          ? dnn::DataType::kFloat
-          : dnn::DataType::kHalf;
-  return IsStatusOk(DoConvolveBackwardFilterImpl(
-                        stream, input_descriptor, input_data, output_descriptor,
-                        backward_output_data, convolution_descriptor,
-                        filter_descriptor, backward_filter_data, acc_type,
-                        algorithm_desc, scratch_memory, output_profile_result),
-                    /*report_error=*/!output_profile_result);
+  return IsStatusOk(
+      DoConvolveBackwardFilterImpl(
+          stream, input_descriptor, input_data, output_descriptor,
+          backward_output_data, convolution_descriptor, filter_descriptor,
+          backward_filter_data, GetConvAccumulatorType(dnn::DataType::kHalf),
+          algorithm_desc, scratch_memory, output_profile_result),
+      /*report_error=*/!output_profile_result);
 }
 
 template <class T>
