@@ -2969,8 +2969,10 @@ tf_kernel_library(
 tf_kernel_library(
     name = "matrix_triangular_solve_op",
     prefix = "matrix_triangular_solve_op",
-    deps = LINALG_DEPS + if_cuda([
+    deps = LINALG_DEPS + if_cuda_is_configured([
         "//tensorflow/core/platform/default/build_config:cublas_plugin",
+    ]) + if_rocm_is_configured([
+        "//tensorflow/core/platform/default/build_config:rocblas_plugin",
     ]),
 )
 
@@ -3266,8 +3268,10 @@ tf_kernel_library(
     prefix = "fft_ops",
     deps = MATH_DEPS + [
         "//tensorflow/core:spectral_ops_op_lib",
-    ] + if_cuda([
+    ] + if_cuda_is_configured([
         "//tensorflow/core/platform/default/build_config:cufft_plugin",
+    ]) + if_rocm_is_configured([
+        "//tensorflow/core/platform/default/build_config:rocfft_plugin",
     ]),
 )
 
@@ -3292,8 +3296,10 @@ tf_kernel_library(
     ] + select({
         ":xsmm": ["@libxsmm_archive//:xsmm_avx"],
         "//conditions:default": [],
-    }) + mkl_deps() + if_cuda([
+    }) + mkl_deps() + if_cuda_is_configured([
         "//tensorflow/core/platform/default/build_config:cublas_plugin",
+    ]) + if_rocm_is_configured([
+        "//tensorflow/core/platform/default/build_config:rocblas_plugin",
     ]),
 )
 
@@ -3741,9 +3747,12 @@ tf_kernel_library(
             "@libxsmm_archive//:xsmm_avx",
         ],
         "//conditions:default": [],
-    }) + if_cuda([
+    }) + if_cuda_is_configured([
         "//tensorflow/core/platform/default/build_config:cublas_plugin",
         "//tensorflow/core/platform/default/build_config:cudnn_plugin",
+    ]) + if_rocm_is_configured([
+        "//tensorflow/core/platform/default/build_config:rocblas_plugin",
+        "//tensorflow/core/platform/default/build_config:miopen_plugin",
     ]),
 )
 

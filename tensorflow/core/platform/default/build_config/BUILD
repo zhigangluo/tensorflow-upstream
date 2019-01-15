@@ -114,6 +114,22 @@ cc_library(
     deps = if_static(["//tensorflow/stream_executor/cuda:cudnn_plugin"]),
 )
 
+# Dummy stream executor ROCm plugins.
+cc_library(
+    name = "rocblas_plugin",
+    deps = if_static(["//tensorflow/stream_executor/rocm:rocblas_plugin"]),
+)
+
+cc_library(
+    name = "rocfft_plugin",
+    deps = if_static(["//tensorflow/stream_executor/rocm:rocfft_plugin"]),
+)
+
+cc_library(
+    name = "miopen_plugin",
+    deps = if_static(["//tensorflow/stream_executor/rocm:miopen_plugin"]),
+)
+
 # OSX framework for device driver access
 cc_library(
     name = "IOKit",
@@ -285,13 +301,25 @@ cc_library(
 
 cc_library(
     name = "rocm",
-    data = [],
+    data = [
+        "@local_config_rocm//rocm:hip",
+        "@local_config_rocm//rocm:hiprand",
+        "@local_config_rocm//rocm:miopen",
+        "@local_config_rocm//rocm:rocblas",
+        "@local_config_rocm//rocm:rocfft",
+    ],
     linkopts = select({
         "//conditions:default": [
             "-Wl,-rpath,../local_config_rocm/rocm/rocm/lib",
         ],
     }),
-    deps = [],
+    deps = [
+        "@local_config_rocm//rocm:hip",
+        "@local_config_rocm//rocm:hiprand",
+        "@local_config_rocm//rocm:miopen",
+        "@local_config_rocm//rocm:rocblas",
+        "@local_config_rocm//rocm:rocfft",
+    ],
 )
 
 cc_library(

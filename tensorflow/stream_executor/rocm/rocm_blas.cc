@@ -24,13 +24,12 @@ limitations under the License.
 #include <complex>
 
 #include "absl/strings/str_cat.h"
-#include "tensorflow/stream_executor/rocm/rocm_activation.h"
-#include "tensorflow/stream_executor/rocm/rocm_gpu_executor.h"
-#include "tensorflow/stream_executor/rocm/rocm_helpers.h"
-#include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
-#include "tensorflow/stream_executor/rocm/rocm_stream.h"
-#include "tensorflow/stream_executor/rocm/rocm_timer.h"
 #include "tensorflow/stream_executor/device_memory.h"
+#include "tensorflow/stream_executor/gpu/gpu_activation.h"
+#include "tensorflow/stream_executor/gpu/gpu_executor.h"
+#include "tensorflow/stream_executor/gpu/gpu_helpers.h"
+#include "tensorflow/stream_executor/gpu/gpu_stream.h"
+#include "tensorflow/stream_executor/gpu/gpu_timer.h"
 #include "tensorflow/stream_executor/lib/env.h"
 #include "tensorflow/stream_executor/lib/initialize.h"
 #include "tensorflow/stream_executor/lib/status.h"
@@ -39,11 +38,12 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform/logging.h"
 #include "tensorflow/stream_executor/platform/port.h"
 #include "tensorflow/stream_executor/plugin_registry.h"
+#include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 #include "tensorflow/stream_executor/scratch_allocator.h"
 #include "tensorflow/stream_executor/stream_executor.h"
 
 namespace stream_executor {
-namespace rocm {
+namespace gpu {
 
 PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kRocBlasPlugin);
 
@@ -53,8 +53,8 @@ namespace wrap {
   struct WrapperShim__##__name {                                    \
     static const char *kName;                                       \
     template <typename... Args>                                     \
-    rocblas_status operator()(ROCMExecutor *parent, Args... args) { \
-      rocm::ScopedActivateExecutorContext sac{parent};              \
+    rocblas_status operator()(GpuExecutor *parent, Args... args) { \
+      gpu::ScopedActivateExecutorContext sac{parent};              \
       return ::__name(args...);                                     \
     }                                                               \
   } __name;                                                         \
@@ -283,7 +283,7 @@ bool ROCMBlas::Init() {
   return true;
 }
 
-ROCMBlas::ROCMBlas(rocm::ROCMExecutor *parent)
+ROCMBlas::ROCMBlas(gpu::GpuExecutor *parent)
     : parent_(CHECK_NOTNULL(parent)), blas_(nullptr) {}
 
 ROCMBlas::~ROCMBlas() {
@@ -294,10 +294,10 @@ ROCMBlas::~ROCMBlas() {
 
 bool ROCMBlas::SetStream(Stream *stream) {
   CHECK(stream != nullptr);
-  CHECK(AsROCMStreamValue(stream) != nullptr);
+  CHECK(AsGpuStreamValue(stream) != nullptr);
   CHECK(blas_ != nullptr);
   rocblas_status ret =
-      wrap::rocblas_set_stream(parent_, blas_, AsROCMStreamValue(stream));
+      wrap::rocblas_set_stream(parent_, blas_, AsGpuStreamValue(stream));
   if (ret != rocblas_status_success) {
     LOG(ERROR) << "failed to set stream for rocBLAS calls: " << ToString(ret);
     return false;
@@ -382,7 +382,7 @@ bool ROCMBlas::DoBlasAsum(Stream *stream, uint64 elem_count,
                           DeviceMemory<float> *result) {
   return DoBlasInternal(wrap::rocblas_sasum, stream,
                         false /* = pointer_mode_host */, elem_count,
-                        ROCMMemory(x), incx, ROCMMemoryMutable(result));
+                        GpuMemory(x), incx, GpuMemoryMutable(result));
 }
 
 bool ROCMBlas::DoBlasAsum(Stream *stream, uint64 elem_count,
@@ -390,7 +390,7 @@ bool ROCMBlas::DoBlasAsum(Stream *stream, uint64 elem_count,
                           DeviceMemory<double> *result) {
   return DoBlasInternal(wrap::rocblas_dasum, stream,
                         false /* = pointer_mode_host */, elem_count,
-                        ROCMMemory(x), incx, ROCMMemoryMutable(result));
+                        GpuMemory(x), incx, GpuMemoryMutable(result));
 }
 
 bool ROCMBlas::DoBlasAsum(Stream *stream, uint64 elem_count,
@@ -414,7 +414,7 @@ bool ROCMBlas::DoBlasAxpy(Stream *stream, uint64 elem_count, float alpha,
                           DeviceMemory<float> *y, int incy) {
   return DoBlasInternal(wrap::rocblas_saxpy, stream,
                         true /* = pointer_mode_host */, elem_count, &alpha,
-                        ROCMMemory(x), incx, ROCMMemoryMutable(y), incy);
+                        GpuMemory(x), incx, GpuMemoryMutable(y), incy);
 }
 
 bool ROCMBlas::DoBlasAxpy(Stream *stream, uint64 elem_count, double alpha,
@@ -422,7 +422,7 @@ bool ROCMBlas::DoBlasAxpy(Stream *stream, uint64 elem_count, double alpha,
                           DeviceMemory<double> *y, int incy) {
   return DoBlasInternal(wrap::rocblas_daxpy, stream,
                         true /* = pointer_mode_host */, elem_count, &alpha,
-                        ROCMMemory(x), incx, ROCMMemoryMutable(y), incy);
+                        GpuMemory(x), incx, GpuMemoryMutable(y), incy);
 }
 
 bool ROCMBlas::DoBlasAxpy(Stream *stream, uint64 elem_count,
@@ -448,7 +448,7 @@ bool ROCMBlas::DoBlasCopy(Stream *stream, uint64 elem_count,
                           DeviceMemory<float> *y, int incy) {
   return DoBlasInternal(wrap::rocblas_scopy, stream,
                         true /* = pointer_mode_host */, elem_count,
-                        ROCMMemory(x), incx, ROCMMemoryMutable(y), incy);
+                        GpuMemory(x), incx, GpuMemoryMutable(y), incy);
 }
 
 bool ROCMBlas::DoBlasCopy(Stream *stream, uint64 elem_count,
@@ -456,7 +456,7 @@ bool ROCMBlas::DoBlasCopy(Stream *stream, uint64 elem_count,
                           DeviceMemory<double> *y, int incy) {
   return DoBlasInternal(wrap::rocblas_dcopy, stream,
                         true /* = pointer_mode_host */, elem_count,
-                        ROCMMemory(x), incx, ROCMMemoryMutable(y), incy);
+                        GpuMemory(x), incx, GpuMemoryMutable(y), incy);
 }
 
 bool ROCMBlas::DoBlasCopy(Stream *stream, uint64 elem_count,
@@ -481,7 +481,7 @@ bool ROCMBlas::DoBlasDot(Stream *stream, uint64 elem_count,
                          DeviceMemory<float> *result) {
   return DoBlasInternal(
       wrap::rocblas_sdot, stream, false /* = pointer_mode_host */, elem_count,
-      ROCMMemory(x), incx, ROCMMemory(y), incy, ROCMMemoryMutable(result));
+      GpuMemory(x), incx, GpuMemory(y), incy, GpuMemoryMutable(result));
 }
 
 bool ROCMBlas::DoBlasDot(Stream *stream, uint64 elem_count,
@@ -490,7 +490,7 @@ bool ROCMBlas::DoBlasDot(Stream *stream, uint64 elem_count,
                          DeviceMemory<double> *result) {
   return DoBlasInternal(
       wrap::rocblas_ddot, stream, false /* = pointer_mode_host */, elem_count,
-      ROCMMemory(x), incx, ROCMMemory(y), incy, ROCMMemoryMutable(result));
+      GpuMemory(x), incx, GpuMemory(y), incy, GpuMemoryMutable(result));
 }
 
 bool ROCMBlas::DoBlasDotc(Stream *stream, uint64 elem_count,
@@ -534,7 +534,7 @@ bool ROCMBlas::DoBlasNrm2(Stream *stream, uint64 elem_count,
                           DeviceMemory<float> *result) {
   return DoBlasInternal(wrap::rocblas_snrm2, stream,
                         false /* = pointer_mode_host */, elem_count,
-                        ROCMMemory(x), incx, ROCMMemoryMutable(result));
+                        GpuMemory(x), incx, GpuMemoryMutable(result));
 }
 
 bool ROCMBlas::DoBlasNrm2(Stream *stream, uint64 elem_count,
@@ -542,7 +542,7 @@ bool ROCMBlas::DoBlasNrm2(Stream *stream, uint64 elem_count,
                           DeviceMemory<double> *result) {
   return DoBlasInternal(wrap::rocblas_dnrm2, stream,
                         false /* = pointer_mode_host */, elem_count,
-                        ROCMMemory(x), incx, ROCMMemoryMutable(result));
+                        GpuMemory(x), incx, GpuMemoryMutable(result));
 }
 
 bool ROCMBlas::DoBlasNrm2(Stream *stream, uint64 elem_count,
@@ -670,14 +670,14 @@ bool ROCMBlas::DoBlasScal(Stream *stream, uint64 elem_count, float alpha,
                           DeviceMemory<float> *x, int incx) {
   return DoBlasInternal(wrap::rocblas_sscal, stream,
                         true /* = pointer_mode_host */, elem_count, &alpha,
-                        ROCMMemoryMutable(x), incx);
+                        GpuMemoryMutable(x), incx);
 }
 
 bool ROCMBlas::DoBlasScal(Stream *stream, uint64 elem_count, double alpha,
                           DeviceMemory<double> *x, int incx) {
   return DoBlasInternal(wrap::rocblas_dscal, stream,
                         true /* = pointer_mode_host */, elem_count, &alpha,
-                        ROCMMemoryMutable(x), incx);
+                        GpuMemoryMutable(x), incx);
 }
 
 bool ROCMBlas::DoBlasScal(Stream *stream, uint64 elem_count, float alpha,
@@ -715,7 +715,7 @@ bool ROCMBlas::DoBlasSwap(Stream *stream, uint64 elem_count,
                           DeviceMemory<float> *y, int incy) {
   return DoBlasInternal(wrap::rocblas_sswap, stream,
                         true /* = pointer_mode_host */, elem_count,
-                        ROCMMemoryMutable(x), incx, ROCMMemoryMutable(y), incy);
+                        GpuMemoryMutable(x), incx, GpuMemoryMutable(y), incy);
 }
 
 bool ROCMBlas::DoBlasSwap(Stream *stream, uint64 elem_count,
@@ -723,7 +723,7 @@ bool ROCMBlas::DoBlasSwap(Stream *stream, uint64 elem_count,
                           DeviceMemory<double> *y, int incy) {
   return DoBlasInternal(wrap::rocblas_dswap, stream,
                         true /* = pointer_mode_host */, elem_count,
-                        ROCMMemoryMutable(x), incx, ROCMMemoryMutable(y), incy);
+                        GpuMemoryMutable(x), incx, GpuMemoryMutable(y), incy);
 }
 
 bool ROCMBlas::DoBlasSwap(Stream *stream, uint64 elem_count,
@@ -747,7 +747,7 @@ bool ROCMBlas::DoBlasIamax(Stream *stream, uint64 elem_count,
                            DeviceMemory<int> *result) {
   return DoBlasInternal(wrap::rocblas_isamax, stream,
                         false /* = pointer_mode_host */, elem_count,
-                        ROCMMemory(x), incx, ROCMMemoryMutable(result));
+                        GpuMemory(x), incx, GpuMemoryMutable(result));
 }
 
 bool ROCMBlas::DoBlasIamax(Stream *stream, uint64 elem_count,
@@ -755,7 +755,7 @@ bool ROCMBlas::DoBlasIamax(Stream *stream, uint64 elem_count,
                            DeviceMemory<int> *result) {
   return DoBlasInternal(wrap::rocblas_idamax, stream,
                         false /* = pointer_mode_host */, elem_count,
-                        ROCMMemory(x), incx, ROCMMemoryMutable(result));
+                        GpuMemory(x), incx, GpuMemoryMutable(result));
 }
 
 bool ROCMBlas::DoBlasIamax(Stream *stream, uint64 elem_count,
@@ -779,7 +779,7 @@ bool ROCMBlas::DoBlasIamin(Stream *stream, uint64 elem_count,
                            DeviceMemory<int> *result) {
   return DoBlasInternal(
       wrap::rocblas_isamin, stream, false /* = pointer_mode_host */, elem_count,
-      ROCMComplex(ROCMMemory(x)), incx, ROCMMemoryMutable(result));
+      GpuComplex(GpuMemory(x)), incx, GpuMemoryMutable(result));
 }
 
 bool ROCMBlas::DoBlasIamin(Stream *stream, uint64 elem_count,
@@ -787,7 +787,7 @@ bool ROCMBlas::DoBlasIamin(Stream *stream, uint64 elem_count,
                            DeviceMemory<int> *result) {
   return DoBlasInternal(
       wrap::rocblas_idamin, stream, false /* = pointer_mode_host */, elem_count,
-      ROCMComplex(ROCMMemory(x)), incx, ROCMMemoryMutable(result));
+      GpuComplex(GpuMemory(x)), incx, GpuMemoryMutable(result));
 }
 
 bool ROCMBlas::DoBlasIamin(Stream *stream, uint64 elem_count,
@@ -856,8 +856,8 @@ bool ROCMBlas::DoBlasGemv(Stream *stream, blas::Transpose trans, uint64 m,
                           float beta, DeviceMemory<float> *y, int incy) {
   return DoBlasInternal(
       wrap::rocblas_sgemv, stream, true /* = pointer_mode_host */,
-      ROCMBlasTranspose(trans), m, n, &alpha, ROCMMemory(a), lda, ROCMMemory(x),
-      incx, &beta, ROCMMemoryMutable(y), incy);
+      ROCMBlasTranspose(trans), m, n, &alpha, GpuMemory(a), lda, GpuMemory(x),
+      incx, &beta, GpuMemoryMutable(y), incy);
 }
 
 bool ROCMBlas::DoBlasGemv(Stream *stream, blas::Transpose trans, uint64 m,
@@ -866,8 +866,8 @@ bool ROCMBlas::DoBlasGemv(Stream *stream, blas::Transpose trans, uint64 m,
                           double beta, DeviceMemory<double> *y, int incy) {
   return DoBlasInternal(
       wrap::rocblas_dgemv, stream, true /* = pointer_mode_host */,
-      ROCMBlasTranspose(trans), m, n, &alpha, ROCMMemory(a), lda, ROCMMemory(x),
-      incx, &beta, ROCMMemoryMutable(y), incy);
+      ROCMBlasTranspose(trans), m, n, &alpha, GpuMemory(a), lda, GpuMemory(x),
+      incx, &beta, GpuMemoryMutable(y), incy);
 }
 
 bool ROCMBlas::DoBlasGemv(Stream *stream, blas::Transpose trans, uint64 m,
@@ -898,7 +898,7 @@ bool ROCMBlas::DoBlasGer(Stream *stream, uint64 m, uint64 n, float alpha,
                          DeviceMemory<float> *a, int lda) {
   return DoBlasInternal(
       wrap::rocblas_sger, stream, true /* = pointer_mode_host */, m, n, &alpha,
-      ROCMMemory(x), incx, ROCMMemory(y), incy, ROCMMemoryMutable(a), lda);
+      GpuMemory(x), incx, GpuMemory(y), incy, GpuMemoryMutable(a), lda);
 }
 
 bool ROCMBlas::DoBlasGer(Stream *stream, uint64 m, uint64 n, double alpha,
@@ -907,7 +907,7 @@ bool ROCMBlas::DoBlasGer(Stream *stream, uint64 m, uint64 n, double alpha,
                          DeviceMemory<double> *a, int lda) {
   return DoBlasInternal(
       wrap::rocblas_dger, stream, true /* = pointer_mode_host */, m, n, &alpha,
-      ROCMMemory(x), incx, ROCMMemory(y), incy, ROCMMemoryMutable(a), lda);
+      GpuMemory(x), incx, GpuMemory(y), incy, GpuMemoryMutable(a), lda);
 }
 
 bool ROCMBlas::DoBlasGerc(Stream *stream, uint64 m, uint64 n,
@@ -1186,8 +1186,8 @@ bool ROCMBlas::DoBlasSyr(Stream *stream, blas::UpperLower uplo, uint64 n,
                          DeviceMemory<float> *a, int lda) {
   return DoBlasInternal(wrap::rocblas_ssyr, stream,
                         true /* = pointer_mode_host */,
-                        ROCMBlasUpperLower(uplo), n, &alpha, ROCMMemory(x),
-                        incx, ROCMMemoryMutable(a), lda);
+                        ROCMBlasUpperLower(uplo), n, &alpha, GpuMemory(x),
+                        incx, GpuMemoryMutable(a), lda);
 }
 
 bool ROCMBlas::DoBlasSyr(Stream *stream, blas::UpperLower uplo, uint64 n,
@@ -1195,8 +1195,8 @@ bool ROCMBlas::DoBlasSyr(Stream *stream, blas::UpperLower uplo, uint64 n,
                          DeviceMemory<double> *a, int lda) {
   return DoBlasInternal(wrap::rocblas_dsyr, stream,
                         true /* = pointer_mode_host */,
-                        ROCMBlasUpperLower(uplo), n, &alpha, ROCMMemory(x),
-                        incx, ROCMMemoryMutable(a), lda);
+                        ROCMBlasUpperLower(uplo), n, &alpha, GpuMemory(x),
+                        incx, GpuMemoryMutable(a), lda);
 }
 
 bool ROCMBlas::DoBlasSyr2(Stream *stream, blas::UpperLower uplo, uint64 n,
@@ -1477,10 +1477,10 @@ bool ROCMBlas::DoBlasGemm(
       wrap::rocblas_hgemm, stream, true /* = pointer_mode_host */,
       ROCMBlasTranspose(transa), ROCMBlasTranspose(transb), m, n, k,
       reinterpret_cast<const rocblas_half*>(&alpha_half),
-      reinterpret_cast<const rocblas_half*>(ROCMMemory(a)), lda,
-      reinterpret_cast<const rocblas_half*>(ROCMMemory(b)), ldb,
+      reinterpret_cast<const rocblas_half*>(GpuMemory(a)), lda,
+      reinterpret_cast<const rocblas_half*>(GpuMemory(b)), ldb,
       reinterpret_cast<const rocblas_half*>(&beta_half),
-      reinterpret_cast<rocblas_half*>(ROCMMemoryMutable(c)), ldc);
+      reinterpret_cast<rocblas_half*>(GpuMemoryMutable(c)), ldc);
 }
 
 bool ROCMBlas::DoBlasGemm(Stream *stream, blas::Transpose transa,
@@ -1519,7 +1519,7 @@ bool ROCMBlas::DoBlasGemm(Stream *stream, blas::Transpose transa,
   return DoBlasInternal(
       wrap::rocblas_sgemm, stream, true /* = pointer_mode_host */,
       ROCMBlasTranspose(transa), ROCMBlasTranspose(transb), m, n, k, &alpha,
-      ROCMMemory(a), lda, ROCMMemory(b), ldb, &beta, ROCMMemoryMutable(c), ldc);
+      GpuMemory(a), lda, GpuMemory(b), ldb, &beta, GpuMemoryMutable(c), ldc);
 }
 
 bool ROCMBlas::DoBlasGemm(Stream *stream, blas::Transpose transa,
@@ -1530,7 +1530,7 @@ bool ROCMBlas::DoBlasGemm(Stream *stream, blas::Transpose transa,
   return DoBlasInternal(
       wrap::rocblas_dgemm, stream, true /* = pointer_mode_host */,
       ROCMBlasTranspose(transa), ROCMBlasTranspose(transb), m, n, k, &alpha,
-      ROCMMemory(a), lda, ROCMMemory(b), ldb, &beta, ROCMMemoryMutable(c), ldc);
+      GpuMemory(a), lda, GpuMemory(b), ldb, &beta, GpuMemoryMutable(c), ldc);
 }
 
 bool ROCMBlas::DoBlasGemm(Stream *stream, blas::Transpose transa,
@@ -1866,8 +1866,8 @@ port::Status ROCMBlas::DoBlasGemmBatchedInternal(
     bool ok = DoBlasInternal(
             rocblas_func, stream, true /* = pointer_mode_host */,
             ROCMBlasTranspose(transa), ROCMBlasTranspose(transb), m, n, k,
-            ROCMComplex(alpha_ptr), a_raw_ptrs[ 0 ], lda, bsa,
-            b_raw_ptrs[ 0 ], ldb, bsb, ROCMComplex(beta_ptr),
+            GpuComplex(alpha_ptr), a_raw_ptrs[ 0 ], lda, bsa,
+            b_raw_ptrs[ 0 ], ldb, bsb, GpuComplex(beta_ptr),
             c_raw_ptrs[ 0 ], ldc, bsc, batch_count);
 
       if (ok) {
@@ -2212,8 +2212,8 @@ bool ROCMBlas::DoBlasTrsm(Stream *stream, blas::Side side,
   return DoBlasInternal(wrap::rocblas_strsm, stream,
                         true /* = pointer_mode_host */, ROCMBlasSide(side),
                         ROCMBlasUpperLower(uplo), ROCMBlasTranspose(transa),
-                        ROCMBlasDiagonal(diag), m, n, &alpha, const_cast<float*>(ROCMMemory(a)),
-                        lda, ROCMMemoryMutable(b), ldb);
+                        ROCMBlasDiagonal(diag), m, n, &alpha, const_cast<float*>(GpuMemory(a)),
+                        lda, GpuMemoryMutable(b), ldb);
 }
 
 bool ROCMBlas::DoBlasTrsm(Stream *stream, blas::Side side,
@@ -2224,8 +2224,8 @@ bool ROCMBlas::DoBlasTrsm(Stream *stream, blas::Side side,
   return DoBlasInternal(wrap::rocblas_dtrsm, stream,
                         true /* = pointer_mode_host */, ROCMBlasSide(side),
                         ROCMBlasUpperLower(uplo), ROCMBlasTranspose(transa),
-                        ROCMBlasDiagonal(diag), m, n, &alpha, const_cast<double*>(ROCMMemory(a)),
-                        lda, ROCMMemoryMutable(b), ldb);
+                        ROCMBlasDiagonal(diag), m, n, &alpha, const_cast<double*>(GpuMemory(a)),
+                        lda, GpuMemoryMutable(b), ldb);
 }
 
 bool ROCMBlas::DoBlasTrsm(Stream *stream, blas::Side side,
@@ -2301,44 +2301,39 @@ bool ROCMBlas::DoBlasGemmStridedBatched(
 	     << "for the \"complex<double>\" dataype" ;
   return false;
 }
-}  // namespace rocm
 
-namespace gpu = ::stream_executor;
+}  // namespace gpu
 
 void initialize_rocblas() {
-  gpu::port::Status status =
-      gpu::PluginRegistry::Instance()
-          ->RegisterFactory<gpu::PluginRegistry::BlasFactory>(
-              gpu::rocm::kROCmPlatformId, gpu::rocm::kRocBlasPlugin, "rocBLAS",
-              [](gpu::internal::StreamExecutorInterface
-                     *parent) -> gpu::blas::BlasSupport * {
-                gpu::rocm::ROCMExecutor *rocm_executor =
-                    dynamic_cast<gpu::rocm::ROCMExecutor *>(parent);
-                if (rocm_executor == nullptr) {
-                  LOG(ERROR)
-                      << "Attempting to initialize an instance of the rocBLAS "
-                      << "support library with a non-ROCM StreamExecutor";
-                  return nullptr;
-                }
+  port::Status status =
+      PluginRegistry::Instance()->RegisterFactory<PluginRegistry::BlasFactory>(
+          gpu::kROCmPlatformId, gpu::kRocBlasPlugin, "rocBLAS",
+          [](internal::StreamExecutorInterface *parent) -> blas::BlasSupport * {
+            gpu::GpuExecutor *rocm_executor =
+                dynamic_cast<gpu::GpuExecutor *>(parent);
+            if (rocm_executor == nullptr) {
+              LOG(ERROR)
+                  << "Attempting to initialize an instance of the rocBLAS "
+                  << "support library with a non-ROCM StreamExecutor";
+              return nullptr;
+            }
 
-                gpu::rocm::ROCMBlas *blas =
-                    new gpu::rocm::ROCMBlas(rocm_executor);
-                if (!blas->Init()) {
-                  // Note: Init() will log a more specific error.
-                  delete blas;
-                  return nullptr;
-                }
-                return blas;
-              });
+            gpu::ROCMBlas *blas = new gpu::ROCMBlas(rocm_executor);
+            if (!blas->Init()) {
+              // Note: Init() will log a more specific error.
+              delete blas;
+              return nullptr;
+            }
+            return blas;
+          });
 
   if (!status.ok()) {
     LOG(ERROR) << "Unable to register rocBLAS factory: "
                << status.error_message();
   }
 
-  gpu::PluginRegistry::Instance()->SetDefaultFactory(gpu::rocm::kROCmPlatformId,
-                                                     gpu::PluginKind::kBlas,
-                                                     gpu::rocm::kRocBlasPlugin);
+  PluginRegistry::Instance()->SetDefaultFactory(
+      gpu::kROCmPlatformId, PluginKind::kBlas, gpu::kRocBlasPlugin);
 }
 
 }  // namespace stream_executor

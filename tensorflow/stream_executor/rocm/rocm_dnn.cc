@@ -20,21 +20,21 @@ limitations under the License.
 
 #include "absl/strings/str_cat.h"
 #include "third_party/eigen3/Eigen/Core"
-#include "tensorflow/stream_executor/rocm/rocm_activation.h"
-#include "tensorflow/stream_executor/rocm/rocm_diagnostics.h"
-#include "tensorflow/stream_executor/rocm/rocm_driver.h"
-#include "tensorflow/stream_executor/rocm/rocm_gpu_executor.h"
-#include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
-#include "tensorflow/stream_executor/rocm/rocm_stream.h"
-#include "tensorflow/stream_executor/rocm/rocm_timer.h"
 #include "tensorflow/stream_executor/dnn.h"
-#include "tensorflow/stream_executor/platform/dso_loader.h"
+#include "tensorflow/stream_executor/gpu/gpu_activation.h"
+#include "tensorflow/stream_executor/gpu/gpu_diagnostics.h"
+#include "tensorflow/stream_executor/gpu/gpu_driver.h"
+#include "tensorflow/stream_executor/gpu/gpu_executor.h"
+#include "tensorflow/stream_executor/gpu/gpu_stream.h"
+#include "tensorflow/stream_executor/gpu/gpu_timer.h"
 #include "tensorflow/stream_executor/lib/env.h"
 #include "tensorflow/stream_executor/lib/error.h"
 #include "tensorflow/stream_executor/lib/initialize.h"
 #include "tensorflow/stream_executor/lib/threadpool.h"
+#include "tensorflow/stream_executor/platform/dso_loader.h"
 #include "tensorflow/stream_executor/platform/logging.h"
 #include "tensorflow/stream_executor/plugin_registry.h"
+#include "tensorflow/stream_executor/rocm/rocm_platform_id.h"
 #include "tensorflow/stream_executor/scratch_allocator.h"
 #include "tensorflow/stream_executor/stream.h"
 #include "tensorflow/stream_executor/stream_executor_pimpl.h"
@@ -66,7 +66,7 @@ using dnn::ConvolutionDescriptor;
 using dnn::PoolingDescriptor;
 using dnn::NormalizeDescriptor;
 
-namespace rocm {
+namespace gpu {
 
 const int kVlogLevel = 2;
 
@@ -122,8 +122,8 @@ static port::ThreadPool* GetROCmThreadpool() {
 #define PERFTOOLS_GPUTOOLS_MIOPEN_WRAP(__name)                      \
   struct WrapperShim__##__name {                                   \
     template <typename... Args>                                    \
-    miopenStatus_t operator()(ROCMExecutor* parent, Args... args) { \
-      rocm::ScopedActivateExecutorContext sac{parent};             \
+    miopenStatus_t operator()(GpuExecutor* parent, Args... args) { \
+      gpu::ScopedActivateExecutorContext sac{parent};             \
       miopenStatus_t retval = ::__name(args...);                    \
       return retval;                                               \
     }                                                              \
@@ -284,7 +284,7 @@ class CachedFusionPlans {
   //   create a new fusion plan descriptor,
   //   associate it with the given hash value in the cache
   //   return false (+ newly created fusion plan via given pointer)
-  static bool FindOrCreate(uint64 hash, ROCMExecutor* parent,
+  static bool FindOrCreate(uint64 hash, GpuExecutor* parent,
                            miopenFusionPlanDescriptor_t* fusion_plan,
                            miopenFusionDirection_t fusion_direction,
                            miopenTensorDescriptor_t input_descriptor) {
@@ -311,7 +311,7 @@ class CachedFusionPlans {
   }
 
   // need to figure out the right place to call this routine
-  static void Clear(ROCMExecutor* parent) {
+  static void Clear(GpuExecutor* parent) {
     mutex_lock lock{cachedPlansMutex};
 
     for (auto it : cachedPlans) {
@@ -414,7 +414,7 @@ miopenConvBwdWeightsAlgorithm_t ToConvBackwardFilterAlgo(
 
 }  // namespace
 
-MIOpenSupport::MIOpenSupport(ROCMExecutor* parent)
+MIOpenSupport::MIOpenSupport(GpuExecutor* parent)
     : parent_(parent), dnn_handle_(nullptr) {}
 
 MIOpenSupport::~MIOpenSupport() {
@@ -433,7 +433,7 @@ port::Status MIOpenSupport::Init() {
 
   LOG(ERROR) << "could not create miopen handle: " << ToString(status);
   if (status == miopenStatusNotInitialized) {
-    auto result = rocm::Diagnostician::FindKernelDriverVersion();
+    auto result = gpu::Diagnostician::FindKernelDriverVersion();
     if (!result.ok()) {
       LOG(ERROR) << "error retrieving driver version: "
                  << DriverVersionStatusToString(result);
@@ -458,7 +458,7 @@ MIOpenSupport::GetVersion() {
 // Turns a BatchDescriptor structure into a miopen tensor handle within a scope.
 class ScopedTensorDescriptor {
  public:
-  ScopedTensorDescriptor(ROCMExecutor* parent,
+  ScopedTensorDescriptor(GpuExecutor* parent,
                          const BatchDescriptor& batch_descriptor,
                          miopenDataType_t elem_type)
       : parent_(parent), handle_(nullptr) {
@@ -516,7 +516,7 @@ class ScopedTensorDescriptor {
   miopenTensorDescriptor_t handle() const { return handle_; }
 
  private:
-  ROCMExecutor* parent_;            // Parent executor. Not owned.
+  GpuExecutor* parent_;            // Parent executor. Not owned.
   miopenTensorDescriptor_t handle_;  // Owned.
 
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedTensorDescriptor);
@@ -525,7 +525,7 @@ class ScopedTensorDescriptor {
 // Turns a FilterDescriptor structure into a miopen filter handle within a scope.
 class ScopedFilterDescriptor {
  public:
-  ScopedFilterDescriptor(ROCMExecutor* parent,
+  ScopedFilterDescriptor(GpuExecutor* parent,
                          const FilterDescriptor& filter_descriptor,
                          const BatchDescriptor& batch_descriptor,
                          miopenDataType_t elem_type)
@@ -569,7 +569,7 @@ class ScopedFilterDescriptor {
 
  private:
   // Parent executor object. Not owned.
-  ROCMExecutor* parent_;
+  GpuExecutor* parent_;
 
   // miopen filter descriptor this object creates. Owned.
   miopenTensorDescriptor_t handle_;
@@ -582,7 +582,7 @@ class ScopedFilterDescriptor {
 class ScopedConvolutionDescriptor {
  public:
   ScopedConvolutionDescriptor(
-      ROCMExecutor* parent, const ConvolutionDescriptor& convolution_descriptor,
+      GpuExecutor* parent, const ConvolutionDescriptor& convolution_descriptor,
       miopenDataType_t data_type)
       : parent_(parent), handle_(nullptr) {
     miopenStatus_t status =
@@ -629,7 +629,7 @@ class ScopedConvolutionDescriptor {
   miopenConvolutionDescriptor_t handle() const { return handle_; }
 
  private:
-  ROCMExecutor* parent_;                 // Parent executor. Not owned.
+  GpuExecutor* parent_;                 // Parent executor. Not owned.
   miopenConvolutionDescriptor_t handle_;  // Owned.
 
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedConvolutionDescriptor);
@@ -639,7 +639,7 @@ class ScopedConvolutionDescriptor {
 // within a scope.
 class ScopedPoolingDescriptor {
  public:
-  ScopedPoolingDescriptor(ROCMExecutor* parent,
+  ScopedPoolingDescriptor(GpuExecutor* parent,
                           const PoolingDescriptor& pooling_descriptor)
       : parent_(parent), handle_(nullptr) {
     miopenStatus_t status =
@@ -692,7 +692,7 @@ class ScopedPoolingDescriptor {
   miopenPoolingDescriptor_t handle() const { return handle_; }
 
  private:
-  ROCMExecutor* parent_;             // Parent executor. Not owned.
+  GpuExecutor* parent_;             // Parent executor. Not owned.
   miopenPoolingDescriptor_t handle_;  // Owned.
 
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedPoolingDescriptor);
@@ -701,7 +701,7 @@ class ScopedPoolingDescriptor {
 // Turns a NormalizeDescriptor structure into a miopen LRN descriptor handle.
 class ScopedNormalizeDescriptor {
  public:
-  ScopedNormalizeDescriptor(ROCMExecutor* parent,
+  ScopedNormalizeDescriptor(GpuExecutor* parent,
                             const NormalizeDescriptor& normalize_descriptor)
       : parent_(parent), handle_(nullptr) {
     miopenStatus_t status = wrap::miopenCreateLRNDescriptor(parent_, &handle_);
@@ -749,7 +749,7 @@ class ScopedNormalizeDescriptor {
   miopenLRNDescriptor_t handle() const { return handle_; }
 
  private:
-  ROCMExecutor* parent_;         // Parent executor. Not owned.
+  GpuExecutor* parent_;         // Parent executor. Not owned.
   miopenLRNDescriptor_t handle_;  // Owned.
 
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedNormalizeDescriptor);
@@ -759,7 +759,7 @@ class ScopedNormalizeDescriptor {
 // around it
 class ScopedActivationDescriptor {
  public:
-  ScopedActivationDescriptor(ROCMExecutor* parent,
+  ScopedActivationDescriptor(GpuExecutor* parent,
                              dnn::ActivationMode activation_mode)
       : parent_(parent),
         handle_(nullptr),
@@ -835,7 +835,7 @@ class ScopedActivationDescriptor {
   }
 
  private:
-  ROCMExecutor* parent_;                 // Parent executor. Not owned.
+  GpuExecutor* parent_;                 // Parent executor. Not owned.
   miopenActivationDescriptor_t handle_;  // Owned.
 
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedActivationDescriptor);
@@ -855,7 +855,7 @@ class ScopedActivationDescriptor {
 // base class for all fusion plan implementations to derive from
 class ScopedFusionPlanBase {
  public:
-  ScopedFusionPlanBase(ROCMExecutor* parent, miopenHandle_t miopen_handle,
+  ScopedFusionPlanBase(GpuExecutor* parent, miopenHandle_t miopen_handle,
                        const miopenFusionDirection_t fuse_direction,
                        const miopenTensorDescriptor_t input_descriptor)
       : parent_(parent),
@@ -1055,7 +1055,7 @@ class ScopedFusionPlanBase {
     return status;
   }
 
-  ROCMExecutor* parent_;
+  GpuExecutor* parent_;
   miopenHandle_t miopen_handle_;
   miopenFusionPlanDescriptor_t fusion_plan_;
   miopenOperatorArgs_t fusion_args_;  // Owned.
@@ -1068,7 +1068,7 @@ class ScopedFusionPlanBase {
 class ScopedFusionPlanConvolutionBiasActivation : public ScopedFusionPlanBase {
  public:
   ScopedFusionPlanConvolutionBiasActivation(
-      ROCMExecutor* parent, miopenHandle_t miopen_handle,
+      GpuExecutor* parent, miopenHandle_t miopen_handle,
       miopenTensorDescriptor_t input_descriptor,
       miopenTensorDescriptor_t filter_descriptor,
       miopenConvolutionDescriptor_t conv_descriptor,
@@ -1186,7 +1186,7 @@ class ScopedFusionPlanBatchNormActivationInference
     : public ScopedFusionPlanBase {
  public:
   ScopedFusionPlanBatchNormActivationInference(
-      ROCMExecutor* parent, miopenHandle_t miopen_handle,
+      GpuExecutor* parent, miopenHandle_t miopen_handle,
       miopenTensorDescriptor_t input_descriptor,
       miopenTensorDescriptor_t scale_offset_mean_variance_descriptor,
       ScopedActivationDescriptor& activation_descriptor)
@@ -1289,7 +1289,7 @@ class ScopedFusionPlanBatchNormActivationInference
 class ScopedFusionPlanBatchNormActivationForward : public ScopedFusionPlanBase {
  public:
   ScopedFusionPlanBatchNormActivationForward(
-      ROCMExecutor* parent, miopenHandle_t miopen_handle,
+      GpuExecutor* parent, miopenHandle_t miopen_handle,
       miopenTensorDescriptor_t input_descriptor,
       miopenTensorDescriptor_t scale_offset_mean_variance_descriptor,
       ScopedActivationDescriptor& activation_descriptor)
@@ -1393,7 +1393,7 @@ class ScopedFusionPlanBatchNormActivationBackward
     : public ScopedFusionPlanBase {
  public:
   ScopedFusionPlanBatchNormActivationBackward(
-      ROCMExecutor* parent, miopenHandle_t miopen_handle,
+      GpuExecutor* parent, miopenHandle_t miopen_handle,
       miopenTensorDescriptor_t input_descriptor,
       miopenTensorDescriptor_t scale_offset_mean_variance_descriptor,
       ScopedActivationDescriptor& activation_descriptor)
@@ -1508,6 +1508,11 @@ miopenDataType_t ToMIOpenDataType(
   }
 }
 
+miopenDataType_t ToMIOpenDataType(dnn::DataType data_type,
+                                 dnn::FilterLayout filter_layout) {
+  return ToMIOpenDataType(data_type);
+}
+
 miopenRNNInputMode_t ToMIOpenRnnInputMode(dnn::RnnInputMode input_mode) {
   switch (input_mode) {
     case dnn::RnnInputMode::kRnnLinearSkip:
@@ -1563,6 +1568,22 @@ class MixinBase : public Base {};
 template <>
 class MixinBase<void> {};
 
+dnn::DataType GetConvAccumulatorType(dnn::DataType data_type) {
+  switch (data_type) {
+    case dnn::DataType::kFloat:
+    case dnn::DataType::kDouble:
+      return data_type;
+    case dnn::DataType::kHalf:
+      // FIXME: Check if MIOpen can switch dynamically change accumulator type
+      return dnn::DataType::kFloat;
+    case dnn::DataType::kInt8:
+    case dnn::DataType::kInt32:
+      return dnn::DataType::kInt32;
+    default:
+      LOG(FATAL) << "Invalid DNN data type: " << static_cast<int>(data_type);
+  }
+}
+
 }  // namespace
 
 
@@ -1589,7 +1610,7 @@ class MIOpenRnnParamsDescriptor : public MIOpenDescriptorCommon<void> {
  public:
   typedef dnn::RnnDescriptor::ParamsRegion ParamsRegion;
   typedef dnn::RnnDescriptor::ParamsRegions ParamsRegions;
-  MIOpenRnnParamsDescriptor(ROCMExecutor* parent, miopenHandle_t miopen_handle,
+  MIOpenRnnParamsDescriptor(GpuExecutor* parent, miopenHandle_t miopen_handle,
                            const MIOpenRnnDescriptor& rnn_desc);
   ~MIOpenRnnParamsDescriptor() {
     miopenStatus_t status = wrap::miopenDestroyTensorDescriptor(parent_, handle_);
@@ -1611,7 +1632,7 @@ class MIOpenRnnParamsDescriptor : public MIOpenDescriptorCommon<void> {
 
  private:
   int GetRegionCountPerLayer() const;
-  ROCMExecutor* parent_;
+  GpuExecutor* parent_;
   miopenTensorDescriptor_t handle_;
   const MIOpenRnnDescriptor * rnn_desc_;
   int64 params_size_in_bytes_;
@@ -1623,7 +1644,7 @@ class MIOpenRnnParamsDescriptor : public MIOpenDescriptorCommon<void> {
 
 class MIOpenRnnDescriptor : public MIOpenDescriptorCommon<dnn::RnnDescriptor> {
  public:
-  MIOpenRnnDescriptor(ROCMExecutor* parent, miopenHandle_t miopen_handle,
+  MIOpenRnnDescriptor(GpuExecutor* parent, miopenHandle_t miopen_handle,
                      int num_layers, int hidden_size, int input_size,
                      miopenRNNInputMode_t input_mode,
                      miopenRNNDirectionMode_t direction_mode,
@@ -1693,7 +1714,7 @@ class MIOpenRnnDescriptor : public MIOpenDescriptorCommon<dnn::RnnDescriptor> {
   }
 
  private:
-  ROCMExecutor* parent_;
+  GpuExecutor* parent_;
   miopenRNNDescriptor_t rnn_desc_;
   int num_layers_;
   int hidden_size_;
@@ -1729,7 +1750,7 @@ int MIOpenRnnParamsDescriptor::GetRegionCountPerLayer() const {
 class MIOpenRnnSequenceTensorDescriptor
     : public MIOpenDescriptorCommon<dnn::RnnSequenceTensorDescriptor> {
  public:
-  MIOpenRnnSequenceTensorDescriptor(ROCMExecutor* parent, int seq_length,
+  MIOpenRnnSequenceTensorDescriptor(GpuExecutor* parent, int seq_length,
                                    int batch_size, int data_size,
                                    miopenDataType_t data_type)
       : parent_(parent),
@@ -1776,7 +1797,7 @@ class MIOpenRnnSequenceTensorDescriptor
   int data_size() const { return data_size_; }
 
  private:
-  ROCMExecutor* parent_;
+  GpuExecutor* parent_;
   int seq_length_;
   int batch_size_;
   int data_size_;
@@ -1789,7 +1810,7 @@ class MIOpenRnnSequenceTensorDescriptor
 class MIOpenRnnStateTensorDescriptor
     : public MIOpenDescriptorCommon<dnn::RnnStateTensorDescriptor> {
  public:
-  MIOpenRnnStateTensorDescriptor(ROCMExecutor* parent, int num_layers,
+  MIOpenRnnStateTensorDescriptor(GpuExecutor* parent, int num_layers,
                                 int batch_size, int data_size,
                                 miopenDataType_t data_type)
       : parent_(parent),
@@ -1825,7 +1846,7 @@ class MIOpenRnnStateTensorDescriptor
   int data_size() const { return data_size_; }
 
  private:
-  ROCMExecutor* parent_;
+  GpuExecutor* parent_;
   miopenTensorDescriptor_t handle_;
   int num_layers_;
   int batch_size_;
@@ -1907,7 +1928,7 @@ bool ExtractAndCheckRnnForward(
   return true;
 }
 
-bool CheckRNNParameterSize(ROCMExecutor* parent, miopenHandle_t miopen_handle,
+bool CheckRNNParameterSize(GpuExecutor* parent, miopenHandle_t miopen_handle,
                            const MIOpenRnnDescriptor& rnn_desc,
                            const MIOpenRnnSequenceTensorDescriptor& input_desc) {
   size_t params_size_in_bytes = 0;
@@ -1923,7 +1944,7 @@ bool CheckRNNParameterSize(ROCMExecutor* parent, miopenHandle_t miopen_handle,
          rnn_desc.ParamsSizeInBytes();
 }
 
-bool CreateRnnWorkspace(Stream* stream, ROCMExecutor* parent,
+bool CreateRnnWorkspace(Stream* stream, GpuExecutor* parent,
                         miopenHandle_t miopen_handle,
                         const MIOpenRnnDescriptor& rnn_desc,
                         const MIOpenRnnSequenceTensorDescriptor& input_desc,
@@ -2194,7 +2215,7 @@ bool MIOpenSupport::DoRnnBackwardImpl(
 }
 
 MIOpenRnnParamsDescriptor::MIOpenRnnParamsDescriptor(
-    ROCMExecutor* parent, miopenHandle_t miopen_handle,
+    GpuExecutor* parent, miopenHandle_t miopen_handle,
     const MIOpenRnnDescriptor& rnn_desc)
     : parent_(parent),
       handle_(nullptr),
@@ -2561,34 +2582,36 @@ void MIOpenDeallocatorCallback(void * ctx, void *mem)
   // Don't need dealloactor since the TensorFlow heap will automatically reclaim the memory
 }
 
-template <typename T>
-bool MIOpenSupport::PrepareForConvolutionImpl(
-    Stream* stream, int miopen_type,  // Actually miopenDataType_t.
-    const dnn::BatchDescriptor& batch_descriptor,
-    const DeviceMemory<T>& input_data,
+port::Status MIOpenSupport::DoPrepareForConvolution(
+    dnn::ConvolutionKind kind, dnn::DataType element_type, Stream* stream,
+    const dnn::BatchDescriptor& input_descriptor, DeviceMemoryBase input_data,
     const dnn::FilterDescriptor& filter_descriptor,
-    const DeviceMemory<T>& filter_data,
+    DeviceMemoryBase filter_data,
+    const dnn::BatchDescriptor& output_descriptor,
+    DeviceMemoryBase output_data,
     const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::BatchDescriptor& output_descriptor, DeviceMemory<T>* output_data,
-    ScratchAllocator* scratch_allocator,
     const dnn::AlgorithmConfig& algorithm_config,
-    dnn::AlgorithmDesc* algorithm_desc, DeviceMemory<uint8>* scratch_memory) {
-  ScopedTensorDescriptor input_nd{parent_, batch_descriptor,
-                                  static_cast<miopenDataType_t>(miopen_type)};
-  ScopedTensorDescriptor output_nd{parent_, output_descriptor,
-                                   static_cast<miopenDataType_t>(miopen_type)};
-  ScopedFilterDescriptor filter{parent_, filter_descriptor, batch_descriptor,
-                                static_cast<miopenDataType_t>(miopen_type)};
-  ScopedConvolutionDescriptor conv{parent_, convolution_descriptor,
-                                   static_cast<miopenDataType_t>(miopen_type)};
+    ScratchAllocator* scratch_allocator, dnn::AlgorithmDesc* algorithm_desc,
+    DeviceMemory<uint8>* scratch_memory) {
+  ScopedTensorDescriptor input_nd{
+    parent_, input_descriptor,
+    ToMIOpenDataType(element_type, input_descriptor.layout())};
+  ScopedFilterDescriptor filter{
+    parent_, filter_descriptor, input_descriptor,
+    ToMIOpenDataType(element_type, filter_descriptor.layout())};
+  ScopedTensorDescriptor output_nd{
+    parent_, output_descriptor,
+    ToMIOpenDataType(element_type, output_descriptor.layout())};
+  ScopedConvolutionDescriptor conv{
+    parent_, convolution_descriptor,
+    ToMIOpenDataType(GetConvAccumulatorType(element_type))};
 
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                      AsROCMStreamValue(stream));
+                                      AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
-    LOG(FATAL) << "failed to set stream for miopen handle: "
-               << ToString(status);
-    return false;
+    return port::InternalError(
+        absl::StrCat("Failed to set stream for MIOpen handle: ", ToString(status)));
   }
 
   absl::optional<dnn::AlgorithmDesc> algo_desc = algorithm_config.algorithm();
@@ -2604,10 +2627,34 @@ bool MIOpenSupport::PrepareForConvolutionImpl(
                              MIOpenAllocatorCallback, MIOpenDeallocatorCallback,
                              &mac);
     size_t size_in_bytes;
-    status = wrap::miopenConvolutionForwardGetWorkSpaceSize(
-        parent_, ToHandle(dnn_handle_), /*filterDesc=*/filter.handle(),
-        /*srcDesc=*/input_nd.handle(), /*convDesc=*/conv.handle(),
-        /*destDesc=*/output_nd.handle(), /*sizeInBytes=*/&size_in_bytes);
+
+    switch (kind) {
+      case dnn::ConvolutionKind::FORWARD: {
+        status = wrap::miopenConvolutionForwardGetWorkSpaceSize(
+            parent_, ToHandle(dnn_handle_), /*filterDesc=*/filter.handle(),
+            /*srcDesc=*/input_nd.handle(), /*convDesc=*/conv.handle(),
+            /*destDesc=*/output_nd.handle(), /*sizeInBytes=*/&size_in_bytes);
+        break;
+      }
+      case dnn::ConvolutionKind::BACKWARD_DATA: {
+        status = wrap::miopenConvolutionBackwardDataGetWorkSpaceSize(
+            parent_, ToHandle(dnn_handle_), /*diffDesc=*/output_nd.handle(),
+            /*filterDesc=*/filter.handle(), /*convDesc=*/conv.handle(),
+            /*gradDesc=*/input_nd.handle(), /*sizeInBytes=*/&size_in_bytes);
+        break;
+      }
+      case dnn::ConvolutionKind::BACKWARD_FILTER: {
+        status = wrap::miopenConvolutionBackwardWeightsGetWorkSpaceSize(
+            parent_, ToHandle(dnn_handle_), /*diffDesc=*/output_nd.handle(),
+            /*srcDesc=*/input_nd.handle() ,/*convDesc=*/conv.handle(),
+            /*gradDesc=*/filter.handle(), /*sizeInBytes=*/&size_in_bytes);
+        break;
+      }
+      default:
+        return port::InternalError(
+            absl::StrCat("Unexpected convolution kind ", static_cast<int>(kind)));
+    }
+
     if (status == miopenStatusSuccess && size_in_bytes != 0) {
       auto allocated = scratch_allocator->AllocateBytes(stream, size_in_bytes);
       if (allocated.ok()) {
@@ -2618,23 +2665,65 @@ bool MIOpenSupport::PrepareForConvolutionImpl(
     miopenConvAlgoPerf_t preference;
     int returnedAlgoCount;
 
-    status = wrap::miopenFindConvolutionForwardAlgorithm(
-        parent_, ToHandle(dnn_handle_), input_nd.handle(), input_data.opaque(),
-        filter.handle(), filter_data.opaque(), conv.handle(),
-        output_nd.handle(), output_data->opaque(),
-        /*requestAlgoCount=*/1, &returnedAlgoCount,
-        /*preference=*/&preference, /*workspace*/ scratch_memory_temp.opaque(),
-        /*WorkSpaceSize*/ scratch_memory_temp.size(),
-        /*exhaustiveSearch*/ false);
+    switch (kind) {
+      case dnn::ConvolutionKind::FORWARD: {
+        status = wrap::miopenFindConvolutionForwardAlgorithm(
+            parent_, ToHandle(dnn_handle_), input_nd.handle(),input_data.opaque(),
+            filter.handle(), filter_data.opaque(), conv.handle(),
+            output_nd.handle(), output_data.opaque(),
+            /*requestAlgoCount=*/1, &returnedAlgoCount,
+            /*preference=*/&preference, /*workspace*/ scratch_memory_temp.opaque(),
+            /*WorkSpaceSize*/ scratch_memory_temp.size(),
+            /*exhaustiveSearch*/ false);
+        CHECK_EQ(status, miopenStatusSuccess) << "Unable to find a suitable "
+                                                 "algorithm for doing forward "
+                                                 "convolution";
+        *algorithm_desc = dnn::AlgorithmDesc(preference.fwd_algo, false);
+        break;
+      }
+      case dnn::ConvolutionKind::BACKWARD_DATA: {
+        miopenStatus_t status = wrap::miopenFindConvolutionBackwardDataAlgorithm(
+            parent_, ToHandle(dnn_handle_),
+            /*diffDesc=*/output_nd.handle(), output_data.opaque(),
+            /*filterDesc=*/filter.handle(), filter_data.opaque(),
+            /*convDesc=*/conv.handle(),
+            /*gradDesc=*/input_nd.handle(), input_data.opaque(),
+            /*requestCount=*/1, /*returnedAlgoCount=*/&returnedAlgoCount,
+            /*preference=*/&preference, /*WorkSpace=*/scratch_memory_temp.opaque(),
+            /*WorkSpaceSize=*/scratch_memory_temp.size(),
+            /*exhaustiveSearch=*/false);
+        CHECK_EQ(status, miopenStatusSuccess) << "Unable to find a suitable "
+                                                 "algorithm for doing backward "
+                                                 "data convolution";
+        *algorithm_desc = dnn::AlgorithmDesc(preference.bwd_data_algo, false);
+        break;
+      }
+      case dnn::ConvolutionKind::BACKWARD_FILTER: {
+        miopenStatus_t status =
+            wrap::miopenFindConvolutionBackwardWeightsAlgorithm(
+                parent_, ToHandle(dnn_handle_),
+                /*diffDesc=*/output_nd.handle(), output_data.opaque(),
+                /*srcDesc=*/input_nd.handle(), input_data.opaque(),
+                /*convDesc=*/conv.handle(),
+                /*gradDesc=*/filter.handle(), filter_data.opaque(),
+                /*requestAlgoCount=*/1, /*returnedAlgoCount=*/&returnedAlgoCount,
+                /*preference=*/&preference, /*WorkSpace=*/scratch_memory_temp.opaque(),
+                /*WorkSpaceSize=*/scratch_memory_temp.size(), /*exhaustiveSearch=*/false);
+        CHECK_EQ(status, miopenStatusSuccess) << "Unable to find a suitable "
+                                                  "algorithm for doing backward "
+                                                  "filter convolution";
+        *algorithm_desc = dnn::AlgorithmDesc(preference.bwd_weights_algo, false);
+        break;
+      }
+      default:
+        return port::InternalError(
+            absl::StrCat("Unexpected convolution kind ", static_cast<int>(kind)));
+    }
 
     // Restore default allocator, note mac is stack temp
     wrap::miopenSetAllocator(parent_, ToHandle(dnn_handle_), nullptr, nullptr,
                              nullptr);
-    CHECK_EQ(status, miopenStatusSuccess) << "Unable to find a suitable "
-                                             "algorithm for doing forward "
-                                             "convolution";
 
-    *algorithm_desc = dnn::AlgorithmDesc(preference.fwd_algo, false);
     scratch_memory_size = preference.memory;
   } else {
     // An algorithm has been specified.
@@ -2645,21 +2734,22 @@ bool MIOpenSupport::PrepareForConvolutionImpl(
   // allocate scratch memory
   if (scratch_memory_size != 0) {
     if (scratch_allocator == nullptr) {
-      LOG(FATAL) << "An allocator must be specified when scratch memory is "
-                    "needed";
+      return port::InternalError(
+          absl::StrCat("An allocator must be specified when scratch memory is "
+                       "needed"));
     }
     auto allocated =
         scratch_allocator->AllocateBytes(stream, scratch_memory_size);
     if (!allocated.ok()) {
-      // Silently return when we are profiling.
-      return false;
+      return port::InternalError(
+          absl::StrCat("Failed to allocate scratch memory of size: ", scratch_memory_size));
     }
     if (allocated.ok()) {
       *scratch_memory = allocated.ValueOrDie();
     }
   }
 
-  return true;
+  return port::Status::OK();
 }
 
 template <class T>
@@ -2684,7 +2774,7 @@ bool MIOpenSupport::DoConvolveImpl(
 
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "failed to set stream for miopen handle: " << ToString(status);
   }
@@ -2695,16 +2785,16 @@ bool MIOpenSupport::DoConvolveImpl(
 
   const bool is_profiling = output_profile_result != nullptr;
 
-  std::unique_ptr<ROCMTimer> timer;
+  std::unique_ptr<GpuTimer> timer;
   if (is_profiling) {
-    timer.reset(new ROCMTimer(parent_));
+    timer.reset(new GpuTimer(parent_));
     if (!timer->Init()) {
       return false;
     }
     // The start and stop of the timer should be as close to the MIOpen call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
-    if (!timer->Start(AsROCMStream(stream))) {
+    if (!timer->Start(AsGpuStream(stream))) {
       timer->Destroy();
       return false;
     }
@@ -2720,7 +2810,7 @@ bool MIOpenSupport::DoConvolveImpl(
       /*workSpace=*/scratch_memory->opaque(),
       /*workSpaceSizeInBytes=*/scratch_memory->size());
   if (is_profiling) {
-    if (!timer->Stop(AsROCMStream(stream))) {
+    if (!timer->Stop(AsGpuStream(stream))) {
       timer->Destroy();
       return false;
     }
@@ -2849,7 +2939,7 @@ bool MIOpenSupport::DoBatchNormalizationForwardImpl(
     std::function<void()> inv_var_to_var) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -2931,7 +3021,7 @@ bool MIOpenSupport::DoBatchNormalizationBackwardImpl(
     DeviceMemory<U>* offset_backprop) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -2958,52 +3048,6 @@ bool MIOpenSupport::DoBatchNormalizationBackwardImpl(
     return false;
   }
   return true;
-}
-
-bool MIOpenSupport::PrepareForConvolution(
-    Stream* stream, const dnn::BatchDescriptor& batch_descriptor,
-    const DeviceMemory<float>& input_data,
-    const dnn::FilterDescriptor& filter_descriptor,
-    const DeviceMemory<float>& filter_data,
-    const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::BatchDescriptor& output_descriptor,
-    DeviceMemory<float>* output_data, ScratchAllocator* scratch_allocator,
-    const dnn::AlgorithmConfig& algorithm_config,
-    dnn::AlgorithmDesc* algorithm_desc, DeviceMemory<uint8>* scratch_memory) {
-  return PrepareForConvolutionImpl<float>(
-      stream, miopenFloat, batch_descriptor, input_data, filter_descriptor,
-      filter_data, convolution_descriptor, output_descriptor, output_data,
-      scratch_allocator, algorithm_config, algorithm_desc, scratch_memory);
-}
-
-bool MIOpenSupport::PrepareForConvolution(
-    Stream* stream, const dnn::BatchDescriptor& batch_descriptor,
-    const DeviceMemory<double>& input_data,
-    const dnn::FilterDescriptor& filter_descriptor,
-    const DeviceMemory<double>& filter_data,
-    const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::BatchDescriptor& output_descriptor,
-    DeviceMemory<double>* output_data, ScratchAllocator* scratch_allocator,
-    const dnn::AlgorithmConfig& algorithm_config,
-    dnn::AlgorithmDesc* algorithm_desc, DeviceMemory<uint8>* scratch_memory) {
-  LOG(ERROR) << "double-based DNN not yet implemented";
-  return false;
-}
-
-bool MIOpenSupport::PrepareForConvolution(
-    Stream* stream, const dnn::BatchDescriptor& batch_descriptor,
-    const DeviceMemory<Eigen::half>& input_data,
-    const dnn::FilterDescriptor& filter_descriptor,
-    const DeviceMemory<Eigen::half>& filter_data,
-    const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::BatchDescriptor& output_descriptor,
-    DeviceMemory<Eigen::half>* output_data, ScratchAllocator* scratch_allocator,
-    const dnn::AlgorithmConfig& algorithm_config,
-    dnn::AlgorithmDesc* algorithm_desc, DeviceMemory<uint8>* scratch_memory) {
-  return PrepareForConvolutionImpl<Eigen::half>(
-      stream, miopenHalf, batch_descriptor, input_data, filter_descriptor,
-      filter_data, convolution_descriptor, output_descriptor, output_data,
-      scratch_allocator, algorithm_config, algorithm_desc, scratch_memory);
 }
 
 bool MIOpenSupport::DoConvolve(
@@ -3178,119 +3222,6 @@ bool MIOpenSupport::DoTransformTensor(Stream* stream,
 }
 
 template <class T>
-bool MIOpenSupport::PrepareForConvolutionBackwardDataImpl(
-    Stream* stream, int miopen_type,
-    const dnn::FilterDescriptor& filter_descriptor,
-    const DeviceMemory<T>& filter_data,
-    const dnn::BatchDescriptor& output_descriptor_in,
-    DeviceMemory<T> backward_output_data,
-    const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::BatchDescriptor& input_descriptor,
-    DeviceMemory<T>* backward_input_data, ScratchAllocator* scratch_allocator,
-    const dnn::AlgorithmConfig& algorithm_config,
-    dnn::AlgorithmDesc* algorithm_desc, DeviceMemory<uint8>* scratch_memory) {
-  mutex_lock lock{dnn_handle_mutex_};
-  auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                      AsROCMStreamValue(stream));
-  if (status != miopenStatusSuccess) {
-    LOG(FATAL) << "failed to set stream for miopen handle: "
-               << ToString(status);
-  }
-
-  // TBD(keveman): remove once MIOpen supports kBatchYXDepth for backward pass.
-  BatchDescriptor output_descriptor;
-  output_descriptor.CloneFrom(output_descriptor_in);
-  std::unique_ptr<TemporaryDeviceMemory<T>> transform_scratch;
-  backward_output_data =
-      MaybeTransformLayout(stream, miopen_type, &output_descriptor,
-                           backward_output_data, &transform_scratch);
-
-  ScopedTensorDescriptor out_back_nd{
-      parent_, output_descriptor, static_cast<miopenDataType_t>(miopen_type)};
-  ScopedTensorDescriptor in_back_nd{parent_, input_descriptor,
-                                    static_cast<miopenDataType_t>(miopen_type)};
-  ScopedFilterDescriptor filter{parent_, filter_descriptor, input_descriptor,
-                                static_cast<miopenDataType_t>(miopen_type)};
-  ScopedConvolutionDescriptor conv{parent_, convolution_descriptor,
-                                   miopenFloat};
-
-  absl::optional<dnn::AlgorithmDesc> algo_desc = algorithm_config.algorithm();
-  size_t scratch_memory_size;
-
-  if (!algo_desc.has_value()) {
-    // With the default algorithm, use MIOpen's heuristics.
-    assert(scratch_allocator);
-
-    DeviceMemory<uint8> scratch_memory_temp;
-    MIOpenAllocatorContext mac(scratch_allocator, stream);
-    wrap::miopenSetAllocator(parent_, ToHandle(dnn_handle_),
-                             MIOpenAllocatorCallback, MIOpenDeallocatorCallback,
-                             &mac);
-    size_t size_in_bytes;
-    status = wrap::miopenConvolutionBackwardDataGetWorkSpaceSize(
-        parent_, ToHandle(dnn_handle_),
-        /*diffDesc=*/out_back_nd.handle(),
-        /*filterDesc=*/filter.handle(),
-        /*convDesc=*/conv.handle(),
-        /*gradDesc=*/in_back_nd.handle(),
-        /*sizeInBytes=*/&size_in_bytes);
-    if (status == miopenStatusSuccess && size_in_bytes != 0) {
-      auto allocated = scratch_allocator->AllocateBytes(stream, size_in_bytes);
-      if (allocated.ok()) {
-        scratch_memory_temp = allocated.ValueOrDie();
-      }
-    }
-
-    miopenConvAlgoPerf_t preference;
-    int returnedAlgoCount;
-
-    miopenStatus_t status = wrap::miopenFindConvolutionBackwardDataAlgorithm(
-        parent_, ToHandle(dnn_handle_),
-        /*diffDesc=*/out_back_nd.handle(), backward_output_data.opaque(),
-        /*filterDesc=*/filter.handle(), filter_data.opaque(),
-        /*convDesc=*/conv.handle(),
-        /*gradDesc=*/in_back_nd.handle(), backward_input_data->opaque(),
-        /*requestCount=*/1, /*returnedAlgoCount=*/&returnedAlgoCount,
-        /*preference=*/&preference, /*WorkSpace=*/scratch_memory_temp.opaque(),
-        /*WorkSpaceSize=*/scratch_memory_temp.size(),
-        /*exhaustiveSearch=*/false);
-
-    // Restore default allocator, note mac is stack temp
-    wrap::miopenSetAllocator(parent_, ToHandle(dnn_handle_), nullptr, nullptr,
-                             nullptr);
-    CHECK_EQ(status, miopenStatusSuccess) << "Unable to find a suitable "
-                                             "algorithm for doing backward "
-                                             "filter convolution";
-
-    *algorithm_desc = dnn::AlgorithmDesc(preference.bwd_data_algo, false);
-    scratch_memory_size = preference.memory;
-  } else {
-    // An algorithm has been specified.
-    *algorithm_desc = *algo_desc;
-    scratch_memory_size = *(algorithm_config.scratch_size());
-  }
-
-  // allocate scratch memory
-  if (scratch_memory_size != 0) {
-    if (scratch_allocator == nullptr) {
-      LOG(FATAL) << "An allocator must be specified when scratch memory is "
-                    "needed";
-    }
-    auto allocated =
-        scratch_allocator->AllocateBytes(stream, scratch_memory_size);
-    if (!allocated.ok()) {
-      // Silently return when we are profiling.
-      return false;
-    }
-    if (allocated.ok()) {
-      *scratch_memory = allocated.ValueOrDie();
-    }
-  }
-
-  return true;
-}
-
-template <class T>
 bool MIOpenSupport::DoConvolveBackwardDataImpl(
     Stream* stream,
     int miopen_type,  // Actually miopenDataType_t.
@@ -3306,7 +3237,7 @@ bool MIOpenSupport::DoConvolveBackwardDataImpl(
     dnn::ProfileResult* output_profile_result) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "failed to set stream for miopen handle: " << ToString(status);
   }
@@ -3335,14 +3266,14 @@ bool MIOpenSupport::DoConvolveBackwardDataImpl(
 
   const bool is_profiling = output_profile_result != nullptr;
 
-  std::unique_ptr<ROCMTimer> timer;
+  std::unique_ptr<GpuTimer> timer;
   if (is_profiling) {
-    timer.reset(new ROCMTimer(parent_));
+    timer.reset(new GpuTimer(parent_));
     timer->Init();
     // The start and stop of the timer should be as close to the MIOpen call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
-    timer->Start(AsROCMStream(stream));
+    timer->Start(AsGpuStream(stream));
   }
 
   status = wrap::miopenConvolutionBackwardData(
@@ -3362,7 +3293,7 @@ bool MIOpenSupport::DoConvolveBackwardDataImpl(
       /*workSpaceSizeInBytes=*/scratch_memory->size());
 
   if (is_profiling) {
-    timer->Stop(AsROCMStream(stream));
+    timer->Stop(AsGpuStream(stream));
     if (status == miopenStatusSuccess) {
       dnn::AlgorithmDesc algotype(algorithm_desc.algo_id(), false);
       output_profile_result->set_algorithm(algotype);
@@ -3381,57 +3312,6 @@ bool MIOpenSupport::DoConvolveBackwardDataImpl(
     return false;
   }
   return true;
-}
-
-bool MIOpenSupport::PrepareForConvolutionBackwardData(
-    Stream* stream, const dnn::FilterDescriptor& filter_descriptor,
-    const DeviceMemory<float>& filter_data,
-    const dnn::BatchDescriptor& output_descriptor_in,
-    DeviceMemory<float> backward_output_data,
-    const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::BatchDescriptor& input_descriptor,
-    DeviceMemory<float>* backward_input_data,
-    ScratchAllocator* scratch_allocator,
-    const dnn::AlgorithmConfig& algorithm_config,
-    dnn::AlgorithmDesc* algorithm_desc, DeviceMemory<uint8>* scratch_memory) {
-  return PrepareForConvolutionBackwardDataImpl<float>(
-      stream, miopenFloat, filter_descriptor, filter_data, output_descriptor_in,
-      backward_output_data, convolution_descriptor, input_descriptor,
-      backward_input_data, scratch_allocator, algorithm_config, algorithm_desc,
-      scratch_memory);
-}
-
-bool MIOpenSupport::PrepareForConvolutionBackwardData(
-    Stream* stream, const dnn::FilterDescriptor& filter_descriptor,
-    const DeviceMemory<double>& filter_data,
-    const dnn::BatchDescriptor& output_descriptor,
-    DeviceMemory<double> backward_output_data,
-    const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::BatchDescriptor& input_descriptor,
-    DeviceMemory<double>* backward_input_data,
-    ScratchAllocator* scratch_allocator,
-    const dnn::AlgorithmConfig& algorithm_config,
-    dnn::AlgorithmDesc* algorithm_desc, DeviceMemory<uint8>* scratch_memory) {
-  LOG(ERROR) << "bwd data for double type not implemented yet";
-  return false;
-}
-
-bool MIOpenSupport::PrepareForConvolutionBackwardData(
-    Stream* stream, const dnn::FilterDescriptor& filter_descriptor,
-    const DeviceMemory<Eigen::half>& filter_data,
-    const dnn::BatchDescriptor& output_descriptor_in,
-    DeviceMemory<Eigen::half> backward_output_data,
-    const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::BatchDescriptor& input_descriptor,
-    DeviceMemory<Eigen::half>* backward_input_data,
-    ScratchAllocator* scratch_allocator,
-    const dnn::AlgorithmConfig& algorithm_config,
-    dnn::AlgorithmDesc* algorithm_desc, DeviceMemory<uint8>* scratch_memory) {
-  return PrepareForConvolutionBackwardDataImpl<Eigen::half>(
-      stream, miopenHalf, filter_descriptor, filter_data, output_descriptor_in,
-      backward_output_data, convolution_descriptor, input_descriptor,
-      backward_input_data, scratch_allocator, algorithm_config, algorithm_desc,
-      scratch_memory);
 }
 
 bool MIOpenSupport::DoConvolveBackwardData(
@@ -3486,114 +3366,6 @@ bool MIOpenSupport::DoConvolveBackwardData(
 }
 
 template <class T>
-bool MIOpenSupport::PrepareForConvolutionBackwardFilterImpl(
-    Stream* stream, int miopen_type,  // Actually miopenDataType_t.
-    const dnn::BatchDescriptor& input_descriptor,
-    const DeviceMemory<T>& input_data,
-    const dnn::BatchDescriptor& output_descriptor_in,
-    DeviceMemory<T> backward_output_data,
-    const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::FilterDescriptor& filter_descriptor,
-    DeviceMemory<T>* backward_filter_data, ScratchAllocator* scratch_allocator,
-    const dnn::AlgorithmConfig& algorithm_config,
-    dnn::AlgorithmDesc* algorithm_desc, DeviceMemory<uint8>* scratch_memory) {
-  mutex_lock lock{dnn_handle_mutex_};
-  auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
-  if (status != miopenStatusSuccess) {
-    LOG(FATAL) << "failed to set stream for miopen handle: " << ToString(status);
-  }
-
-  // TBD(keveman): remove once MIOpen supports kBatchYXDepth for backward pass.
-  BatchDescriptor output_descriptor;
-  output_descriptor.CloneFrom(output_descriptor_in);
-  std::unique_ptr<TemporaryDeviceMemory<T>> transform_scratch;
-  backward_output_data = MaybeTransformLayout(
-      stream, static_cast<miopenDataType_t>(miopen_type),
-      &output_descriptor, backward_output_data,
-      &transform_scratch);
-
-  ScopedTensorDescriptor out_back_nd{parent_, output_descriptor,
-        static_cast<miopenDataType_t>(miopen_type)};
-  ScopedTensorDescriptor input_nd{parent_, input_descriptor,
-          static_cast<miopenDataType_t>(miopen_type)};
-  ScopedFilterDescriptor filter{parent_, filter_descriptor, input_descriptor,
-        static_cast<miopenDataType_t>(miopen_type)};
-  ScopedConvolutionDescriptor conv{parent_, convolution_descriptor,
-      miopenFloat};
-
-  absl::optional<dnn::AlgorithmDesc> algo_desc = algorithm_config.algorithm();
-  size_t scratch_memory_size;
-
-  if (!algo_desc.has_value()) {
-    // With the default algorithm, use MIOpen's heuristics.
-    assert (scratch_allocator);
-
-    DeviceMemory<uint8> scratch_memory_temp;
-    MIOpenAllocatorContext mac(scratch_allocator, stream);
-    wrap::miopenSetAllocator(parent_, ToHandle(dnn_handle_),MIOpenAllocatorCallback,MIOpenDeallocatorCallback,&mac);
-    size_t size_in_bytes;
-    status = wrap::miopenConvolutionBackwardWeightsGetWorkSpaceSize(
-        parent_, ToHandle(dnn_handle_), /*diffDesc=*/out_back_nd.handle(),
-        /*srcDesc=*/input_nd.handle() ,/*convDesc=*/conv.handle(),
-        /*gradDesc=*/filter.handle(), /*sizeInBytes=*/&size_in_bytes);
-    if (status == miopenStatusSuccess && size_in_bytes != 0) {
-      auto allocated =
-          scratch_allocator->AllocateBytes(stream, size_in_bytes);
-      if (allocated.ok()) {
-        scratch_memory_temp = allocated.ValueOrDie();
-      }
-    }
-
-    miopenConvAlgoPerf_t preference;
-    int returnedAlgoCount;
-
-    miopenStatus_t status =
-        wrap::miopenFindConvolutionBackwardWeightsAlgorithm(
-            parent_, ToHandle(dnn_handle_),
-            /*diffDesc=*/out_back_nd.handle(), backward_output_data.opaque(),
-            /*srcDesc=*/input_nd.handle(), input_data.opaque(),
-            /*convDesc=*/conv.handle(),
-            /*gradDesc=*/filter.handle(), backward_filter_data->opaque(),
-            /*requestAlgoCount=*/1, /*returnedAlgoCount=*/&returnedAlgoCount,
-            /*preference=*/&preference, /*WorkSpace=*/scratch_memory_temp.opaque(),
-            /*WorkSpaceSize=*/scratch_memory_temp.size(), /*exhaustiveSearch=*/false);
-    CHECK_EQ(status, miopenStatusSuccess) << "Unable to find a suitable "
-                                              "algorithm for doing backward "
-                                              "filter convolution";
-
-    // Restore default allocator, note mac is stack temp
-    wrap::miopenSetAllocator(parent_, ToHandle(dnn_handle_),nullptr,nullptr,nullptr);
-
-    *algorithm_desc = dnn::AlgorithmDesc(preference.bwd_weights_algo, false);
-    scratch_memory_size = preference.memory;
-  } else {
-    // An algorithm has been specified.
-    *algorithm_desc = *algo_desc;
-    scratch_memory_size = *(algorithm_config.scratch_size());
-  }
-
-  // allocate scratch memory
-  if (scratch_memory_size != 0) {
-    if (scratch_allocator == nullptr) {
-      LOG(FATAL) << "An allocator must be specified when scratch memory is "
-                    "needed";
-    }
-    auto allocated =
-        scratch_allocator->AllocateBytes(stream, scratch_memory_size);
-    if (!allocated.ok()) {
-      // Silently return when we are profiling.
-      return false;
-    }
-    if (allocated.ok()) {
-      *scratch_memory = allocated.ValueOrDie();
-    }
-  }
-
-  return true;
-}
-
-template <class T>
 bool MIOpenSupport::DoConvolveBackwardFilterImpl(
     Stream* stream, int miopen_type,  // Actually miopenDataType_t.
     const dnn::BatchDescriptor& input_descriptor,
@@ -3608,7 +3380,7 @@ bool MIOpenSupport::DoConvolveBackwardFilterImpl(
     dnn::ProfileResult* output_profile_result) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "failed to set stream for miopen handle: " << ToString(status);
   }
@@ -3638,14 +3410,14 @@ bool MIOpenSupport::DoConvolveBackwardFilterImpl(
 
   const bool is_profiling = output_profile_result != nullptr;
 
-  std::unique_ptr<ROCMTimer> timer;
+  std::unique_ptr<GpuTimer> timer;
   if (is_profiling) {
-    timer.reset(new ROCMTimer(parent_));
+    timer.reset(new GpuTimer(parent_));
     timer->Init();
     // The start and stop of the timer should be as close to the MIOpen call as
     // possible. It is still possible for other threads to issue workload on
     // to this stream. So it could take multiple profiling measurements.
-    timer->Start(AsROCMStream(stream));
+    timer->Start(AsGpuStream(stream));
   }
 
   status = wrap::miopenConvolutionBackwardWeights(
@@ -3662,7 +3434,7 @@ bool MIOpenSupport::DoConvolveBackwardFilterImpl(
       /*workSpace=*/scratch_memory->opaque(),
       /*workSpaceSizeInBytes=*/scratch_memory->size());
   if (is_profiling) {
-    timer->Stop(AsROCMStream(stream));
+    timer->Stop(AsGpuStream(stream));
     if (status == miopenStatusSuccess) {
       dnn::AlgorithmDesc algotype(algorithm_desc.algo_id(), false);
       output_profile_result->set_algorithm(algotype);
@@ -3681,57 +3453,6 @@ bool MIOpenSupport::DoConvolveBackwardFilterImpl(
     return false;
   }
   return true;
-}
-
-bool MIOpenSupport::PrepareForConvolutionBackwardFilter(
-    Stream* stream, const dnn::BatchDescriptor& input_descriptor,
-    const DeviceMemory<double>& input_data,
-    const dnn::BatchDescriptor& output_descriptor_in,
-    DeviceMemory<double> backward_output_data,
-    const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::FilterDescriptor& filter_descriptor,
-    DeviceMemory<double>* backward_filter_data,
-    ScratchAllocator* scratch_allocator,
-    const dnn::AlgorithmConfig& algorithm_config,
-    dnn::AlgorithmDesc* algorithm_desc, DeviceMemory<uint8>* scratch_memory) {
-  LOG(ERROR) << "bwd filter for double type not implemented yet";
-  return false;
-}
-
-bool MIOpenSupport::PrepareForConvolutionBackwardFilter(
-    Stream* stream, const dnn::BatchDescriptor& input_descriptor,
-    const DeviceMemory<float>& input_data,
-    const dnn::BatchDescriptor& output_descriptor_in,
-    DeviceMemory<float> backward_output_data,
-    const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::FilterDescriptor& filter_descriptor,
-    DeviceMemory<float>* backward_filter_data,
-    ScratchAllocator* scratch_allocator,
-    const dnn::AlgorithmConfig& algorithm_config,
-    dnn::AlgorithmDesc* algorithm_desc, DeviceMemory<uint8>* scratch_memory) {
-  return PrepareForConvolutionBackwardFilterImpl<float>(
-      stream, miopenFloat, input_descriptor, input_data,
-      output_descriptor_in, backward_output_data, convolution_descriptor,
-      filter_descriptor, backward_filter_data, scratch_allocator,
-      algorithm_config, algorithm_desc, scratch_memory);
-}
-
-bool MIOpenSupport::PrepareForConvolutionBackwardFilter(
-    Stream* stream, const dnn::BatchDescriptor& input_descriptor,
-    const DeviceMemory<Eigen::half>& input_data,
-    const dnn::BatchDescriptor& output_descriptor_in,
-    DeviceMemory<Eigen::half> backward_output_data,
-    const dnn::ConvolutionDescriptor& convolution_descriptor,
-    const dnn::FilterDescriptor& filter_descriptor,
-    DeviceMemory<Eigen::half>* backward_filter_data,
-    ScratchAllocator* scratch_allocator,
-    const dnn::AlgorithmConfig& algorithm_config,
-    dnn::AlgorithmDesc* algorithm_desc, DeviceMemory<uint8>* scratch_memory) {
-  return PrepareForConvolutionBackwardFilterImpl<Eigen::half>(
-      stream, miopenHalf, input_descriptor, input_data,
-      output_descriptor_in, backward_output_data, convolution_descriptor,
-      filter_descriptor, backward_filter_data, scratch_allocator,
-      algorithm_config, algorithm_desc, scratch_memory);
 }
 
 bool MIOpenSupport::DoConvolveBackwardFilter(
@@ -3794,7 +3515,7 @@ bool MIOpenSupport::DoConvolveBackwardBiasImpl(
     DeviceMemory<T>* backward_bias_data) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(FATAL) << "failed to set stream for miopen handle: " << ToString(status);
   }
@@ -4015,7 +3736,7 @@ bool MIOpenSupport::DoBiasAdd(Stream* stream,
 
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4069,7 +3790,7 @@ bool MIOpenSupport::DoPoolForward(
     ScratchAllocator* workspace_allocator) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4106,7 +3827,7 @@ bool MIOpenSupport::DoPoolForward(
     ScratchAllocator* workspace_allocator) {
 
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4158,7 +3879,7 @@ bool MIOpenSupport::DoPoolBackward(
     ScratchAllocator* workspace_allocator) {
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4259,7 +3980,7 @@ bool MIOpenSupport::DoPoolBackward(
 
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4372,7 +4093,7 @@ bool MIOpenSupport::DoNormalizeWithDimensions(
   // Launch the normalization.
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4416,7 +4137,7 @@ bool MIOpenSupport::DoNormalizeBackwardWithDimensions(
 
   mutex_lock lock{dnn_handle_mutex_};
   auto status = wrap::miopenSetStream(parent_, ToHandle(dnn_handle_),
-                                     AsROCMStreamValue(stream));
+                                     AsGpuStreamValue(stream));
   if (status != miopenStatusSuccess) {
     LOG(ERROR) << "failed to set stream for miopen handle: " << ToString(status);
     return false;
@@ -4676,11 +4397,11 @@ bool MIOpenSupport::DoFusedConvolutionBiasActivationImpl(
   if (fusion_plan.CompilationSucceeded()) {
     const bool is_profiling = output_profile_result != nullptr;
 
-    std::unique_ptr<ROCMTimer> timer;
+    std::unique_ptr<GpuTimer> timer;
     if (is_profiling) {
-      timer.reset(new ROCMTimer(parent_));
+      timer.reset(new GpuTimer(parent_));
       timer->Init();
-      timer->Start(AsROCMStream(stream));
+      timer->Start(AsGpuStream(stream));
     }
 
     miopenStatus_t status = miopenStatusSuccess;
@@ -4704,7 +4425,7 @@ bool MIOpenSupport::DoFusedConvolutionBiasActivationImpl(
     }
 
     if (is_profiling) {
-      timer->Stop(AsROCMStream(stream));
+      timer->Stop(AsGpuStream(stream));
       if (status == miopenStatusSuccess) {
         output_profile_result->set_elapsed_time_in_ms(
             timer->GetElapsedMilliseconds());
@@ -4772,11 +4493,11 @@ bool MIOpenSupport::DoFusedBatchNormActivationInferenceImpl(
   if (fusion_plan.CompilationSucceeded()) {
     const bool is_profiling = output_profile_result != nullptr;
 
-    std::unique_ptr<ROCMTimer> timer;
+    std::unique_ptr<GpuTimer> timer;
     if (is_profiling) {
-      timer.reset(new ROCMTimer(parent_));
+      timer.reset(new GpuTimer(parent_));
       timer->Init();
-      timer->Start(AsROCMStream(stream));
+      timer->Start(AsGpuStream(stream));
     }
 
     miopenStatus_t status = miopenStatusSuccess;
@@ -4797,7 +4518,7 @@ bool MIOpenSupport::DoFusedBatchNormActivationInferenceImpl(
     }
 
     if (is_profiling) {
-      timer->Stop(AsROCMStream(stream));
+      timer->Stop(AsGpuStream(stream));
       if (status == miopenStatusSuccess) {
         output_profile_result->set_elapsed_time_in_ms(
             timer->GetElapsedMilliseconds());
@@ -4881,11 +4602,11 @@ bool MIOpenSupport::DoFusedBatchNormActivationForwardImpl(
   if (fusion_plan.CompilationSucceeded()) {
     const bool is_profiling = output_profile_result != nullptr;
 
-    std::unique_ptr<ROCMTimer> timer;
+    std::unique_ptr<GpuTimer> timer;
     if (is_profiling) {
-      timer.reset(new ROCMTimer(parent_));
+      timer.reset(new GpuTimer(parent_));
       timer->Init();
-      timer->Start(AsROCMStream(stream));
+      timer->Start(AsGpuStream(stream));
     }
 
     miopenStatus_t status = miopenStatusSuccess;
@@ -4907,7 +4628,7 @@ bool MIOpenSupport::DoFusedBatchNormActivationForwardImpl(
     }
 
     if (is_profiling) {
-      timer->Stop(AsROCMStream(stream));
+      timer->Stop(AsGpuStream(stream));
       if (status == miopenStatusSuccess) {
         output_profile_result->set_elapsed_time_in_ms(
             timer->GetElapsedMilliseconds());
@@ -4996,11 +4717,11 @@ bool MIOpenSupport::DoFusedBatchNormActivationBackwardImpl(
   if (fusion_plan.CompilationSucceeded()) {
     const bool is_profiling = output_profile_result != nullptr;
 
-    std::unique_ptr<ROCMTimer> timer;
+    std::unique_ptr<GpuTimer> timer;
     if (is_profiling) {
-      timer.reset(new ROCMTimer(parent_));
+      timer.reset(new GpuTimer(parent_));
       timer->Init();
-      timer->Start(AsROCMStream(stream));
+      timer->Start(AsGpuStream(stream));
     }
 
     miopenStatus_t status = miopenStatusSuccess;
@@ -5024,7 +4745,7 @@ bool MIOpenSupport::DoFusedBatchNormActivationBackwardImpl(
     }
 
     if (is_profiling) {
-      timer->Stop(AsROCMStream(stream));
+      timer->Stop(AsGpuStream(stream));
       if (status == miopenStatusSuccess) {
         output_profile_result->set_elapsed_time_in_ms(
             timer->GetElapsedMilliseconds());
@@ -5091,44 +4812,38 @@ bool MIOpenSupport::DoFusedBatchNormActivationBackward(
       offset_backprop_data, output_profile_result);
 }
 
-}  // namespace rocm
-
-namespace gpu = ::stream_executor;
+}  // namespace gpu
 
 void initialize_miopen() {
-  gpu::port::Status status =
-      gpu::PluginRegistry::Instance()
-          ->RegisterFactory<gpu::PluginRegistry::DnnFactory>(
-              gpu::rocm::kROCmPlatformId, gpu::rocm::kMIOpenPlugin, "MIOpen",
-              [](gpu::internal::StreamExecutorInterface*
-                     parent) -> gpu::dnn::DnnSupport* {
-                gpu::rocm::ROCMExecutor* rocm_executor =
-                    dynamic_cast<gpu::rocm::ROCMExecutor*>(parent);
-                if (rocm_executor == nullptr) {
-                  LOG(ERROR)
-                      << "Attempting to initialize an instance of the MIOpen "
-                      << "support library with a non-ROCM StreamExecutor";
-                  return nullptr;
-                }
+  port::Status status =
+      PluginRegistry::Instance()->RegisterFactory<PluginRegistry::DnnFactory>(
+          gpu::kROCmPlatformId, gpu::kMIOpenPlugin, "MIOpen",
+          [](internal::StreamExecutorInterface* parent) -> dnn::DnnSupport* {
+            gpu::GpuExecutor* rocm_executor =
+                dynamic_cast<gpu::GpuExecutor*>(parent);
+            if (rocm_executor == nullptr) {
+              LOG(ERROR)
+                  << "Attempting to initialize an instance of the MIOpen "
+                  << "support library with a non-ROCM StreamExecutor";
+              return nullptr;
+            }
 
-                gpu::rocm::MIOpenSupport* dnn =
-                    new gpu::rocm::MIOpenSupport(rocm_executor);
-                if (!dnn->Init().ok()) {
-                  // Note: Init() will log a more specific error.
-                  delete dnn;
-                  return nullptr;
-                }
-                return dnn;
-              });
+            gpu::MIOpenSupport* dnn = new gpu::MIOpenSupport(rocm_executor);
+            if (!dnn->Init().ok()) {
+              // Note: Init() will log a more specific error.
+              delete dnn;
+              return nullptr;
+            }
+            return dnn;
+          });
 
   if (!status.ok()) {
     LOG(ERROR) << "Unable to register MIOpen factory: "
                << status.error_message();
   }
 
-  gpu::PluginRegistry::Instance()->SetDefaultFactory(gpu::rocm::kROCmPlatformId,
-                                                     gpu::PluginKind::kDnn,
-                                                     gpu::rocm::kMIOpenPlugin);
+  PluginRegistry::Instance()->SetDefaultFactory(
+      gpu::kROCmPlatformId, PluginKind::kDnn, gpu::kMIOpenPlugin);
 }
 
 }  // namespace stream_executor
