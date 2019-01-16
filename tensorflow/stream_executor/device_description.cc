@@ -119,7 +119,7 @@ bool DeviceDescription::rocm_amdgpu_isa_version(int *version) const {
     *version = rocm_amdgpu_isa_version_;
     status = true;
   }
-  return false;
+  return status;
 }
 
 bool ThreadDimOk(const DeviceDescription &device_description,
