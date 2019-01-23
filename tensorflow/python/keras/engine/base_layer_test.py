@@ -26,6 +26,8 @@ from tensorflow.python.eager import context
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.framework import test_util
+from tensorflow.python.keras import keras_parameterized
+from tensorflow.python.keras import testing_utils
 from tensorflow.python.keras.engine import base_layer
 from tensorflow.python.keras.optimizer_v2 import rmsprop
 from tensorflow.python.ops import array_ops
@@ -71,7 +73,7 @@ class InvalidLayer(base_layer.Layer):
     raise ValueError('You did something wrong!')
 
 
-class BaseLayerTest(test.TestCase, parameterized.TestCase):
+class BaseLayerTest(keras_parameterized.TestCase):
 
   @parameterized.parameters(DynamicLayer1, DynamicLayer2)
   def test_dynamic_layer_in_functional_model_in_graph_mode(self, layer_class):
@@ -210,6 +212,17 @@ class BaseLayerTest(test.TestCase, parameterized.TestCase):
     with self.assertRaisesRegexp(ValueError, 'You did something wrong!'):
       _ = InvalidLayer()(inputs)
 
+  @keras_parameterized.run_with_all_model_types
+  @test_util.run_in_graph_and_eager_modes
+  def test_build_with_numpy_data(self):
+    model_layers = [
+        keras.layers.Dense(3, activation='relu', kernel_initializer='ones'),
+        keras.layers.Dense(1, activation='sigmoid', kernel_initializer='ones')
+    ]
+    model = testing_utils.get_model_from_layers(model_layers, input_shape=(4,))
+    model(np.zeros((2, 4), dtype='float32'))
+    self.assertTrue(model.built)
+
   def test_using_symbolic_tensors_with_tf_ops(self):
     # Single-input.
     x = keras.Input((3,))
@@ -239,18 +252,14 @@ class BaseLayerTest(test.TestCase, parameterized.TestCase):
       x1 = array_ops.ones((3, 3))
     x2 = array_ops.ones((3, 3))
     self.assertIsInstance(x2, ops.EagerTensor)
-    with self.assertRaisesRegexp(TypeError,
-                                 'provided list of inputs contains '
-                                 'objects other than \'EagerTensor\''):
+    with self.assertRaisesRegexp(TypeError, 'Graph tensors'):
       math_ops.matmul(x1, x2)
 
   def test_mixing_numpy_arrays_and_graph_tensors(self):
     with ops.Graph().as_default():
       x1 = array_ops.ones((3, 3))
     x2 = np.ones((3, 3), dtype='float32')
-    with self.assertRaisesRegexp(TypeError,
-                                 'provided list of inputs contains '
-                                 'objects other than \'EagerTensor\''):
+    with self.assertRaisesRegexp(TypeError, 'Graph tensors'):
       math_ops.matmul(x1, x2)
 
   @test_util.run_in_graph_and_eager_modes

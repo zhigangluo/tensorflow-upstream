@@ -83,15 +83,14 @@ StatusOr<std::unique_ptr<HloInstruction>> HloInstruction::CreateFromProto(
     return computation_map.at(proto.called_computation_ids(index));
   };
 
-  TF_RET_CHECK(std::all_of(
-      proto.operand_ids().begin(), proto.operand_ids().end(),
-      [&instruction_map](int64 id) { return instruction_map.contains(id); }))
+  TF_RET_CHECK(
+      absl::c_all_of(proto.operand_ids(),
+                     [&](int64 id) { return instruction_map.contains(id); }))
       << proto.name() << " instruction contains invalid operand id(s)";
 
-  TF_RET_CHECK(std::all_of(
-      proto.called_computation_ids().begin(),
-      proto.called_computation_ids().end(),
-      [&computation_map](int64 id) { return computation_map.contains(id); }))
+  TF_RET_CHECK(
+      absl::c_all_of(proto.called_computation_ids(),
+                     [&](int64 id) { return computation_map.contains(id); }))
       << proto.name() << " instruction references invalid computation id(s)";
 
   Shape shape(proto.shape());
@@ -459,21 +458,17 @@ StatusOr<std::unique_ptr<HloInstruction>> HloInstruction::CreateFromProto(
           << "DynamicSlice instruction should have at least 1 operands but "
              "sees "
           << proto.operand_ids_size();
-      if (proto.operand_ids_size() == 2 && operands(1)->shape().rank() == 1) {
-        // TODO(b/118437727): Old form, remove this path.
-        instruction =
-            CreateDynamicSlice(shape, operands(0), operands(1), slice_sizes);
-      } else {
-        // New form
+      // TODO(b/118437727): Old form, make the check unconditional.
+      if (proto.operand_ids_size() != 2 || operands(1)->shape().rank() != 1) {
         auto expected_operands = 1 + operands(0)->shape().rank();
         TF_RET_CHECK(proto.operand_ids_size() == expected_operands)
             << "DynamicSlice instruction should have " << expected_operands
             << " operands, but has " << proto.operand_ids_size();
-        const auto& operand_vector = all_operands();
-        instruction = CreateDynamicSlice(
-            shape, operands(0), absl::MakeSpan(operand_vector).subspan(1),
-            slice_sizes);
       }
+      const auto& operand_vector = all_operands();
+      instruction = CreateDynamicSlice(
+          shape, operands(0), absl::MakeSpan(operand_vector).subspan(1),
+          slice_sizes);
       break;
     }
     case HloOpcode::kDynamicUpdateSlice: {
@@ -481,22 +476,19 @@ StatusOr<std::unique_ptr<HloInstruction>> HloInstruction::CreateFromProto(
           << "DynamicUpdateSlice instruction should have at least 2 operands "
              "but sees "
           << proto.operand_ids_size();
-      if (proto.operand_ids_size() == 3 && operands(2)->shape().rank() == 1) {
-        // TODO(b/118437727): Old form, remove this path.
-        instruction = CreateDynamicUpdateSlice(shape, operands(0), operands(1),
-                                               operands(2));
-      } else {
-        // New form
+      // TODO(b/118437727): Old form, make the check unconditional.
+      if (proto.operand_ids_size() != 3 || operands(2)->shape().rank() != 1) {
         auto expected_operands = 2 + operands(0)->shape().rank();
         TF_RET_CHECK(proto.operand_ids_size() == expected_operands)
             << "DynamicUpdateSlice instruction should have "
             << expected_operands << " operands, but has "
             << proto.operand_ids_size();
-        const auto& operand_vector = all_operands();
-        instruction =
-            CreateDynamicUpdateSlice(shape, operands(0), operands(1),
-                                     absl::MakeSpan(operand_vector).subspan(2));
       }
+      const auto& operand_vector = all_operands();
+      instruction =
+          CreateDynamicUpdateSlice(shape, operands(0), operands(1),
+                                   absl::MakeSpan(operand_vector).subspan(2));
+
       break;
     }
     case HloOpcode::kGather: {
@@ -949,27 +941,11 @@ HloInstruction::CreateAddDependency(HloInstruction* data_operand,
 }
 
 /* static */ std::unique_ptr<HloInstruction> HloInstruction::CreateDynamicSlice(
-    const Shape& shape, HloInstruction* operand, HloInstruction* start_indices,
-    absl::Span<const int64> slice_sizes) {
-  return absl::make_unique<HloDynamicSliceInstruction>(
-      shape, operand, start_indices, slice_sizes);
-}
-
-/* static */ std::unique_ptr<HloInstruction> HloInstruction::CreateDynamicSlice(
     const Shape& shape, HloInstruction* operand,
     absl::Span<HloInstruction* const> start_indices,
     absl::Span<const int64> slice_sizes) {
   return absl::make_unique<HloDynamicSliceInstruction>(
       shape, operand, start_indices, slice_sizes);
-}
-
-/* static */ std::unique_ptr<HloInstruction>
-HloInstruction::CreateDynamicUpdateSlice(const Shape& shape,
-                                         HloInstruction* operand,
-                                         HloInstruction* update,
-                                         HloInstruction* start_indices) {
-  return absl::make_unique<HloDynamicUpdateSliceInstruction>(
-      shape, operand, update, start_indices);
 }
 
 /* static */ std::unique_ptr<HloInstruction>
@@ -1599,12 +1575,10 @@ HloInstruction::InstructionVector HloInstruction::unique_operands() const {
 
 Status HloInstruction::AddControlDependencyTo(HloInstruction* instruction) {
   TF_RET_CHECK(instruction->parent() == parent());
-  if (std::find(control_successors_.begin(), control_successors_.end(),
-                instruction) == control_successors_.end()) {
+  if (!absl::c_linear_search(control_successors_, instruction)) {
     control_successors_.push_back(instruction);
-    TF_RET_CHECK(std::find(instruction->control_predecessors_.begin(),
-                           instruction->control_predecessors_.end(),
-                           this) == instruction->control_predecessors_.end());
+    TF_RET_CHECK(
+        !absl::c_linear_search(instruction->control_predecessors_, this));
     instruction->control_predecessors_.push_back(this);
   }
   return Status::OK();
@@ -1853,7 +1827,7 @@ void HloInstruction::RemoveUser(HloInstruction* user) {
   user_set_.erase(set_it);
   // This is linear in the number of the users, but a vector provides a stable
   // iteration order and much faster traversal.
-  auto vec_it = std::find(users_.begin(), users_.end(), user);
+  auto vec_it = absl::c_find(users_, user);
   CHECK(vec_it != users_.end());
   users_.erase(vec_it);
 }
@@ -1871,8 +1845,7 @@ Status HloInstruction::ReplaceUseWith(HloInstruction* user,
 
   RemoveUser(user);
 
-  TF_RET_CHECK(
-      std::count(user->operands_.begin(), user->operands_.end(), this) >= 0);
+  TF_RET_CHECK(absl::c_count(user->operands_, this) >= 0);
   std::replace(user->operands_.begin(), user->operands_.end(), this,
                new_producer);
   new_producer->AddUser(user);
@@ -1907,8 +1880,7 @@ Status HloInstruction::ReplaceOperandWithDifferentShape(
   VLOG(3) << "Replacing operand " << operand_num << " of " << name() << " with "
           << new_operand->name() << ", was " << old_operand->name();
 
-  if (std::find(operands_.begin(), operands_.end(), old_operand) ==
-      operands_.end()) {
+  if (!absl::c_linear_search(operands_, old_operand)) {
     old_operand->RemoveUser(this);
   }
   new_operand->AddUser(this);
@@ -2945,10 +2917,10 @@ StatusOr<HloInstruction::FusionKind> StringToFusionKind(
 
 string PaddingConfigToString(const PaddingConfig& padding) {
   bool has_interior_padding =
-      std::any_of(padding.dimensions().begin(), padding.dimensions().end(),
-                  [](const PaddingConfig::PaddingConfigDimension& dim) {
-                    return dim.interior_padding() != 0;
-                  });
+      absl::c_any_of(padding.dimensions(),
+                     [](const PaddingConfig::PaddingConfigDimension& dim) {
+                       return dim.interior_padding() != 0;
+                     });
   return StrJoin(
       padding.dimensions(), "x",
       [&](string* out, const PaddingConfig::PaddingConfigDimension& dim) {
