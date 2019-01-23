@@ -151,9 +151,10 @@ void UpdateLaunchDimensions(const LaunchDimensions& launch_dims, Thunk* thunk,
 
 IrEmitterUnnested::IrEmitterUnnested(const HloModuleConfig& hlo_module_config,
                                      const HloComputation* hlo_computation,
-                                     IrEmitterContext* ir_emitter_context)
+                                     IrEmitterContext* ir_emitter_context,
+                                     llvm_ir::LLVMTargetFeatures* llvm_target_features)
     : IrEmitter(hlo_module_config, ir_emitter_context, /*is_nested=*/false,
-      target_machine_features),
+                llvm_target_features),
       hlo_computation_(hlo_computation) {
   // Initialize thunk_sequence_ to an empty list of thunks.
   thunk_sequence_.reset(new ThunkSequence());
@@ -1236,8 +1237,7 @@ Status IrEmitterUnnested::HandleSort(HloInstruction* sort) {
         launch_dimensions,
         xor_masks.size() > 1 ? num_iterations_in_sort_dim
                              : standard_num_iterations_in_sort_dim,
-        kTileSize,
-        GetTargetMachineFeatures());
+        kTileSize, GetTargetMachineFeatures());
   };
   std::vector<int64> xor_masks;
   for (int64 stage = 0; stage < num_stages; ++stage) {
@@ -2043,9 +2043,10 @@ Status IrEmitterUnnested::EmitTargetElementLoopInThunk(
   // pressure, since we touch threadIdx.x and blockIdx.x at the beginning of the
   // kernel *anyway*.
   std::vector<IrArray> output_arrays = ConstructIrArrayForOutputs(hlo);
-  KernelSupportLibrary{&b_}.If("emit_mof_tuple", IsBlock0Thread0(&b_,GetTargetMachineFeatures()), [&] {
-    llvm_ir::EmitTuple(GetIrArray(hlo, hlo), output_arrays, &b_, module_);
-  });
+  KernelSupportLibrary{&b_}.If(
+      "emit_mof_tuple", IsBlock0Thread0(&b_, GetTargetMachineFeatures()), [&] {
+        llvm_ir::EmitTuple(GetIrArray(hlo, hlo), output_arrays, &b_, module_);
+      });
 
   // For multioutput fusion, we need to emit each operand and the root.
   TF_RETURN_IF_ERROR(
@@ -2844,7 +2845,7 @@ void IrEmitterUnnested::EmitBlock(const TileGenerator& emit_one_tile,
   };
 
   const IrArray::Index starting_block =
-      mapping_scheme->EmitBlockIndex(index_ty,GetTargetMachineFeatures());
+      mapping_scheme->EmitBlockIndex(index_ty, GetTargetMachineFeatures());
   const IrArray::Index starting_tile_for_dim_z =
       mapping_scheme->GetTileIndexForBlockOrigin(starting_block);
 
@@ -2922,7 +2923,7 @@ LaunchDimensions IrEmitterUnnested::EmitKernel(
   // *anyway*.
   if (!reduction_info && unnested_hlo->IsMultiOutputFusion()) {
     KernelSupportLibrary{&b_}.If(
-        "emit_mof_tuple", IsBlock0Thread0(&b_), [&] {
+        "emit_mof_tuple", IsBlock0Thread0(&b_, GetTargetMachineFeatures()), [&] {
           llvm_ir::EmitTuple(GetIrArray(*unnested_hlo, *unnested_hlo),
                              ConstructIrArrayForOutputs(*unnested_hlo), &b_,
                              module_);
@@ -2944,7 +2945,8 @@ LaunchDimensions IrEmitterUnnested::EmitKernel(
   // thread, (y, x) from thread_id.
   llvm::Value* x;
   llvm::Value* y;
-  std::tie(y, x) = mapping_scheme->EmitThreadYXCoordinate(index_ty,GetTargetMachineFeatures());
+  std::tie(y, x) = mapping_scheme->EmitThreadYXCoordinate(
+      index_ty, GetTargetMachineFeatures());
 
   kernel_info->SetLaneId(
       mapping_scheme->GetNumberOfThreadsForDimensionX() == kWarpSize ? x
@@ -2996,7 +2998,7 @@ LaunchDimensions IrEmitterUnnested::EmitKernel(
 
       // Wait for all threads to reach this point using `__syncthreads` in CUDA.
       llvm::Intrinsic::ID barrier_intrinsic_id =
-           GetTargetMachineFeatures().simt_intrinsic("barrier")
+          GetTargetMachineFeatures().simt_intrinsic("barrier");
       llvm_ir::EmitCallToIntrinsic(barrier_intrinsic_id, {}, {}, &b_);
     }
 
@@ -3020,7 +3022,7 @@ LaunchDimensions IrEmitterUnnested::EmitKernel(
     // and overwrite the shared memory buffers.
     if (block_contains_multi_tiles && !tiled_param_ids.empty()) {
       llvm::Intrinsic::ID barrier_intrinsic_id =
-           GetTargetMachineFeatures().simt_intrinsic("barrier")
+          GetTargetMachineFeatures().simt_intrinsic("barrier");
       llvm_ir::EmitCallToIntrinsic(barrier_intrinsic_id, {}, {}, &b_);
     }
   };
