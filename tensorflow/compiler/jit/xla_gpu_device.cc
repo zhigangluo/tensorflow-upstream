@@ -14,7 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 // Registers the XLA_GPU device, which is an XlaDevice instantiation that runs
-// operators using XLA via the XLA "CUDA" (GPU) backend.
+// operators using XLA via the XLA "CUDA" or "ROCM" (GPU) backend.
 
 #include <set>
 #include "absl/memory/memory.h"
@@ -49,7 +49,8 @@ Status XlaGpuDeviceFactory::CreateDevices(
       RegisterXlaDeviceKernels(DEVICE_XLA_GPU, DEVICE_GPU_XLA_JIT);
   (void)registrations;
 
-  auto platform = se::MultiPlatformManager::PlatformWithName("CUDA");
+  // XXX FIXME devise a way to cope with multiple platforms
+  auto platform = se::MultiPlatformManager::PlatformWithName("ROCM");
   if (!platform.ok()) {
     // Treat failures as non-fatal; there might not be a GPU in the machine.
     VLOG(1) << "Failed to create XLA_GPU device: " << platform.status();

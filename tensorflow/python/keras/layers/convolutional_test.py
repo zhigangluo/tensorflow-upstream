@@ -287,6 +287,10 @@ class Conv3DTransposeTest(keras_parameterized.TestCase):
             input_shape=(num_samples, depth, num_row, num_col, stack_size))
 
   def test_conv3dtranspose(self):
+
+    if test.is_built_with_rocm():
+      self.skipTest("5D tensors are not yet supported in ROCm")
+
     kwargs = {
         'filters': 2,
         'kernel_size': (3, 3, 3),
@@ -301,6 +305,10 @@ class Conv3DTransposeTest(keras_parameterized.TestCase):
     self._run_test(kwargs, 'output_padding', [(1, 1, 1)])
 
   def test_conv3dtranspose_regularizers(self):
+
+    if test.is_built_with_rocm():
+      self.skipTest("4D tensors are not yet supported in ROCm")
+
     kwargs = {
         'filters': 3,
         'kernel_size': 3,
@@ -509,6 +517,10 @@ class Conv3DTest(keras_parameterized.TestCase):
             input_shape=(num_samples, depth, num_row, num_col, stack_size))
 
   def test_conv3d(self):
+
+    if test.is_built_with_rocm():
+      self.skipTest("5D tensors are not yet supported in ROCm")
+
     kwargs = {
         'filters': 2,
         'kernel_size': (3, 3, 3),
@@ -521,6 +533,10 @@ class Conv3DTest(keras_parameterized.TestCase):
       self._run_test(kwargs, 'data_format', ['channels_first'])
 
   def test_conv3d_regularizers(self):
+
+    if test.is_built_with_rocm():
+      self.skipTest("5D tensors are not yet supported in ROCm")
+
     kwargs = {
         'filters': 3,
         'kernel_size': 3,

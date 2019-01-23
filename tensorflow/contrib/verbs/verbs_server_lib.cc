@@ -82,7 +82,6 @@ std::once_flag reg_mem_visitors_call;
 
 Status VerbsServer::Init(ServiceInitFunction service_func,
                          RendezvousMgrCreationFunction rendezvous_mgr_func) {
-  std::call_once(reg_mem_visitors_call, []() { RdmaMgr::RegMemVisitors(); });
   Status s = GrpcServer::Init(service_func, rendezvous_mgr_func);
   {
     mutex_lock l(mu_);
@@ -94,6 +93,9 @@ Status VerbsServer::Init(ServiceInitFunction service_func,
     dynamic_cast<RdmaRendezvousMgr*>(worker_env()->rendezvous_mgr)
         ->SetRdmaMgr(rdma_mgr_);
   }
+  std::call_once(reg_mem_visitors_call, [this]() {
+    rdma_mgr_->RegMemVisitors();
+  });
   return s;
 }
 

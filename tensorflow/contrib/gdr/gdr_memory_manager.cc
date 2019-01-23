@@ -47,6 +47,8 @@ bool IsGDRAvailable() {
   return false;
 #elif defined(PLATFORM_WINDOWS)
   return false;
+#elif TENSORFLOW_USE_ROCM
+  return true;
 #else
   std::ifstream ifs("/proc/modules");
   string line;
@@ -247,10 +249,10 @@ Status GdrMemoryManager::Init() {
   LOG(INFO) << "Instrumenting CPU allocator(s)";
 
   for (int numa_idx = 0; numa_idx < port::NUMANumNodes(); ++numa_idx) {
-    GPUProcessState::singleton()->AddCUDAHostAllocVisitor(numa_idx,
-                                                          alloc_visitor);
-    GPUProcessState::singleton()->AddCUDAHostFreeVisitor(numa_idx,
-                                                         free_visitor);
+    GPUProcessState::singleton()->AddGPUHostAllocVisitor(numa_idx,
+                                                         alloc_visitor);
+    GPUProcessState::singleton()->AddGPUHostFreeVisitor(numa_idx,
+                                                        free_visitor);
   }
 
   if (IsGDRAvailable()) {
@@ -263,7 +265,6 @@ Status GdrMemoryManager::Init() {
                                                      cuda_alloc_visitor);
     LOG(INFO) << "Instrumenting GPU allocator for NUMA " << numa_node_;
   }
-
   return Status::OK();
 }
 
@@ -452,20 +453,14 @@ void GdrMemoryManager::TensorFromTransportOptions(
 
   const Tensor* copy = nullptr;
 
-  if (mr == nullptr) {
-    AllocatorAttributes alloc_attrs;
-    alloc_attrs.set_gpu_compatible(true);
-    alloc_attrs.set_nic_compatible(true);
-    alloc_attrs.set_on_host(true);
-    Allocator* alloc = device->GetAllocator(alloc_attrs);
-    copy = new Tensor(alloc, tensor->dtype(), tensor->shape());
-
-    mr = FindMemoryRegion(copy);
-    buffer = DMAHelper::buffer(copy);
-    if (mr == nullptr) {
-      done(errors::Unavailable("Cannot find pinned memory region"));
-      delete copy;
-      return;
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+  if (device->tensorflow_gpu_device_info() && !on_host &&
+      host_copy.NumElements() > 0) {
+    uint64_t checksum = 0;
+    if (VLOG_IS_ON(2)) {
+      checksum = GPUUtil::Checksum(host_copy);
+      CHECK(checksum == remote_mr.checksum())
+          << "Checksum mismatch: " << checksum << "!=" << remote_mr.checksum();
     }
   }
 

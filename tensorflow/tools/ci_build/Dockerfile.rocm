@@ -44,9 +44,12 @@ RUN apt-get update --allow-insecure-repositories && DEBIAN_FRONTEND=noninteracti
   libboost-filesystem-dev \
   rpm \
   libnuma-dev \
+  pciutils \
   virtualenv \
   python-pip \
   python3-pip \
+  libxml2 \
+  libxml2-dev \
   wget && \
   apt-get clean && \
   rm -rf /var/lib/apt/lists/*
@@ -54,14 +57,20 @@ RUN apt-get update --allow-insecure-repositories && DEBIAN_FRONTEND=noninteracti
 # Install rocm pkgs
 RUN apt-get update --allow-insecure-repositories && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-unauthenticated \
-    rocm-dev rocm-libs rocm-utils \
+    rocm-dev rocm-libs rocm-utils rocm-cmake \
     rocfft miopen-hip miopengemm rocblas hipblas rocrand \
     rocm-profiler cxlactivitylogger && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-RUN cd ~ && git clone https://github.com/GPUOpen-ProfessionalCompute-Tools/HIP.git
-RUN cd ~/HIP && mkdir -p build && cd build && cmake .. && make package -j && dpkg -i *.deb
+
+# Override the default rocBLAS and MIOpen installs with a newer version with support for BnA fusion
+RUN mkdir -p $HOME/pkgs/rocblas
+RUN cd $HOME/pkgs/rocblas && wget https://github.com/ROCmSoftwarePlatform/rocBLAS/releases/download/v14.3.0/rocblas-0.14.3.158-Linux.deb && dpkg -i *.deb
+
+RUN mkdir -p $HOME/pkgs/MIOpen
+RUN cd $HOME/pkgs/MIOpen && wget https://www.dropbox.com/s/ppk5cqeylfsgnya/MIOpen-HIP-1.6.0-fa431f0-Linux.deb && dpkg -i *.deb
+
 
 ENV HCC_HOME=$ROCM_PATH/hcc
 ENV HIP_PATH=$ROCM_PATH/hip
@@ -70,8 +79,12 @@ ENV PATH="$HCC_HOME/bin:$HIP_PATH/bin:${PATH}"
 ENV PATH="$ROCM_PATH/bin:${PATH}"
 ENV PATH="$OPENCL_ROOT/bin:${PATH}"
 
+# Workadround : build HIP from source using fork that holds roc-1.9.x with HIP PR 692
+RUN cd $HOME && git clone -b roc-1.9.x-reinit https://github.com/whchung/HIP.git
+RUN cd $HOME/HIP && mkdir build && cd build && cmake .. && make -j$(nproc) package && dpkg -i *.deb
+
 # Add target file to help determine which device(s) to build for
-RUN echo -e "gfx803\ngfx900" >> /opt/rocm/bin/target.lst
+RUN bash -c 'echo -e "gfx803\ngfx900\ngfx906" >> /opt/rocm/bin/target.lst'
 
 # Setup environment variables, and add those environment variables at the end of ~/.bashrc 
 ARG HCC_HOME=/opt/rocm/hcc

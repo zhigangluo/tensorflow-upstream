@@ -48,8 +48,7 @@ using tensorflow::tracing::ScopedAnnotation;
 // Implementation note: HLO profiling is always enabled for GPU executables,
 // since we can use timers around thunks.
 GpuExecutable::GpuExecutable(
-    const string& ptx, const std::vector<uint8>& cubin,
-    std::pair<int, int> compute_capability,
+    const string& text, const std::vector<uint8>& binary,
     std::unique_ptr<const ThunkSchedule> thunk_schedule,
     std::unique_ptr<HloModule> hlo_module,
     std::unique_ptr<const BufferAssignment> assignment,
@@ -57,9 +56,7 @@ GpuExecutable::GpuExecutable(
     std::unique_ptr<HloProfileIndexMap> hlo_profile_index_map)
     : Executable(std::move(hlo_module), std::move(hlo_profile_printer_data),
                  std::move(hlo_profile_index_map)),
-      ptx_(ptx),
-      cubin_(cubin),
-      compute_capability_(compute_capability),
+      text_(text), binary_(binary),
       thunk_schedule_(std::move(thunk_schedule)),
       assignment_(std::move(assignment)) {}
 
@@ -67,18 +64,11 @@ Status GpuExecutable::ExecuteThunks(
     const ServiceExecutableRunOptions* run_options,
     const BufferAllocations& buffer_allocations, bool block_host_until_done,
     HloExecutionProfile* hlo_execution_profile) {
+
+  CheckCompatibilityWithServiceExecutableRunOptions(run_options);
+
   se::Stream* main_stream = run_options->stream();
   se::StreamExecutor* executor = main_stream->parent();
-
-  std::pair<int, int> stream_compute_compatibility;
-  executor->GetDeviceDescription().cuda_compute_capability(
-      &stream_compute_compatibility.first,
-      &stream_compute_compatibility.second);
-  TF_RET_CHECK(stream_compute_compatibility == compute_capability_)
-      << "Compute capability mismatch; expected {" << compute_capability_.first
-      << ", " << compute_capability_.second << "}, but was {"
-      << stream_compute_compatibility.first << ", "
-      << stream_compute_compatibility.second << "}";
 
   bool do_profile = hlo_execution_profile != nullptr;
   if (do_profile) {
@@ -193,10 +183,8 @@ GpuExecutable::ResolveConstantGlobals(se::StreamExecutor* executor) {
   }
 
   se::MultiModuleLoaderSpec module_spec;
-  if (!cubin().empty()) {
-    module_spec.AddCudaCubinInMemory(cubin());
-  }
-  module_spec.AddCudaPtxInMemory(ptx().c_str());
+  module_spec.AddCudaCubinInMemory(binary());
+  module_spec.AddCudaPtxInMemory(text().c_str());
 
   absl::flat_hash_map<int64, se::DeviceMemoryBase> globals;
   se::ModuleHandle module_handle;
