@@ -26,6 +26,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/env.h"
 #include "tensorflow/stream_executor/lib/initialize.h"
 #include "tensorflow/stream_executor/lib/status.h"
+#include "tensorflow/stream_executor/platform/dso_loader.h"
 #include "tensorflow/stream_executor/platform/logging.h"
 #include "tensorflow/stream_executor/platform/port.h"
 #include "tensorflow/stream_executor/plugin_registry.h"
@@ -38,12 +39,13 @@ PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kRocFftPlugin);
 
 namespace wrap {
 
+#ifdef PLATFORM_GOOGLE
 // This macro wraps a global identifier, given by __name, in a callable
 // structure that loads the DLL symbol out of the DSO handle in a thread-safe
 // manner on first use. This dynamic loading technique is used to avoid DSO
 // dependencies on vendor libraries which may or may not be available in the
 // deployed binary environment.
-#define PERFTOOLS_GPUTOOLS_HIPFFT_WRAP(__name)                    \
+#define STREAM_EXECUTOR_ROCFFT_WRAP(__name)                       \
   struct WrapperShim__##__name {                                  \
     template <typename... Args>                                   \
     hipfftResult operator()(ROCMExecutor *parent, Args... args) { \
@@ -52,7 +54,39 @@ namespace wrap {
     }                                                             \
   } __name;
 
-#define HIPFFT_ROUTINE_EACH(__macro) \
+#else
+
+#define STREAM_EXECUTOR_ROCFFT_WRAP(__name)                               \
+  struct DynLoadShim__##__name {                                          \
+    static const char *kName;                                             \
+    using FuncPtrT = std::add_pointer<decltype(::__name)>::type;          \
+    static void *GetDsoHandle() {                                         \
+      auto s = internal::CachedDsoLoader::GetRocfftDsoHandle();           \
+      return s.ValueOrDie();                                              \
+    }                                                                     \
+    static FuncPtrT LoadOrDie() {                                         \
+      void *f;                                                            \
+      auto s = port::Env::Default()->GetSymbolFromLibrary(GetDsoHandle(), \
+                                                          kName, &f);     \
+      CHECK(s.ok()) << "could not find " << kName                         \
+                    << " in rocfft DSO; dlerror: " << s.error_message();  \
+      return reinterpret_cast<FuncPtrT>(f);                               \
+    }                                                                     \
+    static FuncPtrT DynLoad() {                                           \
+      static FuncPtrT f = LoadOrDie();                                    \
+      return f;                                                           \
+    }                                                                     \
+    template <typename... Args>                                           \
+    hipfftResult operator()(ROCMExecutor *parent, Args... args) {       \
+      rocm::ScopedActivateExecutorContext sac{parent};                    \
+      return DynLoad()(args...);                                          \
+    }                                                                     \
+  } __name;                                                               \
+  const char *DynLoadShim__##__name::kName = #__name;
+
+#endif
+
+#define ROCFFT_ROUTINE_EACH(__macro) \
   __macro(hipfftDestroy)             \
   __macro(hipfftSetStream)           \
   __macro(hipfftPlan1d)              \
@@ -77,7 +111,7 @@ namespace wrap {
   __macro(hipfftExecZ2Z)             \
   __macro(hipfftExecR2C)             \
 
-HIPFFT_ROUTINE_EACH(PERFTOOLS_GPUTOOLS_HIPFFT_WRAP)
+ROCFFT_ROUTINE_EACH(STREAM_EXECUTOR_ROCFFT_WRAP)
 
 }  // namespace wrap
 
@@ -529,7 +563,7 @@ bool ROCMFft::DoFftWithDirectionInternal(Stream *stream, fft::Plan *plan,
   return true;
 }
 
-#define PERFTOOLS_GPUTOOLS_ROCM_DEFINE_FFT(__type, __fft_type1, __fft_type2, \
+#define STREAM_EXECUTOR_ROCM_DEFINE_FFT(__type, __fft_type1, __fft_type2, \
                                            __fft_type3)                      \
   bool ROCMFft::DoFft(Stream *stream, fft::Plan *plan,                       \
                       const DeviceMemory<std::complex<__type>> &input,       \
@@ -550,10 +584,10 @@ bool ROCMFft::DoFftWithDirectionInternal(Stream *stream, fft::Plan *plan,
                          output);                                            \
   }
 
-PERFTOOLS_GPUTOOLS_ROCM_DEFINE_FFT(float, C2C, R2C, C2R)
-PERFTOOLS_GPUTOOLS_ROCM_DEFINE_FFT(double, Z2Z, D2Z, Z2D)
+STREAM_EXECUTOR_ROCM_DEFINE_FFT(float, C2C, R2C, C2R)
+STREAM_EXECUTOR_ROCM_DEFINE_FFT(double, Z2Z, D2Z, Z2D)
 
-#undef PERFTOOLS_GPUTOOLS_ROCM_DEFINE_FFT
+#undef STREAM_EXECUTOR_ROCM_DEFINE_FFT
 
 }  // namespace rocm
 }  // namespace stream_executor
