@@ -47,6 +47,12 @@ class DsoLoader {
   static port::Status GetLibcudaDsoHandle(void** dso_handle);
   static port::Status GetLibcuptiDsoHandle(void** dso_handle);
 
+  static port::Status GetRocblasDsoHandle(void** dso_handle);
+  static port::Status GetMiopenDsoHandle(void** dso_handle);
+  static port::Status GetRocfftDsoHandle(void** dso_handle);
+  static port::Status GetRocrandDsoHandle(void** dso_handle);
+  static port::Status GetHipDsoHandle(void** dso_handle);
+
   // Registers a new binary-relative path to use as a dlopen search path.
   static void RegisterRpath(absl::string_view path);
 
@@ -87,6 +93,8 @@ class DsoLoader {
   static string GetCudaDriverLibraryPath();
   static string GetCudaCuptiLibraryPath();
 
+  static string GetRocmLibraryDirPath();
+
   SE_DISALLOW_COPY_AND_ASSIGN(DsoLoader);
 };
 
@@ -101,6 +109,12 @@ class CachedDsoLoader {
   static port::StatusOr<void*> GetCurandDsoHandle();
   static port::StatusOr<void*> GetLibcudaDsoHandle();
   static port::StatusOr<void*> GetLibcuptiDsoHandle();
+
+  static port::StatusOr<void*> GetRocblasDsoHandle();
+  static port::StatusOr<void*> GetMiopenDsoHandle();
+  static port::StatusOr<void*> GetRocfftDsoHandle();
+  static port::StatusOr<void*> GetRocrandDsoHandle();
+  static port::StatusOr<void*> GetHipDsoHandle();
 
  private:
   // Fetches a DSO handle via "load_dso" and returns the StatusOr form of the

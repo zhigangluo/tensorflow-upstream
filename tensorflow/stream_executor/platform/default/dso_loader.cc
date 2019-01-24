@@ -117,6 +117,41 @@ string GetCudnnVersion() { return TF_CUDNN_VERSION; }
 #endif
 }
 
+/* static */ port::Status DsoLoader::GetRocblasDsoHandle(void** dso_handle) {
+  return GetDsoHandle(FindDsoPath(port::Env::Default()->FormatLibraryFileName(
+                                      "rocblas", ""),
+                                  GetRocmLibraryDirPath()),
+                      dso_handle);
+}
+
+/* static */ port::Status DsoLoader::GetMiopenDsoHandle(void** dso_handle) {
+  return GetDsoHandle(FindDsoPath(port::Env::Default()->FormatLibraryFileName(
+                                      "MIOpen", ""),
+                                  GetRocmLibraryDirPath()),
+                      dso_handle);
+}
+
+/* static */ port::Status DsoLoader::GetRocfftDsoHandle(void** dso_handle) {
+  return GetDsoHandle(FindDsoPath(port::Env::Default()->FormatLibraryFileName(
+                                      "rocfft", ""),
+                                  GetRocmLibraryDirPath()),
+                      dso_handle);
+}
+
+/* static */ port::Status DsoLoader::GetRocrandDsoHandle(void** dso_handle) {
+  return GetDsoHandle(FindDsoPath(port::Env::Default()->FormatLibraryFileName(
+                                      "rocrand", ""),
+                                  GetRocmLibraryDirPath()),
+                      dso_handle);
+}
+
+/* static */ port::Status DsoLoader::GetHipDsoHandle(void** dso_handle) {
+  return GetDsoHandle(FindDsoPath(port::Env::Default()->FormatLibraryFileName(
+                                      "hip_hcc", ""),
+                                  GetRocmLibraryDirPath()),
+                      dso_handle);
+}
+
 static mutex& GetRpathMutex() {
   static mutex* mu = new mutex;
   return *mu;
@@ -141,7 +176,7 @@ static mutex& GetRpathMutex() {
 #if !defined(PLATFORM_WINDOWS)
     char* ld_library_path = getenv("LD_LIBRARY_PATH");
 #endif
-    LOG(INFO) << "Couldn't open CUDA library " << path
+    LOG(INFO) << "Couldn't open dynamic library " << path
 #if !defined(PLATFORM_WINDOWS)
               << ". LD_LIBRARY_PATH: "
               << (ld_library_path != nullptr ? ld_library_path : "")
@@ -244,6 +279,10 @@ static std::vector<string>* CreatePrimordialRpaths() {
 #endif
 }
 
+/* static */ string DsoLoader::GetRocmLibraryDirPath() {
+  return "external/local_config_rocm/rocm/lib";
+}
+
 // -- CachedDsoLoader
 
 /* static */ port::StatusOr<void*> CachedDsoLoader::GetCublasDsoHandle() {
@@ -279,6 +318,36 @@ static std::vector<string>* CreatePrimordialRpaths() {
 /* static */ port::StatusOr<void*> CachedDsoLoader::GetLibcuptiDsoHandle() {
   static port::StatusOr<void*> result =
       FetchHandleResult(DsoLoader::GetLibcuptiDsoHandle);
+  return result;
+}
+
+/* static */ port::StatusOr<void*> CachedDsoLoader::GetRocblasDsoHandle() {
+  static port::StatusOr<void*> result =
+      FetchHandleResult(DsoLoader::GetRocblasDsoHandle);
+  return result;
+}
+
+/* static */ port::StatusOr<void*> CachedDsoLoader::GetMiopenDsoHandle() {
+  static port::StatusOr<void*> result =
+      FetchHandleResult(DsoLoader::GetMiopenDsoHandle);
+  return result;
+}
+
+/* static */ port::StatusOr<void*> CachedDsoLoader::GetRocfftDsoHandle() {
+  static port::StatusOr<void*> result =
+      FetchHandleResult(DsoLoader::GetRocfftDsoHandle);
+  return result;
+}
+
+/* static */ port::StatusOr<void*> CachedDsoLoader::GetRocrandDsoHandle() {
+  static port::StatusOr<void*> result =
+      FetchHandleResult(DsoLoader::GetRocrandDsoHandle);
+  return result;
+}
+
+/* static */ port::StatusOr<void*> CachedDsoLoader::GetHipDsoHandle() {
+  static port::StatusOr<void*> result =
+      FetchHandleResult(DsoLoader::GetHipDsoHandle);
   return result;
 }
 
