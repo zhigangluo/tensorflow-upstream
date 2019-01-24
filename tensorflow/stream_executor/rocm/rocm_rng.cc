@@ -25,6 +25,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/lib/env.h"
 #include "tensorflow/stream_executor/lib/initialize.h"
 #include "tensorflow/stream_executor/lib/status.h"
+#include "tensorflow/stream_executor/platform/dso_loader.h"
 #include "tensorflow/stream_executor/platform/logging.h"
 #include "tensorflow/stream_executor/rng.h"
 
@@ -61,24 +62,55 @@ PLUGIN_REGISTRY_DEFINE_PLUGIN_ID(kGpuRandPlugin);
 
 namespace wrap {
 
-#define STREAM_EXECUTOR_HIPRAND_WRAP(__name)                        \
+#ifdef PLATFORM_GOOGLE
+#define STREAM_EXECUTOR_ROCRAND_WRAP(__name)                        \
   struct WrapperShim__##__name {                                    \
     template <typename... Args>                                     \
-    hiprandStatus_t operator()(GpuExecutor* parent, Args... args) { \
+    hiprandStatus_t operator()(GpuExecutor *parent, Args... args) { \
       gpu::ScopedActivateExecutorContext sac{parent};               \
       return ::__name(args...);                                     \
     }                                                               \
   } __name;
 
-STREAM_EXECUTOR_HIPRAND_WRAP(hiprandCreateGenerator);
-STREAM_EXECUTOR_HIPRAND_WRAP(hiprandDestroyGenerator);
-STREAM_EXECUTOR_HIPRAND_WRAP(hiprandSetStream);
-STREAM_EXECUTOR_HIPRAND_WRAP(hiprandGenerateUniform);
-STREAM_EXECUTOR_HIPRAND_WRAP(hiprandGenerateUniformDouble);
-STREAM_EXECUTOR_HIPRAND_WRAP(hiprandSetPseudoRandomGeneratorSeed);
-STREAM_EXECUTOR_HIPRAND_WRAP(hiprandSetGeneratorOffset);
-STREAM_EXECUTOR_HIPRAND_WRAP(hiprandGenerateNormal);
-STREAM_EXECUTOR_HIPRAND_WRAP(hiprandGenerateNormalDouble);
+#else
+#define STREAM_EXECUTOR_ROCRAND_WRAP(__name)                              \
+  struct DynLoadShim__##__name {                                          \
+    static const char *kName;                                             \
+    using FuncPtrT = std::add_pointer<decltype(::__name)>::type;          \
+    static void *GetDsoHandle() {                                         \
+      auto s = internal::CachedDsoLoader::GetRocrandDsoHandle();          \
+      return s.ValueOrDie();                                              \
+    }                                                                     \
+    static FuncPtrT LoadOrDie() {                                         \
+      void *f;                                                            \
+      auto s = port::Env::Default()->GetSymbolFromLibrary(GetDsoHandle(), \
+                                                          kName, &f);     \
+      CHECK(s.ok()) << "could not find " << kName                         \
+                    << " in rocrand DSO; dlerror: " << s.error_message(); \
+      return reinterpret_cast<FuncPtrT>(f);                               \
+    }                                                                     \
+    static FuncPtrT DynLoad() {                                           \
+      static FuncPtrT f = LoadOrDie();                                    \
+      return f;                                                           \
+    }                                                                     \
+    template <typename... Args>                                           \
+    hiprandStatus operator()(GpuExecutor *parent, Args... args) {         \
+      gpu::ScopedActivateExecutorContext sac{parent};                     \
+      return DynLoad()(args...);                                          \
+    }                                                                     \
+  } __name;                                                               \
+  const char *DynLoadShim__##__name::kName = #__name;
+#endif
+
+STREAM_EXECUTOR_ROCRAND_WRAP(hiprandCreateGenerator);
+STREAM_EXECUTOR_ROCRAND_WRAP(hiprandDestroyGenerator);
+STREAM_EXECUTOR_ROCRAND_WRAP(hiprandSetStream);
+STREAM_EXECUTOR_ROCRAND_WRAP(hiprandGenerateUniform);
+STREAM_EXECUTOR_ROCRAND_WRAP(hiprandGenerateUniformDouble);
+STREAM_EXECUTOR_ROCRAND_WRAP(hiprandSetPseudoRandomGeneratorSeed);
+STREAM_EXECUTOR_ROCRAND_WRAP(hiprandSetGeneratorOffset);
+STREAM_EXECUTOR_ROCRAND_WRAP(hiprandGenerateNormal);
+STREAM_EXECUTOR_ROCRAND_WRAP(hiprandGenerateNormalDouble);
 
 }  // namespace wrap
 
