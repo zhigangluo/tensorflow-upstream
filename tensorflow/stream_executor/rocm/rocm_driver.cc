@@ -746,7 +746,7 @@ ROCMDriver::DeviceGetSharedMemConfig(int device_ordinal) {
     LOG(ERROR) << "failed to synchronize the stop event: " << ToString(res);
     return false;
   }
-  res = hipEventElapsedTime(elapsed_milliseconds, start, stop);
+  res = tensorflow::wrap::hipEventElapsedTime(elapsed_milliseconds, start, stop);
   if (res != hipSuccess) {
     LOG(ERROR) << "failed to get elapsed time between events: "
                << ToString(res);
