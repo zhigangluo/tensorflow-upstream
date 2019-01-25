@@ -77,6 +77,7 @@ namespace wrap {
   __macro(hipDeviceTotalMem)                        \
   __macro(hipDriverGetVersion)                      \
   __macro(hipEventCreateWithFlags)                  \
+  __macro(hipEventElapsedTime)                      \
   __macro(hipEventDestroy)                          \
   __macro(hipEventQuery)                            \
   __macro(hipEventRecord)                           \
