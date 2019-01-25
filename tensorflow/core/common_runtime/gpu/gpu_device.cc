@@ -170,8 +170,9 @@ class EigenGpuStreamDevice : public ::Eigen::StreamInterface {
     cudaError_t err = cudaStreamAddCallback(*stream_, asyncFree, afData, 0);
     CHECK_EQ(err, cudaSuccess);
 #elif TENSORFLOW_USE_ROCM
-    hipError_t err = hipStreamAddCallback(*stream_, asyncFree, afData, 0);
-    CHECK_EQ(err, hipSuccess);
+    // XXX #1
+    //hipError_t err = hipStreamAddCallback(*stream_, asyncFree, afData, 0);
+    //CHECK_EQ(err, hipSuccess);
 #endif
   }
 
@@ -990,11 +991,12 @@ Status BaseGPUDeviceFactory::CreateDevices(
                               cudaGetErrorString(err));
     }
 #elif TENSORFLOW_USE_ROCM
-    hipError_t err = hipGetDevice(&original_device);
-    if (err != hipSuccess) {
-      return errors::Internal("hipGetDevice() failed. Status: ",
-                              hipGetErrorString(err));
-    }
+    // XXX #2
+    //hipError_t err = hipGetDevice(&original_device);
+    //if (err != hipSuccess) {
+    //  return errors::Internal("hipGetDevice() failed. Status: ",
+    //                          hipGetErrorString(err));
+    //}
 #endif
 
     // Force to implicitly initialize CUDA runtime on each valid GPU before
@@ -1014,19 +1016,20 @@ Status BaseGPUDeviceFactory::CreateDevices(
                                 cudaGetErrorString(err));
       }
 #elif TENSORFLOW_USE_ROCM
-      err = hipSetDevice(platform_gpu_id.value());
-      if (err != hipSuccess) {
-        return errors::Internal("hipSetDevice() on GPU:",
-                                platform_gpu_id.value(),
-                                " failed. Status: ", hipGetErrorString(err));
-      }
-      err = hipFree(nullptr);
-      if (err != hipSuccess) {
-        return errors::Internal(
-            "ROCm runtime implicit initialization on GPU:",
-            platform_gpu_id.value(), " failed. Status: ",
-            hipGetErrorString(err));
-      }
+      // XXX #3
+      //err = hipSetDevice(platform_gpu_id.value());
+      //if (err != hipSuccess) {
+      //  return errors::Internal("hipSetDevice() on GPU:",
+      //                          platform_gpu_id.value(),
+      //                          " failed. Status: ", hipGetErrorString(err));
+      //}
+      //err = hipFree(nullptr);
+      //if (err != hipSuccess) {
+      //  return errors::Internal(
+      //      "ROCm runtime implicit initialization on GPU:",
+      //      platform_gpu_id.value(), " failed. Status: ",
+      //      hipGetErrorString(err));
+      //}
 #endif
     }
     // Reset to the original device.
@@ -1037,11 +1040,12 @@ Status BaseGPUDeviceFactory::CreateDevices(
                               " failed. Status: ", cudaGetErrorString(err));
     }
 #elif TENSORFLOW_USE_ROCM
-    err = hipSetDevice(original_device);
-    if (err != hipSuccess) {
-      return errors::Internal("hipSetDevice() on GPU:", original_device,
-                              " failed. Status: ", hipGetErrorString(err));
-    }
+    // XXX #4
+    //err = hipSetDevice(original_device);
+    //if (err != hipSuccess) {
+    //  return errors::Internal("hipSetDevice() on GPU:", original_device,
+    //                          " failed. Status: ", hipGetErrorString(err));
+    //}
 #endif
   }
 
