@@ -123,11 +123,12 @@ struct DiagPartFunctor<GPUDevice, T> {
           "Could not launch DiagPartOp kernel: ", cudaGetErrorString(err), ".");
     }
 #elif TENSORFLOW_USE_ROCM
-    auto err = hipGetLastError();
-    if (err != hipSuccess) {
-      return errors::Internal(
-          "Could not launch DiagPartOp kernel: ", hipGetErrorString(err), ".");
-    }
+    // XXX
+    //auto err = hipGetLastError();
+    //if (err != hipSuccess) {
+    //  return errors::Internal(
+    //      "Could not launch DiagPartOp kernel: ", hipGetErrorString(err), ".");
+    //}
 #endif
     return Status::OK();
   }

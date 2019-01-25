@@ -115,12 +115,13 @@ DeviceProperties GetLocalGPUInfo(PlatformGpuId platform_gpu_id) {
   (*device.mutable_environment())["cudnn"] = strings::StrCat(CUDNN_VERSION);
 #elif TENSORFLOW_USE_ROCM
   hipDeviceProp_t properties;
-  hipError_t error = hipGetDeviceProperties(&properties, platform_gpu_id.value());
-  if (error != hipSuccess) {
-    device.set_type("UNKNOWN");
-    LOG(ERROR) << "Failed to get device properties, error code: " << error;
-    return device;
-  }
+  // XXX
+  //hipError_t error = hipGetDeviceProperties(&properties, platform_gpu_id.value());
+  //if (error != hipSuccess) {
+  //  device.set_type("UNKNOWN");
+  //  LOG(ERROR) << "Failed to get device properties, error code: " << error;
+  //  return device;
+  //}
 
   // ROCM TODO review if numbers here are valid
   device.set_vendor("Advanced Micro Devices, Inc");

@@ -282,9 +282,10 @@ inline Gpu3DLaunchConfig GetGpu3DLaunchConfig(
   cudaDeviceProp deviceProp;
   cudaGetDeviceProperties(&deviceProp, dev);
 #elif TENSORFLOW_USE_ROCM
-  hipGetDevice(&dev);
+  // XXX
+  //hipGetDevice(&dev);
   hipDeviceProp_t deviceProp;
-  hipGetDeviceProperties(&deviceProp, dev);
+  //hipGetDeviceProperties(&deviceProp, dev);
 #endif
   int xthreadlimit = deviceProp.maxThreadsDim[0];
   int ythreadlimit = deviceProp.maxThreadsDim[1];
