@@ -148,7 +148,6 @@ def tf_workspace(path_prefix = "", tf_repo_name = ""):
             "https://mirror.bazel.build/bitbucket.org/eigen/eigen/get/bcc817c0ba98.tar.gz",
             "https://bitbucket.org/eigen/eigen/get/bcc817c0ba98.tar.gz",
         ],
-        patch_file = clean_dep("//third_party:eigen_fix_gpu_compilation.patch"),
     )
 
     tf_http_archive(
