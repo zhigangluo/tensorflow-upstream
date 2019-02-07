@@ -28,8 +28,10 @@ limitations under the License.
 #include "tensorflow/lite/nnapi/nnapi_implementation.h"
 
 #ifdef __ANDROID__
-#include <sys/mman.h>
 #include <sys/system_properties.h>
+#endif
+#if defined __ANDROID__ || defined __unix__
+#include <sys/mman.h>
 #include <unistd.h>
 #endif
 
@@ -69,7 +71,7 @@ struct NNFreeCompilation {
 // Manage NNAPI shared memory handle
 class NNMemory {
  public:
-#ifdef __ANDROID__
+#if defined __ANDROID__ || defined __unix__
   NNMemory(const NnApi* nnapi, const char* name, size_t size) {
     nnapi_ = nnapi;
     byte_size_ = size;
@@ -84,7 +86,7 @@ class NNMemory {
 #endif
 
   ~NNMemory() {
-#ifdef __ANDROID__
+#if defined __ANDROID__ || defined __unix__
     if (data_ptr_) {
       munmap(data_ptr_, byte_size_);
     }
@@ -99,7 +101,7 @@ class NNMemory {
   uint8_t* get_data_ptr() { return data_ptr_; }
 
  private:
-#ifdef __ANDROID__
+#if defined __ANDROID__ || defined __unix__
   const NnApi* nnapi_;
   int fd_ = 0;
   size_t byte_size_ = 0;
@@ -718,7 +720,9 @@ class NNAPIDelegateKernel {
         break;
       case kTfLiteBuiltinSvdf:
         // NNAPI only support float32 weights.
+        // Only delegate to NNAPI 1.1, as SVDF does not support rank > 1 on 1.0.
         if (version == 1 && node->inputs->size == 5 &&
+            android_sdk_version >= kMinSdkVersionForNNAPI11 &&
             context->tensors[node->inputs->data[/*kWeightsFeatureTensor*/ 1]]
                     .type == kTfLiteFloat32) {
           return [](const NNAPIOpMappingArgs& mapping_args)
@@ -744,8 +748,11 @@ class NNAPIDelegateKernel {
         break;
       case kTfLiteBuiltinLstm:
         // NNAPI only support float32 weights.
+        // Only delegate to NNAPI 1.1,  as 1.0 has a bug for optional tensors
+        // which would affect LSTM.
         // TODO(miaowang): add loggings to indicate why the op is rejected.
         if (version == 1 && node->inputs->size == 20 &&
+            android_sdk_version >= kMinSdkVersionForNNAPI11 &&
             context->tensors[node->inputs
                                  ->data[/*kInputToOutputWeightsTensor*/ 4]]
                     .type == kTfLiteFloat32) {

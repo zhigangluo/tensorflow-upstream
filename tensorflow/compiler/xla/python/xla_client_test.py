@@ -88,6 +88,12 @@ def NumpyArrayBool(*args, **kwargs):
 class ComputationsWithConstantsTest(LocalComputationTest):
   """Tests focusing on Constant ops."""
 
+  def testConstantScalarSumS8(self):
+    c = self._NewComputation()
+    root = c.Add(c.Constant(np.int8(1)), c.Constant(np.int8(2)))
+    self.assertEqual(c.GetShape(root), c.GetReturnValueShape())
+    self._ExecuteAndCompareExact(c, expected=np.int8(3))
+
   def testConstantScalarSumF32(self):
     c = self._NewComputation()
     root = c.Add(c.ConstantF32Scalar(1.11), c.ConstantF32Scalar(3.14))
@@ -553,6 +559,18 @@ class SingleOpTest(LocalComputationTest):
       for src_dtype, dst_dtype in itertools.product(xla_types, xla_types):
         _ConvertAndTest(x, src_dtype, dst_dtype, xla_types[dst_dtype])
 
+  # TODO(b/123523486): re-enable when shape check is resolved
+  def DISABLED_testAllToAllOneReplica(self):
+    samples = [
+        NumpyArrayF32([97.0]),
+        NumpyArrayF32([64.0, 117.0]),
+        NumpyArrayF32([[2.0, 3.0], [4.0, 5.0]]),
+    ]
+    for lhs in samples[:1]:
+      c = self._NewComputation()
+      c.AllToAll(c.Constant(lhs), 0, 0)
+      self._ExecuteAndCompareExact(c, expected=lhs)
+
   def testCrossReplicaSumOneReplica(self):
     samples = [
         NumpyArrayF32(42.0),
@@ -563,6 +581,18 @@ class SingleOpTest(LocalComputationTest):
     for lhs in samples:
       c = self._NewComputation()
       c.CrossReplicaSum(c.Constant(lhs))
+      self._ExecuteAndCompareExact(c, expected=lhs)
+
+  def testCrossReplicaSumOneReplicaWithSingletonGroup(self):
+    samples = [
+        NumpyArrayF32(42.0),
+        NumpyArrayF32([97.0]),
+        NumpyArrayF32([64.0, 117.0]),
+        NumpyArrayF32([[2.0, 3.0], [4.0, 5.0]]),
+    ]
+    for lhs in samples:
+      c = self._NewComputation()
+      c.CrossReplicaSum(c.Constant(lhs), [[0]])
       self._ExecuteAndCompareExact(c, expected=lhs)
 
   def testDotMatrixVectorF32(self):

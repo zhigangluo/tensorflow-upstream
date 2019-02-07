@@ -140,7 +140,6 @@ def model_iteration(model,
       shuffle=shuffle)
 
   do_validation = validation_data is not None
-  should_set_learning_phase = context.executing_eagerly() and model.run_eagerly
   is_sequence = isinstance(generator, data_utils.Sequence)
   _validate_arguments(is_sequence, is_dataset, use_multiprocessing, workers,
                       steps_per_epoch, validation_data, validation_steps, mode,
@@ -150,12 +149,14 @@ def model_iteration(model,
       model, mode, class_weight=class_weight)
 
   # Create the queue for the generator.
-  output_generator, enqueuer = _make_enqueued_generator(
-      generator,
-      workers=workers,
-      use_multiprocessing=use_multiprocessing,
-      max_queue_size=max_queue_size,
-      shuffle=shuffle)
+  enqueuer = None
+  if not is_dataset:
+    generator, enqueuer = _make_enqueued_generator(
+        generator,
+        workers=workers,
+        use_multiprocessing=use_multiprocessing,
+        max_queue_size=max_queue_size,
+        shuffle=shuffle)
 
   num_samples_or_steps, use_steps = _get_num_samples_or_steps(
       data, steps_per_epoch)
@@ -181,9 +182,10 @@ def model_iteration(model,
   else:
     aggregator = training_utils.MetricsAggregator(True, steps_per_epoch)
 
+  should_set_learning_phase = context.executing_eagerly() and model.run_eagerly
   if should_set_learning_phase:
     old_learning_phase = backend.learning_phase()
-    backend.set_learning_phase(1 if mode == ModeKeys.TRAIN else 0)
+    backend.set_eager_learning_phase(1 if mode == ModeKeys.TRAIN else 0)
 
   callbacks.model.stop_training = False
   callbacks._call_begin_hook(mode)
@@ -208,7 +210,7 @@ def model_iteration(model,
 
     step = 0
     while step < target_steps:
-      batch_data = _get_next_batch(output_generator, mode)
+      batch_data = _get_next_batch(generator, mode)
       if batch_data is None:
         if not is_dataset:
           # We ran out of batches while the user passed an iterator (legacy).
@@ -302,7 +304,7 @@ def model_iteration(model,
     enqueuer.stop()
 
   if should_set_learning_phase:
-    backend.set_learning_phase(old_learning_phase)
+    backend.set_eager_learning_phase(old_learning_phase)
 
   if mode == ModeKeys.TRAIN:
     return model.history
@@ -317,10 +319,10 @@ predict_generator = functools.partial(
     model_iteration, mode=ModeKeys.PREDICT, shuffle=False)
 
 
-def _get_next_batch(output_generator, mode):
+def _get_next_batch(generator, mode):
   """Retrieves the next batch of input data."""
   try:
-    generator_output = next(output_generator)
+    generator_output = next(generator)
   except (StopIteration, errors.OutOfRangeError):
     return None
   if not isinstance(generator_output, tuple):

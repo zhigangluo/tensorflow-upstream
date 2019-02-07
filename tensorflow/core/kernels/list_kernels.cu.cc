@@ -64,6 +64,13 @@ typedef Eigen::GpuDevice GPUDevice;
                               .Device(DEVICE_GPU)                 \
                               .HostMemory("lengths"),             \
                           TensorListConcat<GPUDevice, T>)         \
+  REGISTER_KERNEL_BUILDER(Name("TensorListConcatV2")              \
+                              .TypeConstraint<T>("element_dtype") \
+                              .Device(DEVICE_GPU)                 \
+                              .HostMemory("leading_dims")         \
+                              .HostMemory("element_shape")        \
+                              .HostMemory("lengths"),             \
+                          TensorListConcat<GPUDevice, T>)         \
   REGISTER_KERNEL_BUILDER(Name("TensorListPushBackBatch")         \
                               .TypeConstraint<T>("element_dtype") \
                               .Device(DEVICE_GPU),                \
@@ -79,6 +86,13 @@ typedef Eigen::GpuDevice GPUDevice;
                               .HostMemory("element_shape")        \
                               .HostMemory("indices"),             \
                           TensorListScatter<GPUDevice, T>)        \
+  REGISTER_KERNEL_BUILDER(Name("TensorListScatterV2")             \
+                              .TypeConstraint<T>("element_dtype") \
+                              .Device(DEVICE_GPU)                 \
+                              .HostMemory("element_shape")        \
+                              .HostMemory("num_elements")         \
+                              .HostMemory("indices"),             \
+                          TensorListScatter<GPUDevice, T>)        \
   REGISTER_KERNEL_BUILDER(Name("TensorListSplit")                 \
                               .TypeConstraint<T>("element_dtype") \
                               .Device(DEVICE_GPU)                 \
@@ -90,6 +104,7 @@ TF_CALL_GPU_NUMBER_TYPES(REGISTER_TENSOR_LIST_OPS_GPU);
 REGISTER_TENSOR_LIST_OPS_GPU(bfloat16);
 TF_CALL_complex64(REGISTER_TENSOR_LIST_OPS_GPU);
 TF_CALL_complex128(REGISTER_TENSOR_LIST_OPS_GPU);
+TF_CALL_int32(REGISTER_TENSOR_LIST_OPS_GPU);
 TF_CALL_int64(REGISTER_TENSOR_LIST_OPS_GPU);
 REGISTER_TENSOR_LIST_OPS_GPU(bool);
 

@@ -2175,6 +2175,16 @@ tf_kernel_library(
 )
 
 cc_library(
+    name = "string_view_variant_wrapper",
+    hdrs = ["string_view_variant_wrapper.h"],
+    deps = [
+        "//tensorflow/core:framework",
+        "//tensorflow/core:protos_all_cc",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
     name = "checkpoint_ops",
     deps = [
         ":generate_vocab_remapping_op",
@@ -2417,6 +2427,7 @@ tf_kernel_library(
         "//tensorflow/core/grappler/optimizers:meta_optimizer",
         "//tensorflow/core/grappler/utils:functions",
         "//tensorflow/stream_executor:stream",
+        "@com_google_absl//absl/strings",
     ],
 )
 
@@ -3652,27 +3663,6 @@ tf_cc_test(
         "//tensorflow/core:framework",
         "//tensorflow/core:lib",
         "//tensorflow/core:ops",
-        "//tensorflow/core:test",
-        "//tensorflow/core:test_main",
-        "//tensorflow/core:testlib",
-    ],
-)
-
-tf_cc_test(
-    name = "shape_op_test",
-    srcs = ["shape_op_test.cc"],
-    deps = [
-        ":array",
-        ":ops_testutil",
-        ":ops_util",
-        "//tensorflow/cc:cc_ops",
-        "//tensorflow/cc:client_session",
-        "//tensorflow/core:core_cpu",
-        "//tensorflow/core:direct_session",
-        "//tensorflow/core:framework",
-        "//tensorflow/core:lib",
-        "//tensorflow/core:ops",
-        "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
         "//tensorflow/core:testlib",
@@ -5625,6 +5615,7 @@ filegroup(
         "gemm_functors.h",
         "image_resizer_state.h",
         "initializable_lookup_table.h",
+        "logging_ops.h",
         "lookup_table_init_op.h",
         "lookup_table_op.h",
         "lookup_util.h",
@@ -7074,6 +7065,7 @@ tf_kernel_library(
         "//tensorflow/core/util/proto:descriptors",
         "//tensorflow/core/util/proto:proto_utils",
         "//third_party/eigen3",
+        "@com_google_absl//absl/container:flat_hash_map",
     ],
 )
 

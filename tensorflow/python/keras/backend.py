@@ -32,6 +32,9 @@ import numpy as np
 
 from tensorflow.core.protobuf import config_pb2
 from tensorflow.python.client import session as session_module
+from tensorflow.python.distribute import distribute_coordinator as dc
+from tensorflow.python.distribute import distribute_coordinator_context as dc_context
+from tensorflow.python.distribute import distribution_strategy_context
 from tensorflow.python.eager import context
 from tensorflow.python.eager import function as eager_function
 from tensorflow.python.framework import constant_op
@@ -51,6 +54,7 @@ from tensorflow.python.ops import image_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import linalg_ops
 from tensorflow.python.ops import logging_ops
+from tensorflow.python.ops import map_fn as map_fn_lib
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import nn
 from tensorflow.python.ops import random_ops
@@ -60,7 +64,7 @@ from tensorflow.python.ops import state_ops
 from tensorflow.python.ops import tensor_array_grad  # pylint: disable=unused-import
 from tensorflow.python.ops import tensor_array_ops
 from tensorflow.python.ops import variables as variables_module
-
+from tensorflow.python.training import server_lib
 from tensorflow.python.util import nest
 from tensorflow.python.util import tf_contextlib
 from tensorflow.python.util import tf_inspect
@@ -87,11 +91,8 @@ _GRAPH_LEARNING_PHASES = weakref.WeakKeyDictionary()
 
 # _DUMMY_EAGER_GRAPH is used as a key in _GRAPH_LEARNING_PHASES.
 # We keep a separate reference to it to make sure it does not get removed from
-# _GRAPH_LEARNING_PHASES. We use a dummy class instead of something like a
-# string because strings are not weakly-referencable.
-class _DummyEagerGraph(object):
-  pass
-_DUMMY_EAGER_GRAPH = _DummyEagerGraph()
+# _GRAPH_LEARNING_PHASES.
+_DUMMY_EAGER_GRAPH = threading.local()
 
 # This boolean flag can be set to True to leave variable initialization
 # up to the user.
@@ -218,8 +219,9 @@ def clear_session():
   _SESSION.session = None
   graph = get_graph()
   with graph.as_default():
-    phase = array_ops.placeholder_with_default(
-        False, shape=(), name='keras_learning_phase')
+    with ops.name_scope(''):
+      phase = array_ops.placeholder_with_default(
+          False, shape=(), name='keras_learning_phase')
     _GRAPH_LEARNING_PHASES = {}
     _GRAPH_LEARNING_PHASES[graph] = phase
     _GRAPH_VARIABLES.pop(graph, None)
@@ -254,20 +256,33 @@ def learning_phase():
   Returns:
       Learning phase (scalar integer tensor or Python integer).
   """
-  if context.executing_eagerly():
-    if _DUMMY_EAGER_GRAPH not in _GRAPH_LEARNING_PHASES:
-      # Fallback to inference mode as default.
-      return 0
-    return _GRAPH_LEARNING_PHASES[_DUMMY_EAGER_GRAPH]
-  return symbolic_learning_phase()
+  if ops.get_default_graph() is _GRAPH:
+    # Don't enter an init_scope for the learning phase if eager execution
+    # is enabled but we're inside the Keras workspace graph.
+    return symbolic_learning_phase()
+  with ops.init_scope():
+    # We always check & set the learning phase inside the init_scope,
+    # otherwise the wrong default_graph will be used to look up the learning
+    # phase inside of functions & defuns.
+    #
+    # This is because functions & defuns (both in graph & in eager mode)
+    # will always execute non-eagerly using a function-specific default
+    # subgraph.
+    if context.executing_eagerly():
+      if _DUMMY_EAGER_GRAPH not in _GRAPH_LEARNING_PHASES:
+        # Fallback to inference mode as default.
+        return 0
+      return _GRAPH_LEARNING_PHASES[_DUMMY_EAGER_GRAPH]
+    return symbolic_learning_phase()
 
 
 def symbolic_learning_phase():
   graph = get_graph()
   with graph.as_default():
     if graph not in _GRAPH_LEARNING_PHASES:
-      phase = array_ops.placeholder_with_default(
-          False, shape=(), name='keras_learning_phase')
+      with ops.name_scope(''):
+        phase = array_ops.placeholder_with_default(
+            False, shape=(), name='keras_learning_phase')
       _GRAPH_LEARNING_PHASES[graph] = phase
     return _GRAPH_LEARNING_PHASES[graph]
 
@@ -287,11 +302,25 @@ def set_learning_phase(value):
     raise ValueError('Expected learning phase to be 0 or 1.')
   with ops.init_scope():
     if context.executing_eagerly():
+      # In an eager context, the learning phase values applies to both the eager
+      # context and the internal Keras graph.
       _GRAPH_LEARNING_PHASES[_DUMMY_EAGER_GRAPH] = value
-    else:
-      _GRAPH_LEARNING_PHASES[get_graph()] = value
+    _GRAPH_LEARNING_PHASES[get_graph()] = value
 
 
+def set_eager_learning_phase(value):
+  """Internal utility that sets the learning phase in eager execution only.
+
+  Arguments:
+      value: Learning phase value, either 0 or 1 (integers).
+  """
+  global _GRAPH_LEARNING_PHASES  # pylint: disable=global-variable-not-assigned
+  assert value in {0, 1}
+  assert context.executing_eagerly()
+  _GRAPH_LEARNING_PHASES[_DUMMY_EAGER_GRAPH] = value
+
+
+@keras_export('keras.backend.learning_phase_scope')
 @tf_contextlib.contextmanager
 def learning_phase_scope(value):
   """Provides a scope within which the learning phase is equal to `value`.
@@ -302,24 +331,62 @@ def learning_phase_scope(value):
      value: Learning phase value, either 0 or 1 (integers).
 
   Yields:
-    The provided value.
+    None.
 
   Raises:
      ValueError: if `value` is neither `0` nor `1`.
   """
+  global _GRAPH_LEARNING_PHASES  # pylint: disable=global-variable-not-assigned
   if value not in {0, 1}:
     raise ValueError('Expected learning phase to be 0 or 1.')
-  previous_value = learning_phase()
+
+  with ops.init_scope():
+    if context.executing_eagerly():
+      previous_eager_value = _GRAPH_LEARNING_PHASES.get(
+          _DUMMY_EAGER_GRAPH, None)
+    previous_graph_value = _GRAPH_LEARNING_PHASES.get(get_graph(), None)
+
   try:
     set_learning_phase(value)
-    yield value
+    yield
   finally:
     # Restore learning phase to initial value.
     with ops.init_scope():
       if context.executing_eagerly():
-        _GRAPH_LEARNING_PHASES[_DUMMY_EAGER_GRAPH] = previous_value
-      else:
-        _GRAPH_LEARNING_PHASES[get_graph()] = previous_value
+        if previous_eager_value is not None:
+          _GRAPH_LEARNING_PHASES[_DUMMY_EAGER_GRAPH] = previous_eager_value
+        elif _DUMMY_EAGER_GRAPH in _GRAPH_LEARNING_PHASES:
+          del _GRAPH_LEARNING_PHASES[_DUMMY_EAGER_GRAPH]
+
+      graph = get_graph()
+      if previous_graph_value is not None:
+        _GRAPH_LEARNING_PHASES[graph] = previous_graph_value
+      elif graph in _GRAPH_LEARNING_PHASES:
+        del _GRAPH_LEARNING_PHASES[graph]
+
+@tf_contextlib.contextmanager
+def eager_learning_phase_scope(value):
+  """Internal scope that sets the learning phase in eager execution only.
+
+  Arguments:
+      value: Learning phase value, either 0 or 1 (integers).
+
+  Yields:
+    None.
+
+  Raises:
+     ValueError: if `value` is neither `0` nor `1`.
+  """
+  global _GRAPH_LEARNING_PHASES  # pylint: disable=global-variable-not-assigned
+  assert value in {0, 1}
+  assert context.executing_eagerly()
+  previous_value = learning_phase()
+  try:
+    _GRAPH_LEARNING_PHASES[_DUMMY_EAGER_GRAPH] = value
+    yield
+  finally:
+    # Restore learning phase to initial value.
+    _GRAPH_LEARNING_PHASES[_DUMMY_EAGER_GRAPH] = previous_value
 
 
 def _get_session():
@@ -330,8 +397,14 @@ def _get_session():
     session = default_session
   else:
     if getattr(_SESSION, 'session', None) is None:
-      _SESSION.session = session_module.Session(
-          config=get_default_session_config())
+      # We are creating the Session inside a Distribution
+      # Strategy scope.
+      if distribution_strategy_context.has_strategy():
+        configure_and_create_distributed_session(
+            distribution_strategy_context.get_strategy())
+      else:
+        _SESSION.session = session_module.Session(
+            config=get_default_session_config())
     session = _SESSION.session
   return session
 
@@ -1558,6 +1631,7 @@ def prod(x, axis=None, keepdims=False):
   return math_ops.reduce_prod(x, axis, keepdims)
 
 
+@keras_export('keras.backend.cumsum')
 def cumsum(x, axis=0):
   """Cumulative sum of the values in a tensor, alongside the specified axis.
 
@@ -1571,6 +1645,7 @@ def cumsum(x, axis=0):
   return math_ops.cumsum(x, axis=axis)
 
 
+@keras_export('keras.backend.cumprod')
 def cumprod(x, axis=0):
   """Cumulative product of the values in a tensor, alongside the specified axis.
 
@@ -2818,7 +2893,7 @@ class GraphExecutionFunction(object):
                       'should be a list or tuple.')
     self.inputs = nest.flatten(inputs)
     self._outputs_structure = outputs
-    self.outputs = nest.flatten(outputs)
+    self.outputs = cast_variables_to_tensor(nest.flatten(outputs))
     with ops.control_dependencies(self.outputs):
       updates_ops = []
       for update in updates:
@@ -2978,14 +3053,13 @@ class EagerExecutionFunction(object):
     if not isinstance(updates, (list, tuple)):
       raise TypeError('`updates` in a Keras backend function '
                       'should be a list or tuple.')
+    self.name = name
     self.inputs = nest.flatten(inputs)
     self._outputs_structure = outputs
-    self.outputs = nest.flatten(outputs)
-    self.name = name
-
     graph = get_graph()
     # Consolidate updates
     with graph.as_default():
+      self.outputs = cast_variables_to_tensor(nest.flatten(outputs))
       with ops.control_dependencies(self.outputs):
         # In general, updates should be run after the outputs have been
         # computed. However, we can only ensure this when we create
@@ -4069,8 +4143,8 @@ def conv1d(x,
   x = nn.convolution(
       input=x,
       filter=kernel,
-      dilation_rate=(dilation_rate,),
-      strides=(strides,),
+      dilation_rate=dilation_rate,
+      strides=strides,
       padding=padding,
       data_format=tf_data_format)
   if data_format == 'channels_first' and tf_data_format == 'NWC':
@@ -5053,7 +5127,7 @@ def map_fn(fn, elems, name=None, dtype=None):
   Returns:
       Tensor with dtype `dtype`.
   """
-  return functional_ops.map_fn(fn, elems, name=name, dtype=dtype)
+  return map_fn_lib.map_fn(fn, elems, name=name, dtype=dtype)
 
 
 @keras_export('keras.backend.foldl')
@@ -5135,3 +5209,65 @@ if not os.path.exists(_config_path):
   except IOError:
     # Except permission denied.
     pass
+
+
+def in_multi_worker_mode():
+  """Whether we are operating in a Multi-Worker setting."""
+  tf_config = json.loads(os.environ.get('TF_CONFIG', '{}'))
+  cluster_spec = server_lib.ClusterSpec(tf_config.get('cluster', {}))
+  return tf_config and 'master' not in cluster_spec.jobs
+
+
+def configure_and_create_distributed_session(distribution_strategy):
+  """Configure session config and create a session with it."""
+
+  # TODO(priyag): Throw error if a session already exists.
+  def _create_session(distribution_strategy):
+    """Create the Distributed Strategy session."""
+    session_config = get_default_session_config()
+
+    if is_tpu_strategy(distribution_strategy):
+      # TODO(priyag, yuefengz): Remove this workaround when Distribute
+      # Coordinator is integrated with keras and we can create a session from
+      # there.
+      distribution_strategy.configure(session_config)
+      master = distribution_strategy.extended._tpu_cluster_resolver.master()  # pylint: disable=protected-access
+      session = session_module.Session(config=session_config, target=master)
+    else:
+      worker_context = dc_context.get_current_worker_context()
+      if worker_context:
+        dc_session_config = worker_context.session_config
+        # Merge the default session config to the one from distribute
+        # coordinator, which is fine for now since they don't have
+        # conflicting configurations.
+        dc_session_config.MergeFrom(session_config)
+        session = session_module.Session(
+            config=dc_session_config, target=worker_context.master_target)
+      else:
+        distribution_strategy.configure(session_config)
+        session = session_module.Session(config=session_config)
+
+    set_session(session)
+
+  if in_multi_worker_mode():
+    dc.run_distribute_coordinator(
+        _create_session,
+        distribution_strategy,
+        mode=dc.CoordinatorMode.INDEPENDENT_WORKER)
+  else:
+    _create_session(distribution_strategy)
+
+
+def is_tpu_strategy(strategy):
+  """We're executing TPU Strategy."""
+  return strategy is not None and strategy.__class__.__name__ == 'TPUStrategy'
+
+
+def cast_variables_to_tensor(tensors):
+
+  def _cast_variables_to_tensor(tensor):
+    if isinstance(tensor, variables_module.Variable):
+      return array_ops.identity(tensor)
+    return tensor
+
+  return nest.map_structure(_cast_variables_to_tensor, tensors)

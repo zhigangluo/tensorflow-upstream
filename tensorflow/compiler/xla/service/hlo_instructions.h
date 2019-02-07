@@ -253,6 +253,10 @@ class HloAllReduceInstruction : public HloCollectiveInstruction {
   // Returns a serialized representation of this instruction.
   HloInstructionProto ToProto() const override;
 
+  // Returns true if the AllReduce does no communication, so it's equivalent
+  // to a mem copy.
+  bool IsNoop() const;
+
  private:
   std::vector<string> ExtraAttributesToStringImpl(
       const HloPrintOptions& options) const override;
@@ -416,6 +420,9 @@ class HloSortInstruction : public HloInstruction {
   explicit HloSortInstruction(const Shape& shape, int64 dimension,
                               HloInstruction* keys,
                               absl::Span<HloInstruction* const> values = {});
+  explicit HloSortInstruction(const Shape& shape, int64 dimension,
+                              absl::Span<HloInstruction* const> operands,
+                              HloComputation* compare);
   // Returns the dimension sizes or numbers associated with this instruction.
   const std::vector<int64>& dimensions() const override { return dimensions_; }
   int64 dimensions(int64 index) const override { return dimensions()[index]; }

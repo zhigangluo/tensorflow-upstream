@@ -36,6 +36,7 @@ limitations under the License.
 //  DotDimensionNumbers proto          <-  corresponding Python proto
 //  GatherDimensionNumbers proto       <-  corresponding Python proto
 //  ScatterDimensionNumbers proto      <-  corresponding Python proto
+//  Span<ReplicaGroup proto>           <-  sequence of ReplicaGroup Python proto
 //
 // Arrows indicate whether a conversion only ever occurs in one
 // direction, or whether it is maintained bidirectionally.
@@ -452,16 +453,6 @@ tensorflow::ImportNumpy();
 
 // Literal
 
-%typemap(out) StatusOr<Literal> {
-  if ($1.ok()) {
-    Literal value = $1.ConsumeValueOrDie();
-    $result = numpy::PyObjectFromXlaLiteral(*value);
-  } else {
-    PyErr_SetString(PyExc_RuntimeError, $1.status().ToString().c_str());
-    SWIG_fail;
-  }
-}
-
 %typemap(in) const Literal& (StatusOr<Literal> literal_status) {
   literal_status = numpy::XlaLiteralFromPyObject($input);
   if (!literal_status.ok()) {
@@ -471,16 +462,26 @@ tensorflow::ImportNumpy();
   $1 = &literal_status.ValueOrDie();
 }
 
-%typemap(out) Literal {
-  $result = numpy::PyObjectFromXlaLiteral(*$1);
+%typemap(out) Literal (StatusOr<numpy::Safe_PyObjectPtr> obj_status) {
+  obj_status = numpy::PyObjectFromXlaLiteral(*$1);
+  if (!obj_status.ok()) {
+    PyErr_SetString(PyExc_RuntimeError, obj_status.status().ToString().c_str());
+    SWIG_fail;
+  }
+  $result = obj_status.ValueOrDie().release();
 }
 
-%typemap(out) StatusOr<Literal> {
+%typemap(out) StatusOr<Literal> (StatusOr<numpy::Safe_PyObjectPtr> obj_status) {
   if (!$1.ok()) {
     PyErr_SetString(PyExc_RuntimeError, $1.status().ToString().c_str());
     SWIG_fail;
   }
-  $result = numpy::PyObjectFromXlaLiteral($1.ValueOrDie());
+  obj_status = numpy::PyObjectFromXlaLiteral($1.ValueOrDie());
+  if (!obj_status.ok()) {
+    PyErr_SetString(PyExc_RuntimeError, obj_status.status().ToString().c_str());
+    SWIG_fail;
+  }
+  $result = obj_status.ValueOrDie().release();
 }
 
 %typemap(in) const std::vector<Literal>& (std::vector<Literal> temps) {
@@ -871,6 +872,31 @@ tensorflow::ImportNumpy();
   $1 = &dimension_numbers;
 }
 
+// Span<const ReplicaGroup>
+
+%typemap(in) absl::Span<const ReplicaGroup >
+    (std::vector<ReplicaGroup > temps) {
+  if (!PySequence_Check($input)) {
+    PyErr_SetString(PyExc_TypeError, "Argument is not a sequence");
+    SWIG_fail;
+  }
+  const int size = PySequence_Size($input);
+  temps.reserve(size);
+  for (int i = 0; i < size; ++i) {
+    PyObject* o = PySequence_GetItem($input, i);
+    ReplicaGroup rgrp;
+    if (!HandleRepeatedInt64Attribute(
+            o, "replica_ids",
+            rgrp.mutable_replica_ids())) {
+        SWIG_fail;
+    }
+    temps.push_back(rgrp);
+    Py_DECREF(o);
+  }
+  $1 = temps;
+}
+
+
 // ExecutableBuildOptions
 
 %typemap(in) const ExecutableBuildOptions*
@@ -926,6 +952,12 @@ tensorflow::ImportNumpy();
       build_options.set_result_layout(statusor.ValueOrDie());
     }
     Py_DECREF(o);
+
+    int64 num_replicas;
+    if (!GetIntAttr($input, "num_replicas", &num_replicas)) {
+      SWIG_fail;
+    }
+    build_options.set_num_replicas(num_replicas);
 
     $1 = &build_options;
   }
@@ -986,6 +1018,7 @@ tensorflow::ImportNumpy();
 %unignore xla::swig::LocalComputationBuilder::Pad;
 %unignore xla::swig::LocalComputationBuilder::Reshape;
 %unignore xla::swig::LocalComputationBuilder::Collapse;
+%unignore xla::swig::LocalComputationBuilder::AllToAll;
 %unignore xla::swig::LocalComputationBuilder::CrossReplicaSum;
 %unignore xla::swig::LocalComputationBuilder::Slice;
 %unignore xla::swig::LocalComputationBuilder::SliceInDim;

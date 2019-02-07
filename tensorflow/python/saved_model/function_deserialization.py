@@ -73,25 +73,22 @@ def _deserialize_function_spec(function_spec_proto, coder):
                                    kwargs_to_include, input_signature)
 
 
-def recreate_concrete_function(saved_concrete_function, concrete_functions):
-  """Recreates a user-facing concrete function."""
-  coder = nested_structure_coder.StructureCoder()
-
-  concrete_function = concrete_functions[saved_concrete_function.name]
-  input_signature = coder.decode_proto(
-      saved_concrete_function.canonicalized_input_signature)
-  input_signature_args, input_signature_kwargs = input_signature
-  if input_signature_kwargs:
-    raise ValueError("Restoring concrete function with non-empty kwargs (%s)." %
-                     input_signature_kwargs)
-
+# TODO(allenl): The fact that we can't derive ConcreteFunction calling
+# conventions from the serialized input spec right now is unfortunate. Merging
+# these would be good, maybe by adding TensorSpec names to cache keys so renamed
+# keyword arguments would yield different ConcreteFunctions.
+def setup_bare_concrete_function(saved_bare_concrete_function,
+                                 concrete_functions):
+  """Makes a restored bare concrete function callable."""
+  # Bare concrete functions accept only flat lists of Tensors with unique
+  # names.
+  concrete_function = concrete_functions[
+      saved_bare_concrete_function.concrete_function_name]
   # pylint: disable=protected-access
-  # Set metadata required for the concrete function to accept keyword and
-  # positional arguments in __call__. Normally this is set in
-  # get_concrete_function.
-  concrete_function._arg_keywords = [spec.name for spec in input_signature_args]
-  # TODO(allenl): Should we preserve the number of allowed positional arguments?
-  concrete_function._num_positional_args = len(input_signature_args)
+  concrete_function._arg_keywords = (
+      saved_bare_concrete_function.argument_keywords)
+  concrete_function._num_positional_args = (
+      saved_bare_concrete_function.allowed_positional_arguments)
   # pylint: enable=protected-access
   concrete_function.add_to_graph()
   return concrete_function
@@ -108,17 +105,14 @@ class RestoredFunction(def_function.Function):
     super(RestoredFunction, self).__init__(
         python_function, name, autograph=False)
     self._concrete_functions = concrete_functions
-    # TODO(vbardiovsky): This does not propagate to stateful and stateless
-    # functions of the RestoredFunction, which will have seen only defunned
-    # restored_function_body(*args, **kwargs). Therefore get_concrete_function()
-    # called on RestoredFunction will not work properly.
+    # This does not propagate to stateful and stateless functions of the
+    # RestoredFunction, which will have seen only defunned
+    # restored_function_body(*args, **kwargs). That's why we have to
+    # canonicalize inputs inside restored_function_body.
     self._function_spec = function_spec
 
   def _list_all_concrete_functions_for_serialization(self):
     return self._concrete_functions
-
-  def get_concrete_function(self, *args, **kwargs):
-    raise NotImplementedError()
 
 
 def recreate_function(saved_function, concrete_functions):
@@ -153,27 +147,35 @@ def recreate_function(saved_function, concrete_functions):
           (args, kwargs, e))
 
     debug_considered_signatures = []
-    for concrete_function in saved_function.concrete_function:
-      function_obj = concrete_functions[concrete_function.name]
-      canonicalized_original_inputs = coder.decode_proto(
-          concrete_function.canonicalized_input_signature)
+    for concrete_function_name in saved_function.concrete_functions:
+      function_obj = concrete_functions[concrete_function_name]
+      canonicalized_original_inputs = (
+          function_obj.graph.structured_input_signature)
       debug_considered_signatures.append(canonicalized_original_inputs)
 
       if _inputs_compatible(canonicalized_inputs,
                             canonicalized_original_inputs):
         flattened_inputs = nest.flatten(canonicalized_inputs)
         filtered_inputs = [t for t in flattened_inputs if _is_tensor(t)]
-        return function_obj._call_flat(filtered_inputs)  # pylint: disable=protected-access
+
+        result = function_obj._call_flat(filtered_inputs)  # pylint: disable=protected-access
+        if isinstance(result, ops.Operation):
+          return None
+        return result
 
     raise AssertionError(
         "Could not find matching function to call for canonicalized inputs %r. "
         "Only existing signatures are %r."
         % (canonicalized_inputs, debug_considered_signatures))
 
-  cfs = [concrete_functions[f.name] for f in saved_function.concrete_function]
+  concrete_function_objects = []
+  for concrete_function_name in saved_function.concrete_functions:
+    concrete_function_objects.append(concrete_functions[concrete_function_name])
 
   return RestoredFunction(restored_function_body,
-                          restored_function_body.__name__, function_spec, cfs)
+                          restored_function_body.__name__,
+                          function_spec,
+                          concrete_function_objects)
 
 
 def load_function_def_library(library):
@@ -198,6 +200,8 @@ def load_function_def_library(library):
     copy = _fix_fdef(fdef, functions)
 
     func_graph = function_def_lib.function_def_to_graph(copy)
+    for dep in _list_function_deps(fdef):
+      functions[dep].add_to_graph(func_graph)
     func = function_lib.ConcreteFunction(func_graph)
     func.add_to_graph()
 
