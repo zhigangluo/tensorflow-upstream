@@ -3231,7 +3231,7 @@ cc_library(
 )
 
 GPU_RUNTIME_HEADERS = [
-    "common_runtime/gpu/cuda_host_allocator.h",
+    "common_runtime/gpu/gpu_host_allocator.h",
     "common_runtime/gpu/gpu_bfc_allocator.h",
     "common_runtime/gpu/gpu_cudamalloc_allocator.h",
     "common_runtime/gpu/gpu_debug_allocator.h",
