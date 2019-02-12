@@ -177,7 +177,7 @@ std::unique_ptr<SharedCounter> GPUProcessState::ReleaseGPUAllocatorCounter(
 #endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 }
 
-Allocator* GPUProcessState::GetGPUHostAllocator(int numa_node) {
+Allocator* GPUProcessState::GetGpuHostAllocator(int numa_node) {
   CHECK(process_state_);
   if (!HasGPUDevice() ||
       !process_state_->ProcessState::FLAGS_brain_mem_reg_gpu_dma) {
@@ -188,7 +188,7 @@ Allocator* GPUProcessState::GetGPUHostAllocator(int numa_node) {
   }
   {
     // Here we optimize the most common use case where gpu_host_allocators_
-    // and gpu_host_al_ have already been populated and since we're only reading
+    // have already been populated and since we're only reading
     // these vectors, we can get by with a shared lock. In the slower case,
     // we take a unique lock and populate these vectors.
     tf_shared_lock lock(mu_);
@@ -228,7 +228,7 @@ Allocator* GPUProcessState::GetGPUHostAllocator(int numa_node) {
     while (gpu_host_free_visitors_.size() <= numa_node) {
       gpu_host_free_visitors_.push_back({});
     }
-    SubAllocator* sub_allocator = new GPUHostAllocator(
+    SubAllocator* sub_allocator = new GpuHostAllocator(
         se, numa_node, gpu_host_alloc_visitors_[numa_node],
         gpu_host_free_visitors_[numa_node]);
     // TODO(zheng-xq): evaluate whether 64GB by default is the best choice.
@@ -237,7 +237,7 @@ Allocator* GPUProcessState::GetGPUHostAllocator(int numa_node) {
                                         1LL << 16 /*64GB max by default*/,
                                         &gpu_host_mem_limit_in_mb);
     if (!status.ok()) {
-      LOG(ERROR) << "GetGPUHostAllocator: " << status.error_message();
+      LOG(ERROR) << "GetGpuHostAllocator: " << status.error_message();
     }
     int64 gpu_host_mem_limit = gpu_host_mem_limit_in_mb * (1LL << 20);
     Allocator* allocator =
@@ -294,7 +294,7 @@ void GPUProcessState::AddGPUHostAllocVisitor(
   mutex_lock lock(mu_);
   CHECK(gpu_host_allocators_.empty())  // Crash OK
       << "AddGPUHostAllocVisitor must be called before "
-         "first call to GetGPUHostAllocator.";
+         "first call to GetGpuHostAllocator.";
   while (numa_node >= static_cast<int64>(gpu_host_alloc_visitors_.size())) {
     gpu_host_alloc_visitors_.push_back(std::vector<SubAllocator::Visitor>());
   }
@@ -308,7 +308,7 @@ void GPUProcessState::AddGPUHostFreeVisitor(
   mutex_lock lock(mu_);
   CHECK(gpu_host_allocators_.empty())  // Crash OK
       << "AddGPUHostFreeVisitor must be called before "
-         "first call to GetGPUHostAllocator.";
+         "first call to GetGpuHostAllocator.";
   while (numa_node >= static_cast<int64>(gpu_host_free_visitors_.size())) {
     gpu_host_free_visitors_.push_back(std::vector<SubAllocator::Visitor>());
   }

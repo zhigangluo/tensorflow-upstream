@@ -42,4 +42,15 @@ se::Platform* GPUMachineManager() {
   return result.ValueOrDie();
 }
 
+std::string GpuPlatformName() {
+#if TENSORFLOW_USE_ROCM
+  return "ROCM";
+#else
+  // This function will return "CUDA" even when building TF without GPU support
+  // This is done to preserve existing functionality
+  return "CUDA";
+#endif
+}
+
+  
 }  // namespace tensorflow
