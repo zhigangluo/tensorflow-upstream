@@ -36,6 +36,7 @@ py_test(
         "//tensorflow/tools/common:public_api",
         "//tensorflow/tools/common:traverse",
     ],
+    tags = ["no_rocm"],
 )
 
 tf_cc_binary(

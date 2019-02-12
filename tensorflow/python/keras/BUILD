@@ -587,7 +587,10 @@ cuda_py_test(
         "//tensorflow/python:client_testlib",
     ],
     shard_count = 4,
-    tags = ["no_windows_gpu"],
+    tags = [
+        "no_rocm",
+        "no_windows_gpu",
+    ],
 )
 
 tf_py_test(
@@ -758,6 +761,7 @@ cuda_py_test(
         "//tensorflow/python:client_testlib",
     ],
     shard_count = 8,
+    tags = ["no_rocm"],
 )
 
 cuda_py_test(
@@ -771,6 +775,7 @@ cuda_py_test(
         "//tensorflow/python:client_testlib",
     ],
     shard_count = 8,
+    tags = ["no_rocm"],
 )
 
 tf_py_test(
@@ -1148,6 +1153,7 @@ tf_py_test(
         "//third_party/py/numpy",
         "//tensorflow/python:client_testlib",
     ],
+    tags = ["no_rocm"],
 )
 
 tf_py_test(
