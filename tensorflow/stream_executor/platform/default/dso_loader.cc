@@ -193,7 +193,7 @@ static mutex& GetRpathMutex() {
                         absl::StrCat("could not dlopen DSO: ", path,
                                      "; dlerror: ", s.error_message()));
   }
-  LOG(INFO) << "successfully opened CUDA library " << path << " locally";
+  LOG(INFO) << "successfully opened library " << path << " locally";
   return port::Status::OK();
 }
 
