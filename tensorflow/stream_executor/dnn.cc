@@ -27,7 +27,6 @@ uint64 AlgorithmDesc::hash() const {
       ::tensorflow::Hash64Combine(algo_id(), tensor_ops_enabled());
   hash_value =
       ::tensorflow::Hash64Combine(hash_value, ::tensorflow::Hash64(solver()));
-  hash_value = ::tensorflow::Hash64Combine(hash_value, workspace_size());
   return hash_value;
 }
 

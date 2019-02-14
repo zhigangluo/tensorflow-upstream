@@ -98,9 +98,6 @@ message AlgorithmProto {
   // solvers, and the (algo_id, solver tuple is needed to
   // uniquely decribe an algorithm that can be used for convolution
   bytes solver = 3;
-
-  // each algorithm has a "workspace" size requirement (can be 0)
-  uint64 workspace_size = 4;
 }
 
 // Convolution-specific parameters.
