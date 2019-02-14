@@ -93,6 +93,14 @@ message AlgorithmProto {
   }
   int64 algo_id = 1;
   MathType math_type = 2;
+
+  // On the ROCM platform the algo_id really denotes a family of
+  // solvers, and the (algo_id, solver tuple is needed to
+  // uniquely decribe an algorithm that can be used for convolution
+  bytes solver = 3;
+
+  // each algorithm has a "workspace" size requirement (can be 0)
+  uint64 workspace_size = 4;
 }
 
 // Convolution-specific parameters.
