@@ -29,20 +29,20 @@ limitations under the License.
 namespace tensorflow {
 
 Status ValidateGPUMachineManager() {
-  return se::MultiPlatformManager::PlatformWithName(GPU_PLATFORM_NAME).status();
+  return se::MultiPlatformManager::PlatformWithName(GpuPlatformName()).status();
 }
 
 se::Platform* GPUMachineManager() {
-  auto result = se::MultiPlatformManager::PlatformWithName(GPU_PLATFORM_NAME);
+  auto result = se::MultiPlatformManager::PlatformWithName(GpuPlatformName());
   if (!result.ok()) {
-    LOG(FATAL) << "Could not find Platform with name " << GPU_PLATFORM_NAME;
+    LOG(FATAL) << "Could not find Platform with name " << GpuPlatformName();
     return nullptr;
   }
 
   return result.ValueOrDie();
 }
 
-std::string GpuPlatformName() {
+string GpuPlatformName() {
 #if TENSORFLOW_USE_ROCM
   return "ROCM";
 #else

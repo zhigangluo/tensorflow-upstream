@@ -19,12 +19,6 @@ limitations under the License.
 #include <string>
 #include "tensorflow/core/lib/core/status.h"
 
-#if GOOGLE_CUDA
-#define GPU_PLATFORM_NAME "CUDA"
-#elif TENSORFLOW_USE_ROCM
-#define GPU_PLATFORM_NAME "ROCM"
-#endif
-
 namespace stream_executor {
 class Platform;
 }  // namespace stream_executor
@@ -44,7 +38,7 @@ stream_executor::Platform* GPUMachineManager();
 // Returns the string describing the name of the GPU platform in use.
 // This value is "CUDA" by default, and
 // "ROCM" when TF is built with `--config==rocm`
-std::string GpuPlatformName();
+string GpuPlatformName();
  
 }  // namespace tensorflow
 
