@@ -738,18 +738,23 @@ class PoolingDescriptor {
 class AlgorithmDesc {
  public:
   typedef int64 Index;
-  AlgorithmDesc() : AlgorithmDesc(0, false) {}
-  AlgorithmDesc(Index a, bool use_tensor_ops) {
+  AlgorithmDesc() : AlgorithmDesc(0, false, 0) {}
+  AlgorithmDesc(Index a, bool use_tensor_ops) 
+    : AlgorithmDesc(a, use_tensor_ops, 0) {}
+  AlgorithmDesc(Index a, bool use_tensor_ops, uint64 ss) {
     proto_.set_algo_id(a);
     proto_.set_math_type(use_tensor_ops ? AlgorithmProto::TENSOR_OP_MATH
                                         : AlgorithmProto::DEFAULT_MATH);
+    proto_.set_scratch_size(ss);
   }
+  uint64 scratch_size() const { return proto_.scratch_size(); }
   bool tensor_ops_enabled() const {
     return proto_.math_type() == AlgorithmProto::TENSOR_OP_MATH;
   }
   Index algo_id() const { return proto_.algo_id(); }
   bool operator==(const AlgorithmDesc& other) const {
     return algo_id() == other.algo_id() &&
+           scratch_size() == other.scratch_size() &&
            tensor_ops_enabled() == other.tensor_ops_enabled();
   }
   uint64 hash() const;

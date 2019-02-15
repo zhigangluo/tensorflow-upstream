@@ -2703,7 +2703,7 @@ port::Status MIOpenSupport::DoPrepareForConvolution(
         CHECK_EQ(status, miopenStatusSuccess) << "Unable to find a suitable "
                                                  "algorithm for doing forward "
                                                  "convolution";
-        *algorithm_desc = dnn::AlgorithmDesc(preference.fwd_algo, false);
+        *algorithm_desc = dnn::AlgorithmDesc(preference.fwd_algo, false, preference.memory);
         break;
       }
       case dnn::ConvolutionKind::BACKWARD_DATA: {
@@ -2721,7 +2721,7 @@ port::Status MIOpenSupport::DoPrepareForConvolution(
         CHECK_EQ(status, miopenStatusSuccess) << "Unable to find a suitable "
                                                  "algorithm for doing backward "
                                                  "data convolution";
-        *algorithm_desc = dnn::AlgorithmDesc(preference.bwd_data_algo, false);
+        *algorithm_desc = dnn::AlgorithmDesc(preference.bwd_data_algo, false, preference.memory);
         break;
       }
       case dnn::ConvolutionKind::BACKWARD_FILTER: {
@@ -2740,7 +2740,7 @@ port::Status MIOpenSupport::DoPrepareForConvolution(
                                                  "algorithm for doing backward "
                                                  "filter convolution";
         *algorithm_desc =
-            dnn::AlgorithmDesc(preference.bwd_weights_algo, false);
+            dnn::AlgorithmDesc(preference.bwd_weights_algo, false, preference.memory);
         break;
       }
       default:
@@ -2755,12 +2755,7 @@ port::Status MIOpenSupport::DoPrepareForConvolution(
   } else {
     // An algorithm has been specified.
     *algorithm_desc = *algo_desc;
-    // commenting this line out for the upstream repo, since
-    // AlgorithmConfig::scratch_size_ has been removed in the upstream repo but
-    // is still used in the ROCM develop-upstream repo
-    //
-    // scratch_memory_size = *(algorithm_config.scratch_size());
-    //
+    scratch_memory_size = algo_desc->scratch_size();
   }
 
   // allocate scratch memory
