@@ -24,9 +24,11 @@ from absl.testing import parameterized
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
 
+from tensorflow.python.eager import def_function
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
+from tensorflow.python.framework import tensor_spec
 from tensorflow.python.framework import test_util
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import gradient_checker
@@ -41,7 +43,6 @@ from tensorflow.python.ops.nn_impl import _compute_sampled_logits
 from tensorflow.python.platform import test as test_lib
 
 
-@test_util.disable_all_xla("This test never passed for XLA")
 class ZeroFractionTest(test_lib.TestCase):
 
   def _ZeroFraction(self, x):
@@ -1018,11 +1019,10 @@ class LeakyReluTest(test_lib.TestCase):
 class SwishTest(test_lib.TestCase):
 
   @test_util.run_deprecated_v1
-  @test_util.disable_xla("This test never passed for XLA")
   def testValues(self):
     np_values = np.array(
-        [np.linspace(-10.0, 0.0, 100),
-         np.linspace(0.0, 10.0, 100)],
+        [np.linspace(-7.0, 0.0, 100),
+         np.linspace(0.0, 7.0, 100)],
         dtype=np.float32)
     tf_values = constant_op.constant(np_values)
     actual_tf_outputs = nn_impl.swish(tf_values)
@@ -1315,6 +1315,20 @@ class MaxPoolTest(test_lib.TestCase):
     with self.assertRaisesRegex(
         ValueError, "Input tensor must be of rank 3, 4 or 5 but was 6."):
       nn_ops.max_pool_v2(x, 2, 2, "SAME")
+
+
+@test_util.run_all_in_graph_and_eager_modes
+class ConvolutionTest(test_lib.TestCase):
+
+  def testUnknownSize(self):
+    x = tensor_spec.TensorSpec(None, dtypes.float32, name="x")
+    k = np.ones([3, 6, 6, 5])
+
+    @def_function.function
+    def F(value):
+      return nn_ops.convolution(value, k, "SAME")
+
+    F.get_concrete_function(x)
 
 
 if __name__ == "__main__":

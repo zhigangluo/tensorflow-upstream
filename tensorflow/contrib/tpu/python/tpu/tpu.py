@@ -24,11 +24,10 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 
 from tensorflow.contrib.compiler import xla
 from tensorflow.contrib.framework.python.framework import experimental
-from tensorflow.contrib.tpu.proto import dynamic_padding_pb2 as dynamic_padding
 from tensorflow.contrib.tpu.python.ops import tpu_ops
 from tensorflow.contrib.tpu.python.tpu import tpu_function
-
 from tensorflow.core.framework import attr_value_pb2
+from tensorflow.core.protobuf.tpu import dynamic_padding_pb2 as dynamic_padding
 from tensorflow.python.compat import compat as api_compat
 from tensorflow.python.framework import device as pydev
 from tensorflow.python.framework import dtypes
@@ -811,6 +810,9 @@ def split_compile_and_replicate(computation,
       serialized_padding_maps.append(padding_map.SerializeToString())
     metadata_kwargs["padding_map"] = serialized_padding_maps
 
+  metadata_kwargs["step_marker_location"] = getattr(
+      computation, "step_marker_location", "STEP_MARK_AT_ENTRY")
+
   graph = ops.get_default_graph()
 
   # Fan-in: Builds a TPUReplicatedInput node for each input.
@@ -903,6 +905,17 @@ def split_compile_and_replicate(computation,
       output_tensors, control_deps = _postprocess_flat_outputs(outputs)
     else:
       output_tensors, control_deps = _postprocess_non_flat_outputs(outputs)
+
+    # tensor_tracer imports tpu.py. Local import to tensor_tracer to avoid
+    # import-cycle
+    # pylint: disable=g-import-not-at-top
+    from tensorflow.contrib.tpu.python.tpu import tensor_tracer
+    # pylint: enable=g-import-not-at-top
+    if tensor_tracer.TensorTracer.is_enabled():
+      tt = tensor_tracer.TensorTracer()
+      output_tensors = tt.trace_tpu(ops.get_default_graph(),
+                                    output_tensors, control_deps,
+                                    num_replicas)
 
     context.ExitResult(output_tensors)
   finally:

@@ -140,12 +140,12 @@ def tf_workspace(path_prefix = "", tf_repo_name = ""):
     tf_http_archive(
         name = "eigen_archive",
         build_file = clean_dep("//third_party:eigen.BUILD"),
-        patch_file = clean_dep("//third_party/eigen3:gebp_neon.patch"),
-        sha256 = "48678550a32665331d729be87076e576f2502fff325f5b6c2c78ebf7b1b22c7b",
-        strip_prefix = "eigen-eigen-bcc817c0ba98",
+        patch_file = clean_dep("//third_party/eigen3:gpu_packet_math.patch"),
+        sha256 = "61f0017318a24cf940db14e57febecc524b24a9faa8ff4fa7f9f91630c4cd09d",
+        strip_prefix = "eigen-eigen-5a4931dafc1c",
         urls = [
-            "https://mirror.bazel.build/bitbucket.org/eigen/eigen/get/bcc817c0ba98.tar.gz",
-            "https://bitbucket.org/eigen/eigen/get/bcc817c0ba98.tar.gz",
+            "https://mirror.bazel.build/bitbucket.org/eigen/eigen/get/5a4931dafc1c.tar.gz",
+            "https://bitbucket.org/eigen/eigen/get/5a4931dafc1c.tar.gz",
         ],
     )
 
@@ -186,15 +186,15 @@ def tf_workspace(path_prefix = "", tf_repo_name = ""):
 
     tf_http_archive(
         name = "com_github_googlecloudplatform_google_cloud_cpp",
-        sha256 = "886bcba3616d5f362838a2d86ae0198dd3670a84a84c82291cda6c30e14779fc",
-        strip_prefix = "google-cloud-cpp-0.5.0",
+        sha256 = "8e3a302d37f232dec041bf3f3916ca3fa5689216d42112898a4e36581f2f4ce5",
+        strip_prefix = "google-cloud-cpp-0.6.1",
         system_build_file = clean_dep("//third_party/systemlibs:google_cloud_cpp.BUILD"),
         system_link_files = {
             "//third_party/systemlibs:google_cloud_cpp.google.cloud.bigtable.BUILD": "google/cloud/bigtable/BUILD",
         },
         urls = [
-            "https://mirror.bazel.build/github.com/GoogleCloudPlatform/google-cloud-cpp/archive/v0.5.0.tar.gz",
-            "https://github.com/GoogleCloudPlatform/google-cloud-cpp/archive/v0.5.0.tar.gz",
+            "https://mirror.bazel.build/github.com/googleapis/google-cloud-cpp/archive/v0.6.1.tar.gz",
+            "https://github.com/googleapis/google-cloud-cpp/archive/v0.6.1.tar.gz",
         ],
     )
 
@@ -478,12 +478,12 @@ def tf_workspace(path_prefix = "", tf_repo_name = ""):
     # WARNING: make sure ncteisen@ and vpai@ are cc-ed on any CL to change the below rule
     tf_http_archive(
         name = "grpc",
-        sha256 = "1aa84387232dda273ea8fdfe722622084f72c16f7b84bfc519ac7759b71cdc91",
-        strip_prefix = "grpc-69b6c047bc767b4d80e7af4d00ccb7c45b683dae",
+        sha256 = "dd88f70334f60ca673d461b4fe645a65618dd75e288f5b0620e4d5ef13153904",
+        strip_prefix = "grpc-3dacd1afc451803fbbc4d01c53cbaf026aa9d06b",
         system_build_file = clean_dep("//third_party/systemlibs:grpc.BUILD"),
         urls = [
-            "https://mirror.bazel.build/github.com/grpc/grpc/archive/69b6c047bc767b4d80e7af4d00ccb7c45b683dae.tar.gz",
-            "https://github.com/grpc/grpc/archive/69b6c047bc767b4d80e7af4d00ccb7c45b683dae.tar.gz",
+            "https://mirror.bazel.build/github.com/grpc/grpc/archive/3dacd1afc451803fbbc4d01c53cbaf026aa9d06b.tar.gz",
+            "https://github.com/grpc/grpc/archive/3dacd1afc451803fbbc4d01c53cbaf026aa9d06b.tar.gz",
         ],
     )
 
@@ -715,16 +715,6 @@ def tf_workspace(path_prefix = "", tf_repo_name = ""):
         urls = [
             "https://mirror.bazel.build/github.com/cython/cython/archive/0.28.4.tar.gz",
             "https://github.com/cython/cython/archive/0.28.4.tar.gz",
-        ],
-    )
-
-    tf_http_archive(
-        name = "bazel_toolchains",
-        sha256 = "07dfbe80638eb1fe681f7c07e61b34b579c6710c691e49ee90ccdc6e9e75ebbb",
-        strip_prefix = "bazel-toolchains-9a111bd82161c1fbe8ed17a593ca1023fd941c70",
-        urls = [
-            "https://mirror.bazel.build/github.com/bazelbuild/bazel-toolchains/archive/9a111bd82161c1fbe8ed17a593ca1023fd941c70.tar.gz",
-            "https://github.com/bazelbuild/bazel-toolchains/archive/9a111bd82161c1fbe8ed17a593ca1023fd941c70.tar.gz",
         ],
     )
 

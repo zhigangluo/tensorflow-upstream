@@ -132,6 +132,14 @@ StatusOr<std::unique_ptr<HloInstruction>> HloInstruction::CreateFromProto(
                               absl::Span<const int64>(fft_length));
       break;
     }
+    case HloOpcode::kTriangularSolve: {
+      TF_RET_CHECK(proto.operand_ids_size() == 2)
+          << "Triangular solve instruction should have 2 operands but sees "
+          << proto.operand_ids_size();
+      instruction = CreateTriangularSolve(shape, operands(0), operands(1),
+                                          proto.triangular_solve_options());
+      break;
+    }
     case HloOpcode::kSend:
       TF_RET_CHECK(proto.operand_ids_size() == 2)
           << "Send instruction should have 2 operand but sees "
@@ -201,16 +209,12 @@ StatusOr<std::unique_ptr<HloInstruction>> HloInstruction::CreateFromProto(
           << proto.operand_ids_size();
       TF_RET_CHECK(proto.dimensions().size() == 1)
           << "Sort instruction should have 1 dimension";
+      TF_RET_CHECK(proto.called_computation_ids_size() == 1)
+          << "Sort instruction should one called computation but sees "
+          << proto.called_computation_ids_size();
       auto sort_operands = all_operands();
-      HloInstruction* keys = sort_operands[0];
-      if (proto.called_computation_ids_size() == 1) {
-        instruction = CreateSort(shape, proto.dimensions(0), all_operands(),
-                                 computations(0));
-      } else {
-        instruction = CreateSort(
-            shape, proto.dimensions(0), keys,
-            absl::Span<HloInstruction* const>(sort_operands).subspan(1));
-      }
+      instruction = CreateSort(shape, proto.dimensions(0), all_operands(),
+                               computations(0), proto.is_stable());
       break;
     }
     case HloOpcode::kTranspose:
@@ -300,6 +304,10 @@ StatusOr<std::unique_ptr<HloInstruction>> HloInstruction::CreateFromProto(
     case HloOpcode::kParameter:
       instruction =
           CreateParameter(proto.parameter_number(), shape, proto.name());
+      if (!proto.parameter_replication().replicated_at_leaf_buffers().empty()) {
+        instruction->set_parameter_replicated_at_leaf_buffers(
+            proto.parameter_replication().replicated_at_leaf_buffers());
+      }
       break;
     case HloOpcode::kGetTupleElement:
       TF_RET_CHECK(proto.operand_ids_size() == 1)
@@ -795,6 +803,13 @@ HloInstruction::CreateGetTupleElement(const Shape& shape,
                                               fft_length);
 }
 
+/* static */ std::unique_ptr<HloInstruction>
+HloInstruction::CreateTriangularSolve(const Shape& shape, HloInstruction* a,
+                                      HloInstruction* b,
+                                      const TriangularSolveOptions& options) {
+  return absl::make_unique<HloTriangularSolveInstruction>(shape, a, b, options);
+}
+
 /* static */ std::unique_ptr<HloInstruction> HloInstruction::CreateDot(
     const Shape& shape, HloInstruction* lhs, HloInstruction* rhs,
     const DotDimensionNumbers& dimension_numbers,
@@ -1158,16 +1173,11 @@ HloInstruction::CreateBroadcastSequence(
 }
 
 /* static */ std::unique_ptr<HloInstruction> HloInstruction::CreateSort(
-    const Shape& shape, int64 dimension, HloInstruction* keys,
-    absl::Span<HloInstruction* const> values) {
-  return absl::make_unique<HloSortInstruction>(shape, dimension, keys, values);
-}
-
-/* static */ std::unique_ptr<HloInstruction> HloInstruction::CreateSort(
     const Shape& shape, int64 dimension,
-    absl::Span<HloInstruction* const> operands, HloComputation* compare) {
+    absl::Span<HloInstruction* const> operands, HloComputation* compare,
+    bool is_stable) {
   return absl::make_unique<HloSortInstruction>(shape, dimension, operands,
-                                               compare);
+                                               compare, is_stable);
 }
 
 /* static */ std::unique_ptr<HloInstruction> HloInstruction::CreateFusion(
@@ -1359,6 +1369,7 @@ std::unique_ptr<HloInstruction> HloInstruction::CloneWithNewOperands(
     case HloOpcode::kDot:
     case HloOpcode::kDomain:
     case HloOpcode::kGetDimensionSize:
+    case HloOpcode::kTriangularSolve:
       clone = CloneWithNewOperandsImpl(shape, new_operands, context);
       break;
     // Unary ops.
@@ -1814,6 +1825,7 @@ bool HloInstruction::IdenticalSlowPath(
     case HloOpcode::kDot:
     case HloOpcode::kDomain:
     case HloOpcode::kGetDimensionSize:
+    case HloOpcode::kTriangularSolve:
       LOG(FATAL) << "Base class impl called for opcode with subclass: "
                  << opcode();
   }
@@ -2259,12 +2271,8 @@ std::vector<string> HloInstruction::ExtraAttributesToString(
                opcode() == HloOpcode::kAllReduce ||
                opcode() == HloOpcode::kScatter ||
                opcode() == HloOpcode::kSort) {
-      // TODO(b/122298745): Remove this check when Sort has a required
-      // sub-computation.
-      if (!called_computations().empty()) {
-        extra.push_back(
-            StrCat("to_apply=", PrintName(to_apply()->name(), options)));
-      }
+      extra.push_back(
+          StrCat("to_apply=", PrintName(to_apply()->name(), options)));
     } else if (!called_computations().empty()) {
       extra.push_back(StrCat(
           "calls=",
@@ -2300,12 +2308,8 @@ std::vector<string> HloInstruction::ExtraAttributesToString(
       case HloOpcode::kAllReduce:
       case HloOpcode::kScatter:
       case HloOpcode::kSort:
-        // TODO(b/122298745): Remove this check once sort has a required
-        // sub-computation.
-        if (to_apply() != nullptr) {
-          extra.push_back(
-              StrCat("to_apply=\n", to_apply()->ToString(new_options)));
-        }
+        extra.push_back(
+            StrCat("to_apply=\n", to_apply()->ToString(new_options)));
         break;
       default:
         if (!called_computations().empty()) {
@@ -2609,6 +2613,8 @@ Status HloInstruction::Visit(DfsHloVisitorBase<HloInstructionPtr>* visitor) {
       return visitor->HandleIota(this);
     case HloOpcode::kGetDimensionSize:
       return visitor->HandleGetDimensionSize(this);
+    case HloOpcode::kTriangularSolve:
+      return visitor->HandleTriangularSolve(this);
 
     // These opcodes are not handled here.
     case HloOpcode::kTrace:
@@ -3320,6 +3326,19 @@ int64 HloInstruction::parameter_number() const {
   return Cast<HloParameterInstruction>(this)->parameter_number();
 }
 
+void HloInstruction::set_parameter_replicated_at_leaf_buffers(
+    absl::Span<const bool> parameter_replicated_at_leaf_buffers) {
+  return Cast<HloParameterInstruction>(this)
+      ->set_parameter_replicated_at_leaf_buffers(
+          parameter_replicated_at_leaf_buffers);
+}
+
+const absl::optional<std::vector<bool>>&
+HloInstruction::parameter_replicated_at_leaf_buffers() const {
+  return Cast<HloParameterInstruction>(this)
+      ->parameter_replicated_at_leaf_buffers();
+}
+
 int64 HloInstruction::tuple_index() const {
   return Cast<HloGetTupleElementInstruction>(this)->tuple_index();
 }
@@ -3475,5 +3494,9 @@ const DomainMetadata& HloInstruction::operand_side_metadata() const {
 
 const DomainMetadata& HloInstruction::user_side_metadata() const {
   return Cast<HloDomainInstruction>(this)->user_side_metadata();
+}
+
+const TriangularSolveOptions& HloInstruction::triangular_solve_options() const {
+  return Cast<HloTriangularSolveInstruction>(this)->triangular_solve_options();
 }
 }  // namespace xla

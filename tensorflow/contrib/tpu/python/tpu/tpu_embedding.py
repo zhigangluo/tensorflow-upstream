@@ -25,11 +25,10 @@ import re
 import six
 
 from tensorflow.contrib.framework.python.framework import experimental
-from tensorflow.contrib.tpu.ops import gen_tpu_ops
-from tensorflow.contrib.tpu.proto import optimization_parameters_pb2
-from tensorflow.contrib.tpu.proto import tpu_embedding_configuration_pb2 as elc
 from tensorflow.contrib.tpu.python.ops import tpu_ops
 from tensorflow.contrib.tpu.python.tpu import tpu_system_metadata as tpu_system_metadata_lib
+from tensorflow.core.protobuf.tpu import optimization_parameters_pb2
+from tensorflow.core.protobuf.tpu import tpu_embedding_configuration_pb2 as elc
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import sparse_tensor
@@ -40,7 +39,6 @@ from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import partitioned_variables
 from tensorflow.python.ops import state_ops
 from tensorflow.python.ops import variable_scope
-from tensorflow.python.ops import variables
 
 TRAINING = elc.TPUEmbeddingConfiguration.TRAINING
 INFERENCE = elc.TPUEmbeddingConfiguration.INFERENCE
@@ -268,10 +266,11 @@ class TPUEmbedding(object):
           base_optimizer)
 
       train_op = cross_shard_optimizer.minimize(loss)
-      # `train_op` and `send_gradients_op` must happen in order.
-      with ops.control_dependencies([train_op]):
-        send_gradients_op = embedding.generate_send_gradients_op()
-      with ops.control_dependencies([send_gradients_op]):
+      gradients = (
+          tpu_embedding_gradient.get_gradients_through_compute_gradients(
+              cross_shard_optimizer, loss, activations)
+      send_gradients_op = embedding.generate_send_gradients_op(gradients)
+      with ops.control_dependencies([train_op, send_gradients_op]):
         loss = array_ops.identity(loss)
 
     loss = tpu.shard(computation,
@@ -281,8 +280,7 @@ class TPUEmbedding(object):
       sess.run(tpu.initialize_system(embedding_config=
                                      embedding.config_proto))
       sess.run(variables.global_variables_initializer())
-      sess.run(embedding.init_ops)
-      sess.run(embedding_variables_and_ops.load_ops)
+      sess.run(embedding_variables_and_ops.load_ops())
       sess.run(enqueue_ops)
       loss_val = sess.run(loss)
     ```
@@ -360,8 +358,6 @@ class TPUEmbedding(object):
     _validate_batch_size(self._batch_size, self._num_cores)
     self._batch_size_per_core = self._batch_size // self._num_cores
 
-    self._init_ops = []
-
     # TODO(shizhiw): remove `mode`?
     if mode == TRAINING:
       _validate_optimization_parameters(optimization_parameters)
@@ -383,9 +379,6 @@ class TPUEmbedding(object):
     # on get_slot().
     self._optimizer_handler = _get_optimization_handler(
         self._optimization_parameters)
-
-    dummy_table_variables_init_op = self._create_dummy_table_variables()
-    self._init_ops.append(dummy_table_variables_init_op)
 
     self._config_proto = self._create_config_proto()
 
@@ -442,21 +435,20 @@ class TPUEmbedding(object):
     return self._config_proto
 
   @property
-  def init_ops(self):
-    """Initialization ops for TPU embedding.
-
-    It must be called after all global variables have been initialized,
-    i.e. after `global_variables_initializer()`, as it loads embedding
-    tables into TPU.
-
-    Returns:
-      A list of ops.
-    """
-    return self._init_ops
+  def table_to_config_dict(self):
+    return copy.copy(self._table_to_config_dict)
 
   @property
   def feature_to_table_dict(self):
     return copy.copy(self._feature_to_table_dict)
+
+  @property
+  def table_to_features_dict(self):
+    return copy.copy(self._table_to_features_dict)
+
+  @property
+  def optimization_parameters(self):
+    return self._optimization_parameters
 
   def _create_config_proto(self):
     """Create `TPUEmbeddingConfiguration`."""
@@ -510,13 +502,15 @@ class TPUEmbedding(object):
         A dictionary mapping from string of table name to embedding variables,
         A dictionary mapping from string of table name to AdagradSlotVariable,
          AdamSlotVariables etc with slot variables,
-        A list of ops to load embedding and slot variables on CPU to TPU,
-        A list of ops to retrieve embedding and slot variables from TPU to CPU.
+        A function which returns a list of ops to load embedding and slot
+         variables from TPU to CPU.
+        A function which returns a list of ops to retrieve embedding and slot
+         variables from TPU to CPU.
     """
     embedding_variables_by_table = {}
     slot_variables_by_table = {}
-    load_ops = []
-    retrieve_ops = []
+    load_op_fns = []
+    retrieve_op_fns = []
     for table in self._table_to_config_dict:
       if embedding_variable_name_by_table:
         embedding_variable_name = embedding_variable_name_by_table[table]
@@ -539,62 +533,40 @@ class TPUEmbedding(object):
             collections=[ops.GraphKeys.GLOBAL_VARIABLES])
         embedding_variables_by_table[table] = table_variables
 
-        slot_variables_for_table, load_ops_for_table, retrieve_ops_for_table = (
+        slot_variables_for_table, load_ops_fn, retrieve_ops_fn = (
             self._optimizer_handler.create_variables_and_ops(
                 table, slot_variable_names, self._num_hosts,
                 self._table_to_config_dict[table], table_variables)
         )
         slot_variables_by_table[table] = slot_variables_for_table
-        load_ops.extend(load_ops_for_table)
-        retrieve_ops.extend(retrieve_ops_for_table)
+        load_op_fns.append(load_ops_fn)
+        retrieve_op_fns.append(retrieve_ops_fn)
+
+    def load_ops():
+      """Calls and returns the load ops for each embedding table.
+
+      Returns:
+        A list of ops to load embedding and slot variables from CPU to TPU.
+      """
+      load_ops_list = []
+      for load_op_fn in load_op_fns:
+        load_ops_list.extend(load_op_fn())
+      return load_ops_list
+
+    def retrieve_ops():
+      """Calls and returns the retrieve ops for each embedding table.
+
+      Returns:
+        A list of ops to retrieve embedding and slot variables from TPU to CPU.
+      """
+      retrieve_ops_list = []
+      for retrieve_op_fn in retrieve_op_fns:
+        retrieve_ops_list.extend(retrieve_op_fn())
+      return retrieve_ops_list
+
     return VariablesAndOps(embedding_variables_by_table,
                            slot_variables_by_table,
                            load_ops, retrieve_ops)
-
-  def _create_dummy_table_variables(self):
-    """Create dummy embedding table variables.
-
-    The sole purpose of these dummy variables are to trigger gradient
-    calcuation wrt them so that the gradients wrt activation can be captured
-    and later sent to TPU embedding.
-
-    Returns:
-      Initializer for these variables.
-
-    Raises:
-      RuntimeError: if collection to store gradients already exists and is not
-      empty.
-    """
-    self._dummy_table_variables = []
-    # TODO(shizhiw): remove table id.
-    for table_id, table in enumerate(self._table_to_features_dict):
-      self._dummy_table_variables.append(
-          variable_scope.get_variable(
-              'tpu_embedding_dummy_table_variable_%s' % table,
-              dtype=dtypes.float32,
-              shape=[1],
-              use_resource=True,
-              trainable=True,
-              # TODO(shizhiw): Remove these dummy variables as
-              # tensorflow optimizer creates slot variable for them which
-              # is undesirable.
-              # e.g. tpu_embedding_dummy_table_variable_mlp_user/Adam{_1}.
-              # Explicitly specifying collections prevents this variable from
-              # being added to the GLOBAL_VARIABLES collection, so that Saver()
-              # ignores it.
-              collections=['tpu_embedding_dummy_table_variables']))
-
-      g = ops.get_default_graph()
-      table_gradients = g.get_collection_ref(
-          'tpu_embedding_gradients_table_%d' % table_id)
-      if table_gradients:
-        raise RuntimeError(
-            'tpu_embedding_gradients_table_%d is not empty.' % table_id)
-      table_gradients.extend([None] * len(self._table_to_features_dict[table]))
-
-    return variables.variables_initializer(
-        self._dummy_table_variables,
-        name='tpu_embedding_dummy_table_variables_init')
 
   def generate_enqueue_ops(self, sparse_features_list):
     """Generate enqueue ops.
@@ -742,52 +714,34 @@ class TPUEmbedding(object):
       for lookup_id, feature in enumerate(features):
         start_row = lookup_id * self._batch_size_per_core
         end_row = start_row + self._batch_size_per_core
-        activations[feature] = gen_tpu_ops.tpu_embedding_activations(
-            self._dummy_table_variables[table_id],
-            recv_activations[table_id][start_row:end_row, :],
-            table_id=table_id,
-            lookup_id=lookup_id)
+        activations[feature] = recv_activations[table_id][start_row:end_row, :]
     return activations
 
-  # TODO(shizhiw): Make `gradient_multiplier` per feature. Setting it to 0 would
-  # have the effect of `tf.stop_gradients()`.
-  # TODO(shizhiw): Consider alternative ways to capture gradients wrt embedding
-  # layer outputs to remove `_dummy_table_variables`,
-  # `_embedding_activation_grad` and `tpu_embedding_gradients_table_%d'.
-  def generate_send_gradients_op(self, gradient_multipliers=None):
-    """Retrieve gradients from collections and send them to TPU embedding.
+  def generate_send_gradients_op(self, feature_to_gradient_dict):
+    """Send gradient to TPU embedding.
 
     Args:
-      gradient_multipliers: None, or dict mapping table names to gradient
-        multiplier Tensors.
+      feature_to_gradient_dict: dict mapping feature names to gradient wrt
+        activations.
 
     Returns:
       SendTPUEmbeddingGradients Op.
 
     Raises:
-      ValueError: If required gradients have not been defined.
       RuntimeError: If `mode` is not `TRAINING`.
     """
     if self._mode != TRAINING:
       raise RuntimeError('Only in training mode gradients need to '
                          'be sent to TPU embedding; got mode {}.'
                          .format(self._mode))
-
-    g = ops.get_default_graph()
-    gradients = list()
-    for table_id, table in enumerate(self._table_to_config_dict):
-      table_gradients = g.get_collection(
-          'tpu_embedding_gradients_table_%d' % table_id)
-      if any(gradient is None for gradient in table_gradients):
-        raise ValueError(
-            'Table {}/{} has undefined gradients: this is probably because the '
-            'model asked TPUEmbedding to compute activations that were not '
-            'used.'.format(table_id, table))
+    gradients = []
+    for table in self._table_to_features_dict:
+      features = self._table_to_features_dict[table]
+      table_gradients = [
+          feature_to_gradient_dict[feature] for feature in features
+      ]
       concat_table_grads = array_ops.concat(table_gradients, axis=0)
-      if gradient_multipliers is not None:
-        concat_table_grads *= gradient_multipliers[table.name]
       gradients.append(concat_table_grads)
-
     return tpu_ops.send_tpu_embedding_gradients(
         inputs=gradients, config=self.config_proto.SerializeToString())
 
@@ -877,30 +831,48 @@ class _AdagradHandler(_OptimizerHandler):
         initializer=accumulator_initializer)
     slot_variables = AdagradSlotVariable(accumulator_variables)
 
-    load_ops = []
-    retrieve_ops = []
-    for host_id, table_variable, accumulator_variable in (zip(
-        range(num_hosts), table_variables, accumulator_variables)):
-      with ops.colocate_with(table_variable):
-        load_parameters_op = (
-            tpu_ops.load_tpu_embedding_adagrad_parameters(
-                parameters=table_variable,
-                accumulators=accumulator_variable,
-                table_name=table,
-                num_shards=num_hosts,
-                shard_id=host_id))
-        retrieved_table, retrieved_accumulator = (
-            tpu_ops.retrieve_tpu_embedding_adagrad_parameters(
-                table_name=table,
-                num_shards=num_hosts,
-                shard_id=host_id))
-        retrieve_parameters_op = control_flow_ops.group(
-            state_ops.assign(table_variable, retrieved_table),
-            state_ops.assign(accumulator_variable, retrieved_accumulator))
+    def load_ops_fn():
+      """Returns the retrieve ops for AdaGrad embedding tables.
 
-      load_ops.append(load_parameters_op)
-      retrieve_ops.append(retrieve_parameters_op)
-    return slot_variables, load_ops, retrieve_ops
+      Returns:
+        A list of ops to load embedding and slot variables from CPU to TPU.
+      """
+      load_op_list = []
+      for host_id, table_variable, accumulator_variable in (zip(
+          range(num_hosts), table_variables, accumulator_variables)):
+        with ops.colocate_with(table_variable):
+          load_parameters_op = (
+              tpu_ops.load_tpu_embedding_adagrad_parameters(
+                  parameters=table_variable,
+                  accumulators=accumulator_variable,
+                  table_name=table,
+                  num_shards=num_hosts,
+                  shard_id=host_id))
+        load_op_list.append(load_parameters_op)
+      return load_op_list
+
+    def retrieve_ops_fn():
+      """Returns the retrieve ops for AdaGrad embedding tables.
+
+      Returns:
+        A list of ops to retrieve embedding and slot variables from TPU to CPU.
+      """
+      retrieve_op_list = []
+      for host_id, table_variable, accumulator_variable in (zip(
+          range(num_hosts), table_variables, accumulator_variables)):
+        with ops.colocate_with(table_variable):
+          retrieved_table, retrieved_accumulator = (
+              tpu_ops.retrieve_tpu_embedding_adagrad_parameters(
+                  table_name=table,
+                  num_shards=num_hosts,
+                  shard_id=host_id))
+          retrieve_parameters_op = control_flow_ops.group(
+              state_ops.assign(table_variable, retrieved_table),
+              state_ops.assign(accumulator_variable, retrieved_accumulator))
+        retrieve_op_list.append(retrieve_parameters_op)
+      return retrieve_op_list
+
+    return slot_variables, load_ops_fn, retrieve_ops_fn
 
 
 class _AdamHandler(_OptimizerHandler):
@@ -947,33 +919,55 @@ class _AdamHandler(_OptimizerHandler):
         initializer=v_initializer)
     slot_variables = AdamSlotVariables(m_variables, v_variables)
 
-    load_ops = []
-    retrieve_ops = []
-    for host_id, table_variable, m_variable, v_variable in (zip(
-        range(num_hosts), table_variables,
-        m_variables, v_variables)):
-      with ops.colocate_with(table_variable):
-        load_parameters_op = (
-            tpu_ops.load_tpu_embedding_adam_parameters(
-                parameters=table_variable,
-                momenta=m_variable,
-                velocities=v_variable,
-                table_name=table,
-                num_shards=num_hosts,
-                shard_id=host_id))
-        retrieved_table, retrieved_m, retrieved_v = (
-            tpu_ops.retrieve_tpu_embedding_adam_parameters(
-                table_name=table,
-                num_shards=num_hosts,
-                shard_id=host_id))
-        retrieve_parameters_op = control_flow_ops.group(
-            state_ops.assign(table_variable, retrieved_table),
-            state_ops.assign(m_variable, retrieved_m),
-            state_ops.assign(v_variable, retrieved_v))
+    def load_ops_fn():
+      """Returns the retrieve ops for AdaGrad embedding tables.
 
-      load_ops.append(load_parameters_op)
-      retrieve_ops.append(retrieve_parameters_op)
-    return slot_variables, load_ops, retrieve_ops
+      Returns:
+        A list of ops to load embedding and slot variables from CPU to TPU.
+      """
+      load_op_list = []
+      for host_id, table_variable, m_variable, v_variable in (zip(
+          range(num_hosts), table_variables,
+          m_variables, v_variables)):
+        with ops.colocate_with(table_variable):
+          load_parameters_op = (
+              tpu_ops.load_tpu_embedding_adam_parameters(
+                  parameters=table_variable,
+                  momenta=m_variable,
+                  velocities=v_variable,
+                  table_name=table,
+                  num_shards=num_hosts,
+                  shard_id=host_id))
+
+      load_op_list.append(load_parameters_op)
+      return load_op_list
+
+    def retrieve_ops_fn():
+      """Returns the retrieve ops for Adam embedding tables.
+
+      Returns:
+        A list of ops to retrieve embedding and slot variables from TPU to CPU.
+      """
+
+      retrieve_op_list = []
+      for host_id, table_variable, m_variable, v_variable in (zip(
+          range(num_hosts), table_variables,
+          m_variables, v_variables)):
+        with ops.colocate_with(table_variable):
+          retrieved_table, retrieved_m, retrieved_v = (
+              tpu_ops.retrieve_tpu_embedding_adam_parameters(
+                  table_name=table,
+                  num_shards=num_hosts,
+                  shard_id=host_id))
+          retrieve_parameters_op = control_flow_ops.group(
+              state_ops.assign(table_variable, retrieved_table),
+              state_ops.assign(m_variable, retrieved_m),
+              state_ops.assign(v_variable, retrieved_v))
+
+        retrieve_op_list.append(retrieve_parameters_op)
+      return retrieve_op_list
+
+    return slot_variables, load_ops_fn, retrieve_ops_fn
 
 
 class _StochasticGradientDescentHandler(_OptimizerHandler):
@@ -990,30 +984,51 @@ class _StochasticGradientDescentHandler(_OptimizerHandler):
                                table_config, table_variables):
     del table_config
 
-    load_ops = []
-    retrieve_ops = []
-    for host_id, table_variable in (zip(
-        range(num_hosts), table_variables)):
-      with ops.colocate_with(table_variable):
-        load_parameters_op = (
-            tpu_ops
-            .load_tpu_embedding_stochastic_gradient_descent_parameters(
-                parameters=table_variable,
-                table_name=table,
-                num_shards=num_hosts,
-                shard_id=host_id))
-        retrieved_table = (
-            tpu_ops
-            .retrieve_tpu_embedding_stochastic_gradient_descent_parameters(
-                table_name=table,
-                num_shards=num_hosts,
-                shard_id=host_id))
-        retrieve_parameters_op = control_flow_ops.group(
-            state_ops.assign(table_variable, retrieved_table))
+    def load_ops_fn():
+      """Returns the retrieve ops for AdaGrad embedding tables.
 
-      load_ops.append(load_parameters_op)
-      retrieve_ops.append(retrieve_parameters_op)
-    return None, load_ops, retrieve_ops
+      Returns:
+        A list of ops to load embedding and slot variables from CPU to TPU.
+      """
+      load_op_list = []
+      for host_id, table_variable in (zip(
+          range(num_hosts), table_variables)):
+        with ops.colocate_with(table_variable):
+          load_parameters_op = (
+              tpu_ops
+              .load_tpu_embedding_stochastic_gradient_descent_parameters(
+                  parameters=table_variable,
+                  table_name=table,
+                  num_shards=num_hosts,
+                  shard_id=host_id))
+
+        load_op_list.append(load_parameters_op)
+      return load_op_list
+
+    def retrieve_ops_fn():
+      """Returns the retrieve ops for SGD embedding tables.
+
+      Returns:
+        A list of ops to retrieve embedding and slot variables from TPU to CPU.
+      """
+
+      retrieve_op_list = []
+      for host_id, table_variable in (zip(
+          range(num_hosts), table_variables)):
+        with ops.colocate_with(table_variable):
+          retrieved_table = (
+              tpu_ops
+              .retrieve_tpu_embedding_stochastic_gradient_descent_parameters(
+                  table_name=table,
+                  num_shards=num_hosts,
+                  shard_id=host_id))
+          retrieve_parameters_op = control_flow_ops.group(
+              state_ops.assign(table_variable, retrieved_table))
+
+        retrieve_op_list.append(retrieve_parameters_op)
+      return retrieve_op_list
+
+    return None, load_ops_fn, retrieve_ops_fn
 
 
 def _get_optimization_handler(optimization_parameters):

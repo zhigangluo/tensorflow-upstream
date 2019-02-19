@@ -151,6 +151,7 @@ cuda_py_test(
         "//tensorflow/python:nn_grad",
         "//tensorflow/python:training",
     ],
+    tags = ["no_rocm"],
 )
 
 cuda_py_test(
@@ -384,6 +385,7 @@ cuda_py_test(
         ":context",
         ":function",
         ":test",
+        ":profiler",
         "//third_party/py/numpy",
         "//tensorflow/python:math_ops",
         "//tensorflow/python:pywrap_tensorflow",
@@ -498,7 +500,7 @@ py_library(
         "//tensorflow/python:util",
         "//tensorflow/python:variable_scope",
         "//tensorflow/python:while_v2",  # TODO(b/118513001): Imported via control_flow_ops; remove.
-        "//tensorflow/python/training/checkpointable:base",
+        "//tensorflow/python/training/tracking:base",
     ],
 )
 
@@ -529,6 +531,7 @@ tf_xla_py_test(
     srcs = ["def_function_xla_test.py"],
     tags = [
         "no_pip",
+        "no_rocm",
         "nomac",
     ],
     deps = [
@@ -552,7 +555,7 @@ py_library(
         "//tensorflow/python:framework_ops",
         "//tensorflow/python:template",
         "//tensorflow/python:variable_scope",
-        "//tensorflow/python/training/checkpointable:base",
+        "//tensorflow/python/training/tracking:base",
     ],
 )
 

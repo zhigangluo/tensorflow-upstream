@@ -13,7 +13,6 @@ py_library(
     visibility = ["//visibility:public"],
     deps = [
         "//tensorflow/lite/python/interpreter_wrapper:tensorflow_wrap_interpreter_wrapper",
-        "//tensorflow/python:util",
         "//third_party/py/numpy",
     ],
 )
@@ -37,6 +36,14 @@ py_test(
 
 py_binary(
     name = "tflite_convert",
+    srcs = ["tflite_convert.py"],
+    srcs_version = "PY2AND3",
+    visibility = ["//visibility:public"],
+    deps = [":tflite_convert_main_lib"],
+)
+
+py_library(
+    name = "tflite_convert_main_lib",
     srcs = ["tflite_convert.py"],
     srcs_version = "PY2AND3",
     visibility = ["//visibility:public"],
@@ -64,6 +71,7 @@ py_library(
         ":interpreter",
         ":lite_constants",
         ":op_hint",
+        "//tensorflow/lite/python/optimize:calibrator",
         "//tensorflow/python:graph_util",
         "//tensorflow/python:tf_optimizer",
         "//tensorflow/python/keras",

@@ -126,13 +126,10 @@ StatusOr<HloInstruction*> MakeSelectHlo(HloInstruction* pred,
 // Creates a Sort HLO instruction and adds it to the computation containing the
 // operands. All operands must be in the same computation. Also creates a
 // default compare sub-computation which sorts the first operand into ascending
-// order.
-// Note that this default compare sub-computation does not have special handling
-// for floating point values and thus can result in undefined behavior in the
-// presence of NaN values.
+// order. 'is_stable' specifies whether the sorting should be stable.
 StatusOr<HloInstruction*> MakeSortHlo(
     const Shape& sort_shape, absl::Span<HloInstruction* const> operands,
-    int64 dimension_to_sort, HloComputation::Builder* builder,
+    int64 dimension_to_sort, bool is_stable, HloComputation::Builder* builder,
     HloModule* module);
 
 // Creates an R1 Constant HLO instruction of the given PrimitiveType with the

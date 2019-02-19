@@ -67,8 +67,10 @@ class ConstantFolding : public GraphOptimizer {
                                           const GraphProperties& properties);
   Status MaterializeReductionIndices(NodeDef* node,
                                      const GraphProperties& properties);
-
+  Status MaterializeConstantValuedNode(NodeDef* node,
+                                       const GraphProperties& properties);
   Status MaterializeConstants(const GraphProperties& properties);
+
   bool IsFoldable(const NodeDef& node) const;
 
   Status EvaluateNode(const NodeDef& node,
@@ -233,6 +235,9 @@ class ConstantFolding : public GraphOptimizer {
 
   bool MergeConcat(const GraphProperties& properties, bool use_shape_info,
                    GraphDef* optimized_graph, NodeDef* node);
+
+  Status AddQuantizedMatMulMinMaxOutConstNodes(NodeDef* node,
+                                               GraphDef* optimized_graph);
 
   // Points to an externally provided device or to owned_device_;
   RewriterConfig::Toggle opt_level_;

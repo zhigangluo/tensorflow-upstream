@@ -31,9 +31,7 @@ import six
 from six.moves import queue as Queue  # pylint: disable=redefined-builtin
 from six.moves import xrange  # pylint: disable=redefined-builtin
 
-from tensorflow.contrib.tpu.proto import compilation_result_pb2 as tpu_compilation_result
 from tensorflow.contrib.tpu.python.ops import tpu_ops
-from tensorflow.contrib.tpu.python.ops import tpu_ordinal_selector_op
 from tensorflow.contrib.tpu.python.tpu import _tpu_estimator_embedding
 from tensorflow.contrib.tpu.python.tpu import error_handling
 from tensorflow.contrib.tpu.python.tpu import functional as tpu_functional
@@ -42,7 +40,9 @@ from tensorflow.contrib.tpu.python.tpu import tensor_tracer
 from tensorflow.contrib.tpu.python.tpu import tpu
 from tensorflow.contrib.tpu.python.tpu import tpu_config
 from tensorflow.contrib.tpu.python.tpu import tpu_context
+from tensorflow.contrib.tpu.python.tpu import tpu_embedding_gradient
 from tensorflow.contrib.tpu.python.tpu import tpu_feed
+from tensorflow.contrib.tpu.python.tpu import tpu_function
 from tensorflow.contrib.tpu.python.tpu import training_loop
 from tensorflow.contrib.tpu.python.tpu import util as util_lib
 from tensorflow.contrib.tpu.python.tpu._tpu_estimator_embedding import AdamParameters  # pylint: disable=unused-import
@@ -51,6 +51,7 @@ from tensorflow.contrib.training.python.training import hparam
 from tensorflow.core.framework import variable_pb2
 from tensorflow.core.framework.summary_pb2 import Summary
 from tensorflow.core.protobuf import config_pb2
+from tensorflow.core.protobuf.tpu import compilation_result_pb2 as tpu_compilation_result
 from tensorflow.python.client import session as tf_session
 from tensorflow.python.data.ops import dataset_ops
 from tensorflow.python.data.util import nest as data_nest
@@ -358,15 +359,8 @@ class TPUEstimatorSpec(model_fn_lib._TPUEstimatorSpec):  # pylint: disable=prote
     if tensor_tracer.TensorTracer.is_enabled() \
        and self.train_op is not None:
       tt = tensor_tracer.TensorTracer()
-      (loss, tracing_calls) = tt.trace_cpu(ops.get_default_graph(),
-                                           loss, self.train_op)
-      tracing_call_ret = _OutfeedHostCall.create_cpu_hostcall(tracing_calls)
-      tracing_functions = tracing_call_ret.values()
-      if tracing_functions:
-        if hooks:
-          hooks.extend([_OutfeedHostCallHook(tracing_functions)])
-        else:
-          hooks = [_OutfeedHostCallHook(tracing_functions)]
+      loss = tt.trace_cpu(ops.get_default_graph(), loss, self.train_op)
+
     hooks = tuple(hooks or [])
     scaffold = self.scaffold_fn() if self.scaffold_fn else None
     return model_fn_lib.EstimatorSpec(
@@ -1371,13 +1365,13 @@ def call_computation(computation,
     # TPU core with every `Session.run()` call. Note that the entire inference
     # graph executes on a single core, and that invocations of this graph
     # will round-robin among the cores attached to a host.
-    @function.Defun()
+    @function.Defun(capture_resource_var_by_value=False)
     def tpu_subgraph():
       return computation()
 
     return tpu_functional.TPUPartitionedCall(
         args=tpu_subgraph.captured_inputs,
-        device_ordinal=tpu_ordinal_selector_op.tpu_ordinal_selector(),
+        device_ordinal=tpu_ops.tpu_ordinal_selector(),
         Tout=[o.type for o in tpu_subgraph.definition.signature.output_arg],
         f=tpu_subgraph)
   else:
@@ -1403,11 +1397,19 @@ class _ModelFnWrapper(object):
   def call_without_tpu(self, features, labels, is_export_mode):
     return self._call_model_fn(features, labels, is_export_mode=is_export_mode)
 
-  def _add_embedding_features(self, features):
+  def _add_embedding_features(self, features, hook_dummy_table_variables):
+    """Add embedding features, optionally add hook to intercept gradient."""
     if self._ctx.embedding_config:
       tpu_embedding_ = self._ctx.embedding_config.tpu_embedding
       embedding_activations = tpu_embedding_.get_activations()
-      features.update(embedding_activations)
+      if hook_dummy_table_variables:
+        new_embedding_activations = (
+            tpu_embedding_gradient.hook_dummy_table_variables_to_activations(
+                tpu_embedding_, embedding_activations,
+                self._ctx.embedding_config.dummy_table_variables))
+        features.update(new_embedding_activations)
+      else:
+        features.update(embedding_activations)
 
   def convert_to_single_tpu_train_step(self, dequeue_fn):
     """Converts user provided model_fn` as a single train step on TPU.
@@ -1441,7 +1443,7 @@ class _ModelFnWrapper(object):
       del loss  # unused; required in function signature.
       inputs = dequeue_fn()
       features, labels = inputs.features_and_labels()
-      self._add_embedding_features(features)
+      self._add_embedding_features(features, True)
 
       estimator_spec = self._verify_estimator_spec(
           self._call_model_fn(features, labels))
@@ -1454,25 +1456,21 @@ class _ModelFnWrapper(object):
 
       captured_training_hooks.capture(estimator_spec.training_hooks)
 
-      tracing_ops = []
-      if tensor_tracer.TensorTracer.is_enabled():
-        tt = tensor_tracer.TensorTracer()
-        loss, tracing_ops = tt.trace_tpu(ops.get_default_graph(),
-                                         loss, train_op,
-                                         self._ctx.num_replicas,
-                                         self._ctx.num_of_replicas_per_host,
-                                         self._ctx.num_hosts)
-
       if self._ctx.embedding_config is None:
         apply_sparse_grads = []
       else:
         tpu_embedding_ = self._ctx.embedding_config.tpu_embedding
-        apply_sparse_grads = [tpu_embedding_.generate_send_gradients_op()]
+        gradients = (
+            tpu_embedding_gradient.get_gradients_through_dummy_table_variables(
+                tpu_embedding_)
+        )
+        apply_sparse_grads = [
+            tpu_embedding_.generate_send_gradients_op(gradients)
+        ]
 
       # We must run train_op to update the variables prior to running the
       # outfeed.
-      with ops.control_dependencies([train_op] + tracing_ops +
-                                    apply_sparse_grads):
+      with ops.control_dependencies([train_op] + apply_sparse_grads):
         host_call_outfeed_ops = []
         if (isinstance(estimator_spec, model_fn_lib._TPUEstimatorSpec)  # pylint: disable=protected-access
             and estimator_spec.host_call is not None):
@@ -1518,7 +1516,7 @@ class _ModelFnWrapper(object):
       """Evaluation step function for use inside a while loop."""
       inputs = dequeue_fn()
       features, labels = inputs.features_and_labels()
-      self._add_embedding_features(features)
+      self._add_embedding_features(features, False)
 
       tpu_estimator_spec = self._call_model_fn(features, labels)
       if not isinstance(tpu_estimator_spec, model_fn_lib._TPUEstimatorSpec):  # pylint: disable=protected-access
@@ -2028,9 +2026,9 @@ class TPUEstimator(estimator_lib.Estimator):
   ==========
 
   `model_fn` should return `TPUEstimatorSpec`, which expects the `eval_metrics`
-  for TPU evaluation. However, if eval_on_tpu is False, `model_fn` must return
-  `EstimatorSpec` and the evaluation will execute on CPU or GPU; in this case
-  the following discussion on TPU evaluation does not apply.
+  for TPU evaluation. If eval_on_tpu is False, the evaluation will execute on
+  CPU or GPU; in this case the following discussion on TPU evaluation does not
+  apply.
 
   `TPUEstimatorSpec.eval_metrics` is a tuple of `metric_fn` and `tensors`, where
   `tensors` could be a list of any nested structure of `Tensor`s (See
@@ -2474,8 +2472,14 @@ class TPUEstimator(estimator_lib.Estimator):
           device_assignment = ctx.device_assignment
       else:
         device_assignment = None
-      tensors_on_cpu = tpu.rewrite_for_inference(
-          tpu_computation, device_assignment=device_assignment)
+
+      if self._experimental_exported_model_uses_all_cores:
+        tensors_on_cpu = tpu.rewrite(
+            tpu_computation, device_assignment=device_assignment)
+      else:
+        tensors_on_cpu = tpu.rewrite_for_inference(
+            tpu_computation, device_assignment=device_assignment)
+
       (estimator_spec, export_outputs_dict, export_outputs_list,
        predictions_dict) = (
            tpu_capture.get())
@@ -2786,11 +2790,12 @@ class TPUEstimator(estimator_lib.Estimator):
         input_fn = features
 
         tpu_init_ops = []
-        if ctx.embedding_config:
-          tpu_init_ops.extend(ctx.embedding_config.tpu_embedding.init_ops)
-          embedding_variables_and_ops = (
-              ctx.embedding_config.tpu_embedding.create_variables_and_ops())
-          tpu_init_ops.extend(embedding_variables_and_ops.load_ops)
+        if ctx.embedding_config and mode == model_fn_lib.ModeKeys.TRAIN:
+          dummy_table_variables, dummy_table_variables_init = (
+              tpu_embedding_gradient.create_dummy_table_variables(
+                  ctx.embedding_config.tpu_embedding))
+          ctx.embedding_config.dummy_table_variables = dummy_table_variables
+          tpu_init_ops.append(dummy_table_variables_init)
 
         input_holders = _InputPipeline(input_fn, batch_axis, ctx)
         enqueue_ops, dequeue_fn, input_hooks, run_infeed_loop_on_coordinator = (
@@ -2806,6 +2811,24 @@ class TPUEstimator(estimator_lib.Estimator):
         if mode == model_fn_lib.ModeKeys.TRAIN:
           compile_op, loss, host_call, scaffold, training_hooks = (
               _train_on_tpu_system(ctx, model_fn_wrapper, dequeue_fn))
+          if ctx.embedding_config:
+            g = ops.get_default_graph()
+            table_to_config_dict = (
+                ctx.embedding_config.tpu_embedding.table_to_config_dict)
+            optimization_parameters = (
+                ctx.embedding_config.tpu_embedding.optimization_parameters)
+            embedding_variable_name_by_table, slot_variable_names_by_table = (
+                _tpu_estimator_embedding.get_full_variable_names(
+                    g, table_to_config_dict, optimization_parameters
+                )
+            )
+            embedding_variables_and_ops = (
+                ctx.embedding_config.tpu_embedding.create_variables_and_ops(
+                    embedding_variable_name_by_table,
+                    slot_variable_names_by_table
+                ))
+            tpu_init_ops.extend(embedding_variables_and_ops.load_ops())
+
           host_ops = host_call.create_tpu_hostcall()
           if host_ops is None:
             host_ops = []
@@ -2881,9 +2904,8 @@ class TPUEstimator(estimator_lib.Estimator):
           summary.scalar(model_fn_lib.LOSS_METRIC_KEY, loss)
           with ops.control_dependencies([loss]):
             update_ops = _sync_variables_ops(ctx)
-
-          if ctx.embedding_config:
-            update_ops.extend(embedding_variables_and_ops.retrieve_ops)
+            if ctx.embedding_config:
+              update_ops.extend(embedding_variables_and_ops.retrieve_ops())
 
           # Validate the TPU training graph to catch basic errors
           _validate_tpu_training_graph()
@@ -3135,6 +3157,7 @@ def _train_on_tpu_system(ctx, model_fn_wrapper, dequeue_fn):
    captured_training_hooks) = (
        model_fn_wrapper.convert_to_single_tpu_train_step(dequeue_fn))
 
+  @tpu_function.on_device_training_loop
   def multi_tpu_train_steps_on_single_shard():
     return training_loop.repeat(iterations_per_loop_var, single_tpu_train_step,
                                 [_INITIAL_LOSS])
@@ -3157,6 +3180,7 @@ def _predict_on_tpu_system(ctx, model_fn_wrapper, dequeue_fn):
    captured_predict_hooks
   ) = model_fn_wrapper.convert_to_single_tpu_predict_step(dequeue_fn)
 
+  @tpu_function.on_device_training_loop
   def multi_tpu_predict_steps_on_single_shard():
 
     def cond(scalar_stopping_signal):
