@@ -840,7 +840,8 @@ void LaunchConv2DBackpropFilterOp<Eigen::GpuDevice, T>::operator()(
     std::vector<AlgorithmDesc> algorithms;
     CHECK(stream->parent()->GetConvolveBackwardFilterAlgorithms(
         conv_parameters.ShouldIncludeWinogradNonfusedAlgo<T>(stream->parent()),
-        &algorithms));
+        stream, se::dnn::ToDataType<T>::value, input_desc, filter_desc,
+        conv_desc, output_desc, &algorithms));
     ProfileResult best_result;
     ProfileResult best_result_no_scratch;
     for (auto profile_algorithm : algorithms) {

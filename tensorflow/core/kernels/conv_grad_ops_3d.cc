@@ -1362,7 +1362,8 @@ class Conv3DBackpropInputOp<GPUDevice, T> : public OpKernel {
       CHECK(stream->parent()->GetConvolveBackwardDataAlgorithms(
           conv_parameters.ShouldIncludeWinogradNonfusedAlgo<T>(
               stream->parent()),
-          &algorithms));
+          stream, se::dnn::ToDataType<T>::value, input_desc, filter_desc,
+          conv_desc, output_desc, &algorithms));
       ProfileResult best_result;
       ProfileResult best_result_no_scratch;
       for (auto profile_algorithm : algorithms) {
@@ -1769,7 +1770,8 @@ class Conv3DBackpropFilterOp<GPUDevice, T> : public OpKernel {
       CHECK(stream->parent()->GetConvolveBackwardFilterAlgorithms(
           conv_parameters.ShouldIncludeWinogradNonfusedAlgo<T>(
               stream->parent()),
-          &algorithms));
+          stream, se::dnn::ToDataType<T>::value, input_desc, filter_desc,
+          conv_desc, output_desc, &algorithms));
       ProfileResult best_result;
       ProfileResult best_result_no_scratch;
       for (auto profile_algorithm : algorithms) {

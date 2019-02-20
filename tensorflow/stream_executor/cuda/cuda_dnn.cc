@@ -2351,6 +2351,24 @@ GetCudnnConvolutionBackwardFilterAlgo(const CudnnHandle& cudnn,
   return algo_to_use;
 }
 
+port::StatusOr<size_t> GetCudnnConvolutionForwardWorkspaceSize(
+    const CudnnHandle& cudnn, const CudnnTensorDescriptor& input_nd,
+    const CudnnFilterDescriptor& filter, const CudnnConvolutionDescriptor& conv,
+    const CudnnTensorDescriptor& output_nd,
+    const cudnnConvolutionFwdAlgo_t algo_id) {
+  size_t size_in_bytes;
+  RETURN_IF_CUDNN_ERROR(
+      cudnnGetConvolutionForwardWorkspaceSize(cudnn.handle(),
+                                              /*xDesc=*/input_nd.handle(),
+                                              /*wDesc=*/filter.handle(),
+                                              /*convDesc=*/conv.handle(),
+                                              /*yDesc=*/output_nd.handle(),
+                                              /*algo=*/algo_id,
+                                              /*sizeInBytes=*/&size_in_bytes));
+
+  return size_in_bytes;
+}
+
 port::StatusOr<DeviceMemory<uint8>> AllocateCudnnConvolutionForwardWorkspace(
     Stream* stream, const CudnnHandle& cudnn,
     const CudnnTensorDescriptor& input_nd, const CudnnFilterDescriptor& filter,
@@ -2363,25 +2381,9 @@ port::StatusOr<DeviceMemory<uint8>> AllocateCudnnConvolutionForwardWorkspace(
   // the last call to this function, but should be fixed anyway.
   conv.set_use_tensor_op_math(algorithm_desc.tensor_ops_enabled());
 
-  // Query the size of the workspace and allocate it.
-  size_t size_in_bytes;
-  RETURN_IF_CUDNN_ERROR(cudnnGetConvolutionForwardWorkspaceSize(
-      cudnn.handle(),
-      /*xDesc=*/input_nd.handle(),
-      /*wDesc=*/filter.handle(), /*convDesc=*/conv.handle(),
-      /*yDesc=*/output_nd.handle(), /*algo=*/ToConvForwardAlgo(algorithm_desc),
-      /*sizeInBytes=*/&size_in_bytes));
+  size_t size_in_bytes = algorithm_desc.scratch_size();
 
-  int64 size_in_bytes_int64 = size_in_bytes;
-
-  if (TF_PREDICT_FALSE(size_in_bytes_int64 < 0)) {
-    return port::Status(
-        port::error::INTERNAL,
-        "cudnnGetConvolutionForwardWorkspaceSize() returned "
-        "negative sizeInBytes value. This could be a cudnn bug.");
-  }
-
-  if (size_in_bytes_int64 == 0) {
+  if (size_in_bytes == 0) {
     return DeviceMemory<uint8>();
   }
 
@@ -2391,6 +2393,24 @@ port::StatusOr<DeviceMemory<uint8>> AllocateCudnnConvolutionForwardWorkspace(
   }
 
   return scratch_allocator->AllocateBytes(stream, size_in_bytes);
+}
+
+port::StatusOr<size_t> GetCudnnConvolutionBackwardDataWorkspaceSize(
+    const CudnnHandle& cudnn, const CudnnTensorDescriptor& input_nd,
+    const CudnnFilterDescriptor& filter, const CudnnConvolutionDescriptor& conv,
+    const CudnnTensorDescriptor& output_nd,
+    const cudnnConvolutionBwdDataAlgo_t algo_id) {
+  size_t size_in_bytes;
+  RETURN_IF_CUDNN_ERROR(cudnnGetConvolutionBackwardDataWorkspaceSize(
+      cudnn.handle(),
+      /*wDesc=*/filter.handle(),
+      /*dyDesc=*/output_nd.handle(),
+      /*convDesc=*/conv.handle(),
+      /*dxDesc=*/input_nd.handle(),
+      /*algo=*/algo_id,
+      /*sizeInBytes=*/&size_in_bytes));
+
+  return size_in_bytes;
 }
 
 port::StatusOr<DeviceMemory<uint8>>
@@ -2406,27 +2426,9 @@ AllocateCudnnConvolutionBackwardDataWorkspace(
   // the last call to this function, but should be fixed anyway.
   conv.set_use_tensor_op_math(algorithm_desc.tensor_ops_enabled());
 
-  // Query the size of the workspace and allocate it.
-  size_t size_in_bytes;
-  RETURN_IF_CUDNN_ERROR(cudnnGetConvolutionBackwardDataWorkspaceSize(
-      cudnn.handle(),
-      /*wDesc=*/filter.handle(),
-      /*dyDesc=*/output_nd.handle(),
-      /*convDesc=*/conv.handle(),
-      /*dxDesc=*/input_nd.handle(),
-      /*algo=*/ToConvBackwardDataAlgo(algorithm_desc),
-      /*sizeInBytes=*/&size_in_bytes));
+  int64 size_in_bytes = algorithm_desc.scratch_size();
 
-  int64 size_in_bytes_int64 = size_in_bytes;
-
-  if (TF_PREDICT_FALSE(size_in_bytes_int64 < 0)) {
-    return port::Status(
-        port::error::INTERNAL,
-        "cudnnGetConvolutionBackwardDataWorkspaceSize() returned "
-        "negative sizeInBytes value. This could be a cudnn bug.");
-  }
-
-  if (size_in_bytes_int64 == 0) {
+  if (size_in_bytes == 0) {
     return DeviceMemory<uint8>();
   }
 
@@ -2436,6 +2438,24 @@ AllocateCudnnConvolutionBackwardDataWorkspace(
   }
 
   return scratch_allocator->AllocateBytes(stream, size_in_bytes);
+}
+
+port::StatusOr<size_t> GetCudnnConvolutionBackwardFilterWorkspaceSize(
+    const CudnnHandle& cudnn, const CudnnTensorDescriptor& input_nd,
+    const CudnnFilterDescriptor& filter, const CudnnConvolutionDescriptor& conv,
+    const CudnnTensorDescriptor& output_nd,
+    const cudnnConvolutionBwdFilterAlgo_t algo_id) {
+  size_t size_in_bytes;
+  RETURN_IF_CUDNN_ERROR(cudnnGetConvolutionBackwardFilterWorkspaceSize(
+      cudnn.handle(),
+      /*xDesc=*/input_nd.handle(),
+      /*dyDesc=*/output_nd.handle(),
+      /*convDesc=*/conv.handle(),
+      /*gradDesc=*/filter.handle(),
+      /*algo=*/algo_id,
+      /*sizeInBytes=*/&size_in_bytes));
+
+  return size_in_bytes;
 }
 
 port::StatusOr<DeviceMemory<uint8>>
@@ -2451,27 +2471,9 @@ AllocateCudnnConvolutionBackwardFilterWorkspace(
   // the last call to this function, but should be fixed anyway.
   conv.set_use_tensor_op_math(algorithm_desc.tensor_ops_enabled());
 
-  // Query the size of the workspace and allocate it.
-  size_t size_in_bytes;
-  RETURN_IF_CUDNN_ERROR(cudnnGetConvolutionBackwardFilterWorkspaceSize(
-      cudnn.handle(),
-      /*xDesc=*/input_nd.handle(),
-      /*dyDesc=*/output_nd.handle(),
-      /*convDesc=*/conv.handle(),
-      /*gradDesc=*/filter.handle(),
-      /*algo=*/ToConvBackwardFilterAlgo(algorithm_desc),
-      /*sizeInBytes=*/&size_in_bytes));
+  size_t size_in_bytes = algorithm_desc.scratch_size();
 
-  int64 size_in_bytes_int64 = size_in_bytes;
-
-  if (TF_PREDICT_FALSE(size_in_bytes_int64 < 0)) {
-    return port::Status(
-        port::error::INTERNAL,
-        "cudnnGetConvolutionBackwardFilterWorkspaceSize() returned "
-        "negative sizeInBytes value. This could be a cudnn bug.");
-  }
-
-  if (size_in_bytes_int64 == 0) {
+  if (size_in_bytes == 0) {
     return DeviceMemory<uint8>();
   }
 
@@ -2503,7 +2505,12 @@ port::StatusOr<dnn::AlgorithmDesc> GetCudnnConvolutionForwardAlgorithm(
                         GetCudnnConvolutionForwardAlgo(
                             cudnn, input_nd, filter, conv, output_nd,
                             specify_workspace_limit, memory_limit_bytes));
-    algo_desc = dnn::AlgorithmDesc(algo, /*use_tensor_ops=*/true);
+
+    SE_ASSIGN_OR_RETURN(uint64 scratch_size,
+                        GetCudnnConvolutionForwardWorkspaceSize(
+                            cudnn, input_nd, filter, conv, output_nd, algo));
+
+    algo_desc = dnn::AlgorithmDesc(algo, /*use_tensor_ops=*/true, scratch_size);
   }
 
   auto scratch_or = AllocateCudnnConvolutionForwardWorkspace(
@@ -2552,7 +2559,12 @@ port::StatusOr<dnn::AlgorithmDesc> GetCudnnConvolutionBackwardDataAlgorithm(
                         GetCudnnConvolutionBackwardDataAlgo(
                             cudnn, input_nd, filter, conv, output_nd,
                             specify_workspace_limit, memory_limit_bytes));
-    algo_desc = dnn::AlgorithmDesc(algo, /*use_tensor_ops=*/true);
+
+    SE_ASSIGN_OR_RETURN(uint64 scratch_size,
+                        GetCudnnConvolutionBackwardDataWorkspaceSize(
+                            cudnn, input_nd, filter, conv, output_nd, algo));
+
+    algo_desc = dnn::AlgorithmDesc(algo, /*use_tensor_ops=*/true, scratch_size);
   }
 
   auto scratch_or = AllocateCudnnConvolutionBackwardDataWorkspace(
@@ -2601,7 +2613,12 @@ port::StatusOr<dnn::AlgorithmDesc> GetCudnnConvolutionBackwardFilterAlgorithm(
                         GetCudnnConvolutionBackwardFilterAlgo(
                             cudnn, input_nd, filter, conv, output_nd,
                             specify_workspace_limit, memory_limit_bytes));
-    algo_desc = dnn::AlgorithmDesc(algo, /*use_tensor_ops=*/true);
+
+    SE_ASSIGN_OR_RETURN(uint64 scratch_size,
+                        GetCudnnConvolutionBackwardFilterWorkspaceSize(
+                            cudnn, input_nd, filter, conv, output_nd, algo));
+
+    algo_desc = dnn::AlgorithmDesc(algo, /*use_tensor_ops=*/true, scratch_size);
   }
 
   auto scratch_or = AllocateCudnnConvolutionBackwardFilterWorkspace(
@@ -3114,7 +3131,6 @@ port::Status CudnnSupport::DoConvolve(
     output_profile_result->set_algorithm(algorithm_desc);
     output_profile_result->set_elapsed_time_in_ms(
         timer->GetElapsedMilliseconds());
-    output_profile_result->set_scratch_size(scratch_memory.size());
 
     LogCudaProto(
         GenerateConvProto(kind, element_type, input_descriptor,
@@ -3238,7 +3254,6 @@ port::Status CudnnSupport::DoFusedConvolveImpl(
     output_profile_result->set_algorithm(algo_desc);
     output_profile_result->set_elapsed_time_in_ms(
         timer->GetElapsedMilliseconds());
-    output_profile_result->set_scratch_size(scratch.size());
 
     LogCudaProto(
         GenerateConvProto(
@@ -3257,14 +3272,45 @@ inline bool TensorOpMathAvailable(int cc_major) {
 }
 
 bool CudnnSupport::GetConvolveAlgorithms(
-    bool with_winograd_nonfused, int cc_major, int cc_minor,
+    bool with_winograd_nonfused, int cc_major, int cc_minor, Stream* stream,
+    dnn::DataType element_type, const dnn::BatchDescriptor& input_descriptor,
+    const dnn::FilterDescriptor& filter_descriptor,
+    const dnn::ConvolutionDescriptor& convolution_descriptor,
+    const dnn::BatchDescriptor& output_descriptor,
     std::vector<dnn::AlgorithmDesc>* out_algorithms) {
   bool tensor_op_math_available = TensorOpMathAvailable(cc_major);
   out_algorithms->clear();
 
+  auto cudnn = cudnn_->GetHandle(parent_, stream);
+
+  CudnnTensorDescriptor input_nd(
+      input_descriptor,
+      ToCudnnDataType(element_type, input_descriptor.layout()));
+  CudnnFilterDescriptor filter(
+      filter_descriptor,
+      ToCudnnDataType(element_type, filter_descriptor.layout()));
+  CudnnTensorDescriptor output_nd(
+      output_descriptor,
+      ToCudnnDataType(element_type, output_descriptor.layout()));
+  CudnnConvolutionDescriptor conv(
+      convolution_descriptor,
+      ToCudnnDataType(GetConvAccumulatorType(element_type)));
+
+  uint64 scratch_size = 0;
+
   if (RequireDeterminism()) {
-    out_algorithms->push_back({CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM,
-                               tensor_op_math_available});
+    cudnnConvolutionFwdAlgo_t algo =
+        CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM;
+
+    conv.set_use_tensor_op_math(tensor_op_math_available);
+    auto scratch_size_or = GetCudnnConvolutionForwardWorkspaceSize(
+        cudnn, input_nd, filter, conv, output_nd, algo);
+    if (!scratch_size_or.ok()) {
+      return false;
+    }
+    scratch_size = scratch_size_or.ValueOrDie();
+
+    out_algorithms->push_back({algo, tensor_op_math_available, scratch_size});
     return true;
   }
 
@@ -3286,9 +3332,27 @@ bool CudnnSupport::GetConvolveAlgorithms(
   }
 
   for (auto i : algo_types) {
-    out_algorithms->push_back({i, /*use_tensor_ops=*/false});
+    conv.set_use_tensor_op_math(false);
+    auto scratch_size_or = GetCudnnConvolutionForwardWorkspaceSize(
+        cudnn, input_nd, filter, conv, output_nd, (cudnnConvolutionFwdAlgo_t)i);
+    if (!scratch_size_or.ok()) {
+      return false;
+    }
+    scratch_size = scratch_size_or.ValueOrDie();
+
+    out_algorithms->push_back({i, /*use_tensor_ops=*/false, scratch_size});
+
     if (tensor_op_math_available) {
-      out_algorithms->push_back({i, /*use_tensor_ops=*/true});
+      conv.set_use_tensor_op_math(true);
+      auto scratch_size_or = GetCudnnConvolutionForwardWorkspaceSize(
+          cudnn, input_nd, filter, conv, output_nd,
+          (cudnnConvolutionFwdAlgo_t)i);
+      if (!scratch_size_or.ok()) {
+        return false;
+      }
+      scratch_size = scratch_size_or.ValueOrDie();
+
+      out_algorithms->push_back({i, /*use_tensor_ops=*/true, scratch_size});
     }
   }
 
@@ -3307,10 +3371,12 @@ bool CudnnSupport::GetRnnAlgorithms(
 
   out_algorithms->clear();
   for (auto i : algo_types) {
-    out_algorithms->push_back({i, /*use_tensor_ops=*/false});
+    out_algorithms->push_back(
+        {i, /*use_tensor_ops=*/false, /*scratch_size*/ 0});
 #if CUDNN_VERSION >= 7100
     if (RnnTensorOpMathEnabled()) {
-      out_algorithms->push_back({i, /*use_tensor_ops=*/true});
+      out_algorithms->push_back(
+          {i, /*use_tensor_ops=*/true, /*scratch_size*/ 0});
     }
 #endif
   }
@@ -3318,14 +3384,44 @@ bool CudnnSupport::GetRnnAlgorithms(
 }
 
 bool CudnnSupport::GetConvolveBackwardDataAlgorithms(
-    bool with_winograd_nonfused, int cc_major, int cc_minor,
+    bool with_winograd_nonfused, int cc_major, int cc_minor, Stream* stream,
+    dnn::DataType element_type, const dnn::BatchDescriptor& input_descriptor,
+    const dnn::FilterDescriptor& filter_descriptor,
+    const dnn::ConvolutionDescriptor& convolution_descriptor,
+    const dnn::BatchDescriptor& output_descriptor,
     std::vector<dnn::AlgorithmDesc>* out_algorithms) {
   bool tensor_op_math_available = TensorOpMathAvailable(cc_major);
   out_algorithms->clear();
 
+  auto cudnn = cudnn_->GetHandle(parent_, stream);
+
+  CudnnTensorDescriptor input_nd(
+      input_descriptor,
+      ToCudnnDataType(element_type, input_descriptor.layout()));
+  CudnnFilterDescriptor filter(
+      filter_descriptor,
+      ToCudnnDataType(element_type, filter_descriptor.layout()));
+  CudnnTensorDescriptor output_nd(
+      output_descriptor,
+      ToCudnnDataType(element_type, output_descriptor.layout()));
+  CudnnConvolutionDescriptor conv(
+      convolution_descriptor,
+      ToCudnnDataType(GetConvAccumulatorType(element_type)));
+
+  uint64 scratch_size = 0;
+
   if (RequireDeterminism()) {
-    out_algorithms->push_back(
-        {CUDNN_CONVOLUTION_BWD_DATA_ALGO_1, tensor_op_math_available});
+    cudnnConvolutionBwdDataAlgo_t algo = CUDNN_CONVOLUTION_BWD_DATA_ALGO_1;
+
+    conv.set_use_tensor_op_math(tensor_op_math_available);
+    auto scratch_size_or = GetCudnnConvolutionBackwardDataWorkspaceSize(
+        cudnn, input_nd, filter, conv, output_nd, algo);
+    if (!scratch_size_or.ok()) {
+      return false;
+    }
+    scratch_size = scratch_size_or.ValueOrDie();
+
+    out_algorithms->push_back({algo, tensor_op_math_available, scratch_size});
     return true;
   }
 
@@ -3343,9 +3439,28 @@ bool CudnnSupport::GetConvolveBackwardDataAlgorithms(
   }
 
   for (auto i : algo_types) {
-    out_algorithms->push_back({i, /*use_tensor_ops=*/false});
+    conv.set_use_tensor_op_math(false);
+    auto scratch_size_or = GetCudnnConvolutionBackwardDataWorkspaceSize(
+        cudnn, input_nd, filter, conv, output_nd,
+        (cudnnConvolutionBwdDataAlgo_t)i);
+    if (!scratch_size_or.ok()) {
+      return false;
+    }
+    scratch_size = scratch_size_or.ValueOrDie();
+
+    out_algorithms->push_back({i, /*use_tensor_ops=*/false, scratch_size});
+
     if (tensor_op_math_available) {
-      out_algorithms->push_back({i, /*use_tensor_ops=*/true});
+      conv.set_use_tensor_op_math(true);
+      auto scratch_size_or = GetCudnnConvolutionBackwardDataWorkspaceSize(
+          cudnn, input_nd, filter, conv, output_nd,
+          (cudnnConvolutionBwdDataAlgo_t)i);
+      if (!scratch_size_or.ok()) {
+        return false;
+      }
+      scratch_size = scratch_size_or.ValueOrDie();
+
+      out_algorithms->push_back({i, /*use_tensor_ops=*/true, scratch_size});
     }
   }
 
@@ -3353,14 +3468,44 @@ bool CudnnSupport::GetConvolveBackwardDataAlgorithms(
 }
 
 bool CudnnSupport::GetConvolveBackwardFilterAlgorithms(
-    bool with_winograd_nonfused, int cc_major, int cc_minor,
+    bool with_winograd_nonfused, int cc_major, int cc_minor, Stream* stream,
+    dnn::DataType element_type, const dnn::BatchDescriptor& input_descriptor,
+    const dnn::FilterDescriptor& filter_descriptor,
+    const dnn::ConvolutionDescriptor& convolution_descriptor,
+    const dnn::BatchDescriptor& output_descriptor,
     std::vector<dnn::AlgorithmDesc>* out_algorithms) {
   bool tensor_op_math_available = TensorOpMathAvailable(cc_major);
   out_algorithms->clear();
 
+  auto cudnn = cudnn_->GetHandle(parent_, stream);
+
+  CudnnTensorDescriptor input_nd(
+      input_descriptor,
+      ToCudnnDataType(element_type, input_descriptor.layout()));
+  CudnnFilterDescriptor filter(
+      filter_descriptor,
+      ToCudnnDataType(element_type, filter_descriptor.layout()));
+  CudnnTensorDescriptor output_nd(
+      output_descriptor,
+      ToCudnnDataType(element_type, output_descriptor.layout()));
+  CudnnConvolutionDescriptor conv(
+      convolution_descriptor,
+      ToCudnnDataType(GetConvAccumulatorType(element_type)));
+
+  uint64 scratch_size = 0;
+
   if (RequireDeterminism()) {
-    out_algorithms->push_back(
-        {CUDNN_CONVOLUTION_BWD_FILTER_ALGO_1, tensor_op_math_available});
+    cudnnConvolutionBwdFilterAlgo_t algo = CUDNN_CONVOLUTION_BWD_FILTER_ALGO_1;
+
+    conv.set_use_tensor_op_math(tensor_op_math_available);
+    auto scratch_size_or = GetCudnnConvolutionBackwardFilterWorkspaceSize(
+        cudnn, input_nd, filter, conv, output_nd, algo);
+    if (!scratch_size_or.ok()) {
+      return false;
+    }
+    scratch_size = scratch_size_or.ValueOrDie();
+
+    out_algorithms->push_back({algo, tensor_op_math_available, scratch_size});
     return true;
   }
 
@@ -3383,9 +3528,28 @@ bool CudnnSupport::GetConvolveBackwardFilterAlgorithms(
   }
 
   for (auto i : algo_types) {
-    out_algorithms->push_back({i, /*use_tensor_ops=*/false});
+    conv.set_use_tensor_op_math(false);
+    auto scratch_size_or = GetCudnnConvolutionBackwardFilterWorkspaceSize(
+        cudnn, input_nd, filter, conv, output_nd,
+        (cudnnConvolutionBwdFilterAlgo_t)i);
+    if (!scratch_size_or.ok()) {
+      return false;
+    }
+    scratch_size = scratch_size_or.ValueOrDie();
+
+    out_algorithms->push_back({i, /*use_tensor_ops=*/false, scratch_size});
+
     if (tensor_op_math_available) {
-      out_algorithms->push_back({i, /*use_tensor_ops=*/true});
+      conv.set_use_tensor_op_math(true);
+      auto scratch_size_or = GetCudnnConvolutionBackwardFilterWorkspaceSize(
+          cudnn, input_nd, filter, conv, output_nd,
+          (cudnnConvolutionBwdFilterAlgo_t)i);
+      if (!scratch_size_or.ok()) {
+        return false;
+      }
+      scratch_size = scratch_size_or.ValueOrDie();
+
+      out_algorithms->push_back({i, /*use_tensor_ops=*/true, scratch_size});
     }
   }
 

@@ -495,10 +495,14 @@ int64 ConvolveScratchSize() {
 // algorithms and measuring execution time.
 // TODO(ezhulenev): Move it to conv_ops_gpu.h and share with conv_ops.cc.
 template <typename T, typename ConvLaunch>
-Status FindBestConvolveAlgorithm(const FusedConvParameters& params,
-                                 const ConvLaunch launch,
-                                 OpKernelContext* context, se::Stream* stream,
-                                 se::dnn::AlgorithmConfig* algorithm_config) {
+Status FindBestConvolveAlgorithm(
+    const FusedConvParameters& params, const ConvLaunch launch,
+    OpKernelContext* context, se::Stream* stream,
+    const se::dnn::BatchDescriptor& input_desc,
+    const se::dnn::FilterDescriptor& filter_desc,
+    const se::dnn::ConvolutionDescriptor& conv_desc,
+    const se::dnn::BatchDescriptor& output_desc,
+    se::dnn::AlgorithmConfig* algorithm_config) {
   // Check if we already have an algorithm selected for the given parameters.
   if (AutoTuneFusedConv::GetInstance()->Find(params, algorithm_config)) {
     return Status::OK();
@@ -507,8 +511,9 @@ Status FindBestConvolveAlgorithm(const FusedConvParameters& params,
   // Find all candidate algorithms.
   std::vector<se::dnn::AlgorithmDesc> algorithms;
   if (!stream->parent()->GetConvolveAlgorithms(
-          params.ShouldIncludeWinogradNonfusedAlgo<T>(stream->parent()),
-          &algorithms)) {
+          params.ShouldIncludeWinogradNonfusedAlgo<T>(stream->parent()), stream,
+          se::dnn::ToDataType<T>::value, input_desc, filter_desc, conv_desc,
+          output_desc, &algorithms)) {
     return errors::Unknown(
         "Failed to get convolution algorithm. This is probably "
         "because cuDNN failed to initialize, so try looking to "
@@ -796,9 +801,10 @@ struct LaunchFusedConv2DOp<GPUDevice, T> {
 
     se::dnn::AlgorithmConfig algorithm_config;
     if (cudnn_use_autotune) {
-      OP_REQUIRES_OK(context, FindBestConvolveAlgorithm<T>(
-                                  conv_parameters, launch, context, stream,
-                                  &algorithm_config));
+      OP_REQUIRES_OK(
+          context, FindBestConvolveAlgorithm<T>(
+                       conv_parameters, launch, context, stream, input_desc,
+                       filter_desc, conv_desc, output_desc, &algorithm_config));
     }
 
     DnnScratchAllocator scratch_allocator(ConvolveScratchSize(), context);
