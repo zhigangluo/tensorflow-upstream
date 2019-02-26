@@ -80,6 +80,8 @@ class ReluTest(test.TestCase):
   def testReluInt8x4GoodShape(self):
     if not test.is_gpu_available(cuda_only=True):
       self.skipTest("No GPU available")
+    if test.is_built_with_rocm():
+      self.skipTest("int8x4 is not supported on ROCm yet")
     inputs = np.array([[-50, 7, 23, 0], [-1, -5, 6, 11]])
     np_relu = self._npRelu(inputs)
     tf_relu = nn_ops.relu(constant_op.constant(inputs, dtypes.qint8))
@@ -89,6 +91,8 @@ class ReluTest(test.TestCase):
   def testReluInt8x4BadShape(self):
     if not test.is_gpu_available(cuda_only=True):
       self.skipTest("No GPU available")
+    if test.is_built_with_rocm():
+      self.skipTest("int8x4 is not supported on ROCm yet")
     inputs = constant_op.constant(
         np.array([[-50, 7, 23], [0, 1, -5], [6, -2, 11]]), dtypes.qint8)
     with self.assertRaisesRegexp(

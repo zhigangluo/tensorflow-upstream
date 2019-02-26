@@ -23,4 +23,4 @@ DEFINE_UNARY2(get_angle, complex64, complex128);
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA
+#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM

@@ -120,6 +120,9 @@ load(
     "tf_additional_libdevice_data",
     "tf_additional_libdevice_deps",
     "tf_additional_libdevice_srcs",
+    "tf_additional_rocdl_data",
+    "tf_additional_rocdl_deps",
+    "tf_additional_rocdl_srcs",
     "tf_additional_minimal_lib_srcs",
     "tf_additional_mpi_lib_defines",
     "tf_additional_proto_compiler_hdrs",
@@ -150,6 +153,8 @@ load(
 )
 load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
 load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda_is_configured")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm_is_configured")
 load("@io_bazel_rules_closure//closure:defs.bzl", "closure_proto_library")
 load(
     "//third_party/mkl:build_defs.bzl",
@@ -929,7 +934,7 @@ tf_cuda_library(
         "util/activation_mode.h",
         "util/batch_util.h",
         "util/bcast.h",
-        "util/cuda_kernel_helper.h",
+        "util/gpu_kernel_helper.h",
         "util/device_name_utils.h",
         "util/dump_graph.h",
         "util/events_writer.h",
@@ -1467,6 +1472,8 @@ cc_library(
     ]) + if_cuda([
         "//tensorflow/core/grappler/optimizers:gpu_swapping_kernels",
         "//tensorflow/core/grappler/optimizers:gpu_swapping_ops",
+    ]) + if_rocm([
+        "//tensorflow/core/kernels:gpu_fusion_ops",
     ]) + if_nccl([
         "//tensorflow/core/kernels:nccl_kernels",
     ]),
@@ -1633,6 +1640,7 @@ filegroup(
             "util/stats_calculator.*",
             "util/reporter.*",
             "platform/**/cuda_libdevice_path.*",
+            "platform/**/rocm_rocdl_path.*",
             "platform/**/logger.cc",
             "platform/default/test_benchmark.*",
             "platform/cuda.h",
@@ -1957,6 +1965,14 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "rocm",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//tensorflow/core/platform/default/build_config:rocm",
+    ],
+)
+
 # -----------------------------------------------------------------------------
 # Clif-related proto libraries.
 
@@ -2220,6 +2236,7 @@ cc_library(
             "lib/png/**/*",
             "platform/**/env_time.cc",
             "platform/**/cuda_libdevice_path.cc",
+            "platform/**/rocm_rocdl_path.cc",
             "platform/**/device_tracer.cc",
             "platform/**/logger.cc",
             "platform/**/logging.cc",
@@ -2231,6 +2248,8 @@ cc_library(
             "**/*test*",
             "platform/**/cuda.h",
             "platform/**/cuda_libdevice_path.cc",
+            "platform/**/rocm.h",
+            "platform/**/rocm_rocdl_path.cc",
             "platform/**/stream_executor.h",
             "platform/**/env_time.cc",
             "platform/**/device_tracer.cc",
@@ -2786,6 +2805,7 @@ GRAPH_HDRS = [
     "graph/types.h",
     "graph/validate.h",
     "graph/while_context.h",
+    "graph/gpu_fusion_pass.h",
 ]
 
 tf_cuda_library(
@@ -2967,6 +2987,7 @@ tf_cuda_library(
         "graph/mkl_layout_pass.cc",
         "graph/mkl_tfconversion_pass.cc",
         "graph/quantize_training.cc",
+        "graph/gpu_fusion_pass.cc",
         "public/session.h",
         "public/session_options.h",
         "public/version.h",
@@ -3150,7 +3171,7 @@ cc_library(
 )
 
 GPU_RUNTIME_HEADERS = [
-    "common_runtime/gpu/cuda_host_allocator.h",
+    "common_runtime/gpu/gpu_host_allocator.h",
     "common_runtime/gpu/gpu_bfc_allocator.h",
     "common_runtime/gpu/gpu_cudamalloc_allocator.h",
     "common_runtime/gpu/gpu_debug_allocator.h",
@@ -4053,9 +4074,9 @@ tf_cuda_cc_test(
 )
 
 tf_cuda_only_cc_test(
-    name = "util_cuda_kernel_helper_test",
+    name = "util_gpu_kernel_helper_test",
     srcs = [
-        "util/cuda_kernel_helper_test.cu.cc",
+        "util/gpu_kernel_helper_test.cu.cc",
     ],
     deps = [
         ":test",
@@ -4915,6 +4936,18 @@ cc_library(
     deps = [
         ":lib",
     ] + tf_additional_libdevice_deps(),
+)
+
+cc_library(
+    name = "rocm_rocdl_path",
+    srcs = ["platform/rocm_rocdl_path.cc"] + tf_additional_rocdl_srcs(),
+    hdrs = ["platform/rocm_rocdl_path.h"],
+    copts = tf_copts(),
+    data = tf_additional_rocdl_data(),
+    visibility = ["//visibility:public"],
+    deps = [
+        ":lib",
+    ] + tf_additional_rocdl_deps(),
 )
 
 transitive_hdrs(

@@ -8,6 +8,7 @@ load(
     "if_static",
     "tf_additional_grpc_deps_py",
     "tf_additional_xla_deps_py",
+    "tf_gpu_tests_tags",
     "tf_cuda_tests_tags",
     "tf_sycl_tests_tags",
 )
@@ -255,6 +256,7 @@ def tf_copts(android_optimization_level_override = "-O2", is_external = False):
             "-ftemplate-depth=900",
         ]) +
         if_cuda(["-DGOOGLE_CUDA=1"]) +
+        if_rocm(["-DTENSORFLOW_USE_ROCM=1"]) +
         if_tensorrt(["-DGOOGLE_TENSORRT=1"]) +
         if_mkl(["-DINTEL_MKL=1", "-DEIGEN_USE_VML"]) +
         if_mkl_open_source_only(["-DINTEL_MKL_DNN_ONLY"]) +
@@ -821,7 +823,7 @@ register_extension_info(
     label_regex_for_dep = "{extension_name}",
 )
 
-def tf_cuda_cc_test(
+def tf_gpu_cc_test(
         name,
         srcs = [],
         deps = [],
@@ -863,10 +865,42 @@ def tf_cuda_cc_test(
             "//conditions:default": 0,
         }),
         suffix = "_gpu",
-        tags = tags + tf_cuda_tests_tags(),
-        deps = deps + if_cuda([
+        tags = tags + tf_gpu_tests_tags(),
+        deps = deps + [ 
             clean_dep("//tensorflow/core:gpu_runtime"),
-        ]),
+        ],
+    )
+
+register_extension_info(
+    extension_name = "tf_gpu_cc_test",
+    label_regex_for_dep = "{extension_name}",
+)
+
+# terminology changes: saving tf_cuda_* definition for compatibility
+def tf_cuda_cc_test(
+        name,
+        srcs = [],
+        deps = [],
+        tags = [],
+        data = [],
+        size = "medium",
+        extra_copts = [],
+        linkstatic = 0,
+        args = [],
+        kernels = [],
+        linkopts = []):
+    tf_gpu_cc_test(
+        name,
+        srcs = srcs,
+        deps = deps,
+        tags = tags,
+        data = data,
+        size = size,
+        extra_copts = extra_copts,
+        linkstatic = linkstatic,
+        linkopts = linkopts,
+        args = args,
+        kernels = kernels,
     )
 
 register_extension_info(
@@ -874,7 +908,7 @@ register_extension_info(
     label_regex_for_dep = "{extension_name}",
 )
 
-def tf_cuda_only_cc_test(
+def tf_gpu_only_cc_test(
         name,
         srcs = [],
         deps = [],
@@ -897,6 +931,7 @@ def tf_cuda_only_cc_test(
             clean_dep("//tensorflow/core:cuda"),
             clean_dep("//tensorflow/core:gpu_lib"),
         ]) + if_rocm_is_configured([
+            clean_dep("//tensorflow/core:rocm"),
             clean_dep("//tensorflow/core:gpu_lib"),
         ]),
         linkopts = if_not_windows(["-lpthread", "-lm"]) + linkopts + _rpath_linkopts(name),
@@ -907,11 +942,41 @@ def tf_cuda_only_cc_test(
             clean_dep("//tensorflow:darwin"): 1,
             "//conditions:default": 0,
         }),
-        tags = tags + tf_cuda_tests_tags(),
+        tags = tags + tf_gpu_tests_tags(),
     )
 
 register_extension_info(
-    extension_name = "tf_cuda_only_cc_test",
+    extension_name = "tf_gpu_only_cc_test",
+    label_regex_for_dep = "{extension_name}_gpu",
+)
+
+# terminology changes: saving tf_cuda_* definition for compatibility
+def tf_cuda_only_cc_test(
+        name,
+        srcs = [],
+        deps = [],
+        tags = [],
+        data = [],
+        size = "medium",
+        linkstatic = 0,
+        args = [],
+        kernels = [],
+        linkopts = []):
+    tf_gpu_only_cc_test(
+        name,
+        srcs = srcs,
+        deps = deps,
+        tags = tags,
+        data = data,
+        size = size,
+        linkstatic = linkstatic,
+        args = args,
+        kernels = kernels,
+        linkopts = linkopts,
+    )
+
+register_extension_info(
+    extension_name = "tf_gpu_only_cc_test",
     label_regex_for_dep = "{extension_name}_gpu",
 )
 
@@ -990,7 +1055,7 @@ def tf_cc_tests_gpu(
         args = None):
     tf_cc_tests(srcs, deps, linkstatic, size = size, args = args, kernels = kernels, tags = tags)
 
-def tf_cuda_cc_tests(
+def tf_gpu_cc_tests(
         srcs,
         deps,
         name = "",
@@ -1001,7 +1066,7 @@ def tf_cuda_cc_tests(
         kernels = [],
         linkopts = []):
     for src in srcs:
-        tf_cuda_cc_test(
+        tf_gpu_cc_test(
             name = src_to_test_name(src),
             size = size,
             srcs = [src],
@@ -1012,6 +1077,29 @@ def tf_cuda_cc_tests(
             tags = tags,
             deps = deps,
         )
+
+# terminology changes: saving tf_cuda_* definition for compatibility
+def tf_cuda_cc_tests(
+        srcs,
+        deps,
+        name = "",
+        tags = [],
+        size = "medium",
+        linkstatic = 0,
+        args = None,
+        kernels = [],
+        linkopts = []):
+    tf_gpu_cc_tests(
+        srcs,
+        deps,
+        name = name,
+        tags = tags,
+        size = size,
+        linkstatic = linkstatic,
+        args = args,
+        kernels = kernels,
+        linkopts = linkopts,
+    )
 
 def tf_java_test(
         name,
@@ -1063,11 +1151,11 @@ def _cuda_copts(opts = []):
 def tf_gpu_kernel_library(
         srcs,
         copts = [],
-        cuda_copts = [],
+        gpu_copts = [],
         deps = [],
         hdrs = [],
         **kwargs):
-    copts = copts + tf_copts() + _cuda_copts(opts = cuda_copts) + rocm_copts(opts = cuda_copts)
+    copts = copts + tf_copts() + _cuda_copts(opts = gpu_copts) + rocm_copts(opts = gpu_copts)
     kwargs["features"] = kwargs.get("features", []) + ["-use_header_modules"]
 
     native.cc_library(
@@ -1078,6 +1166,7 @@ def tf_gpu_kernel_library(
             clean_dep("//tensorflow/core:cuda"),
             clean_dep("//tensorflow/core:gpu_lib"),
         ]) + if_rocm_is_configured([
+            clean_dep("//tensorflow/core:rocm"),
             clean_dep("//tensorflow/core:gpu_lib"),
         ]),
         alwayslink = 1,
@@ -1089,7 +1178,7 @@ register_extension_info(
     label_regex_for_dep = "{extension_name}",
 )
 
-def tf_cuda_library(deps = None, cuda_deps = None, copts = tf_copts(), **kwargs):
+def tf_gpu_library(deps = None, cuda_deps = None, copts = tf_copts(), **kwargs):
     """Generate a cc_library with a conditional set of CUDA dependencies.
 
     When the library is built with --config=cuda:
@@ -1118,14 +1207,29 @@ def tf_cuda_library(deps = None, cuda_deps = None, copts = tf_copts(), **kwargs)
             clean_dep("//tensorflow/core:cuda"),
             "@local_config_cuda//cuda:cuda_headers",
         ]) + if_rocm_is_configured(cuda_deps + [
-            # rocm_header placeholder
+            clean_dep("//tensorflow/core:rocm"),
+            "@local_config_rocm//rocm:rocm_headers",
         ]),
         copts = (copts + if_cuda(["-DGOOGLE_CUDA=1"]) + if_rocm(["-DTENSORFLOW_USE_ROCM=1"]) + if_mkl(["-DINTEL_MKL=1"]) + if_mkl_open_source_only(["-DINTEL_MKL_DNN_ONLY"]) + if_enable_mkl(["-DENABLE_MKL"]) + if_tensorrt(["-DGOOGLE_TENSORRT=1"])),
         **kwargs
     )
 
 register_extension_info(
-    extension_name = "tf_cuda_library",
+    extension_name = "tf_gpu_library",
+    label_regex_for_dep = "{extension_name}",
+)
+
+# terminology changes: saving tf_cuda_* definition for compatibility
+def tf_cuda_library(deps = None, cuda_deps = None, copts = tf_copts(), **kwargs):
+    tf_gpu_library(
+        deps = deps,
+        cuda_deps = cuda_deps,
+        copts = copts,
+        **kwargs
+    )
+
+register_extension_info(
+    extension_name = "tf_gpu_library",
     label_regex_for_dep = "{extension_name}",
 )
 
@@ -1142,7 +1246,7 @@ def tf_kernel_library(
         **kwargs):
     """A rule to build a TensorFlow OpKernel.
 
-    May either specify srcs/hdrs or prefix.  Similar to tf_cuda_library,
+    May either specify srcs/hdrs or prefix.  Similar to tf_gpu_library,
     but with alwayslink=1 by default.  If prefix is specified:
       * prefix*.cc (except *.cu.cc) is added to srcs
       * prefix*.h (except *.cu.h) is added to hdrs
@@ -1213,7 +1317,7 @@ def tf_kernel_library(
         "req_dep=%s" % clean_dep("//tensorflow/core:gpu_lib"),
         "req_dep=@local_config_cuda//cuda:cuda_headers",
     ]
-    tf_cuda_library(
+    tf_gpu_library(
         name = name,
         srcs = srcs,
         hdrs = hdrs,
@@ -1520,7 +1624,7 @@ def tf_custom_op_library(name, srcs = [], gpu_srcs = [], deps = [], linkopts = [
         native.cc_library(
             name = basename + "_gpu",
             srcs = gpu_srcs,
-            copts = copts + _cuda_copts() + if_tensorrt(["-DGOOGLE_TENSORRT=1"]),
+            copts = copts + _cuda_copts() + rocm_copts() + if_tensorrt(["-DGOOGLE_TENSORRT=1"]),
             features = if_cuda(["-use_header_modules"]),
             deps = deps + if_cuda_is_configured_compat(cuda_deps) + if_rocm_is_configured(rocm_deps),
             **kwargs
@@ -1813,7 +1917,7 @@ register_extension_info(
     label_regex_map = {"additional_deps": "deps:{extension_name}"},
 )
 
-def cuda_py_test(
+def gpu_py_test(
         name,
         srcs,
         size = "medium",
@@ -1834,7 +1938,7 @@ def cuda_py_test(
         test_tags = tags
         if config == "gpu":
             test_name += "_gpu"
-            test_tags = test_tags + tf_cuda_tests_tags()
+            test_tags = test_tags + tf_gpu_tests_tags()
         tf_py_test(
             name = test_name,
             size = size,
@@ -1850,6 +1954,42 @@ def cuda_py_test(
             tags = test_tags,
             xla_enabled = xla_enabled,
         )
+
+register_extension_info(
+    extension_name = "gpu_py_test",
+    label_regex_map = {"additional_deps": "additional_deps:{extension_name}"},
+)
+
+# terminology changes: saving cuda_* definition for compatibility
+def cuda_py_test(
+        name,
+        srcs,
+        size = "medium",
+        data = [],
+        main = None,
+        args = [],
+        shard_count = 1,
+        additional_deps = [],
+        kernels = [],
+        tags = [],
+        flaky = 0,
+        xla_enabled = False,
+        grpc_enabled = False):
+    gpu_py_test(
+        name = name,
+        srcs = srcs,
+        size = size,
+        data = data,
+        main = main,
+        args = args,
+        shard_count = shard_count,
+        additional_deps = additional_deps,
+        kernels = kernels,
+        tags = tags,
+        flaky = flaky,
+        xla_enabled = xla_enabled,
+        grpc_enabled = grpc_enabled,
+    )
 
 register_extension_info(
     extension_name = "cuda_py_test",
@@ -1922,7 +2062,7 @@ def py_tests(
             xla_enabled = xla_enabled,
         )
 
-def cuda_py_tests(
+def gpu_py_tests(
         name,
         srcs,
         size = "medium",
@@ -1934,7 +2074,7 @@ def cuda_py_tests(
         prefix = "",
         xla_enabled = False,
         grpc_enabled = False):
-    test_tags = tags + tf_cuda_tests_tags()
+    test_tags = tags + tf_gpu_tests_tags()
     py_tests(
         name = name,
         size = size,
@@ -1947,6 +2087,33 @@ def cuda_py_tests(
         shard_count = shard_count,
         tags = test_tags,
         xla_enabled = xla_enabled,
+    )
+
+# terminology changes: saving cuda_* definition for compatibility
+def cuda_py_tests(
+        name,
+        srcs,
+        size = "medium",
+        additional_deps = [],
+        kernels = [],
+        data = [],
+        shard_count = 1,
+        tags = [],
+        prefix = "",
+        xla_enabled = False,
+        grpc_enabled = False):
+    gpu_py_tests(
+        name,
+        srcs,
+        size = size,
+        additional_deps = additional_deps,
+        kernels = kernels,
+        data = data,
+        shard_count = shard_count,
+        tags = tags,
+        prefix = prefix,
+        xla_enabled = xla_enabled,
+        grpc_enabled = grpc_enabled,
     )
 
 # Creates a genrule named <name> for running tools/proto_text's generator to
@@ -2013,7 +2180,10 @@ def tf_py_build_info_genrule():
         name = "py_build_info_gen",
         outs = ["platform/build_info.py"],
         cmd =
-            "$(location //tensorflow/tools/build_info:gen_build_info) --raw_generate \"$@\" --build_config " + if_cuda("cuda", "cpu") + if_windows(" --key_value msvcp_dll_name=msvcp140.dll", ""),
+            "$(location //tensorflow/tools/build_info:gen_build_info) --raw_generate \"$@\" "
+            + " --is_config_cuda " + if_cuda("True", "False")
+            + " --is_config_rocm " + if_rocm("True", "False")
+            + if_windows(" --key_value msvcp_dll_name=msvcp140.dll", ""),
         local = 1,
         tools = [clean_dep("//tensorflow/tools/build_info:gen_build_info")],
     )

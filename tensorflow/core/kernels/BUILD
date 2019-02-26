@@ -3,7 +3,7 @@
 #
 # Note: Any test that uses GPU support and which we would like to
 # benchmark should be linked statically so that it can be executed
-# from a py_binary or cuda_py_test test logger.  For such a test,
+# from a py_binary or gpu_py_test test logger.  For such a test,
 # append "_gpu" to the test name to invoke the GPU benchmarks.  Example:
 #
 #   # for CPU tests
@@ -60,7 +60,8 @@ load(
     "if_mkl_ml",
     "mkl_deps",
 )
-load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
+load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda", "if_cuda_is_configured")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm", "if_rocm_is_configured")
 
 config_setting(
     # Add "--define tensorflow_xsmm=1" to your build command to use libxsmm for
@@ -175,8 +176,8 @@ tf_kernel_library(
     gpu_srcs = [
         "concat_lib_gpu_impl.cu.cc",
         "concat_lib.h",
-        "cuda_device_array.h",
-        "cuda_device_array_gpu.h",
+        "gpu_device_array.h",
+        "gpu_device_array_gpu.h",
     ],
     deps = [
         ":bounds_check",
@@ -504,7 +505,7 @@ tf_kernel_library(
         "split_lib.h",
     ],
     deps = [
-        ":cuda_device_array",
+        ":gpu_device_array",
         "//tensorflow/core:framework",
         "//third_party/eigen3",
     ],
@@ -561,10 +562,10 @@ cc_header_only_library(
 )
 
 cc_library(
-    name = "cuda_device_array",
+    name = "gpu_device_array",
     hdrs = [
-        "cuda_device_array.h",
-        "cuda_device_array_gpu.h",
+        "gpu_device_array.h",
+        "gpu_device_array_gpu.h",
     ],
     visibility = ["//tensorflow:__subpackages__"],
     deps = [
@@ -952,14 +953,14 @@ tf_kernel_library(
 
 tf_kernel_library(
     name = "split_op",
-    gpu_srcs = ["cuda_device_array.h"],
+    gpu_srcs = ["gpu_device_array.h"],
     prefix = "split_op",
     deps = ARRAY_DEPS + [":split_lib"],
 )
 
 tf_kernel_library(
     name = "split_v_op",
-    gpu_srcs = ["cuda_device_array.h"],
+    gpu_srcs = ["gpu_device_array.h"],
     prefix = "split_v_op",
     deps = ARRAY_DEPS + [":split_lib"],
 )
@@ -1031,6 +1032,8 @@ tf_kernel_library(
     deps = if_cuda([
         ":cuda_solvers",
         "@cub_archive//:cub",
+    ]) + if_rocm([
+        "@rocprim_archive//:rocprim",
     ]) + ARRAY_DEPS,
 )
 
@@ -1993,14 +1996,15 @@ tf_kernel_library(
     deps = DYNAMIC_DEPS + [
         ":fill_functor",
         ":gather_functor",
-    ] + if_cuda(["@cub_archive//:cub"]),
+    ] + if_cuda(["@cub_archive//:cub"])
+    + if_rocm(["@rocprim_archive//:rocprim"]),
 )
 
 tf_kernel_library(
     name = "dynamic_stitch_op",
     gpu_srcs = [
-        "cuda_device_array.h",
-        "cuda_device_array_gpu.h",
+        "gpu_device_array.h",
+        "gpu_device_array_gpu.h",
     ],
     prefix = "dynamic_stitch_op",
     deps = DYNAMIC_DEPS,
@@ -2789,10 +2793,11 @@ tf_kernel_library(
     deps = [
         "//tensorflow/core:framework",
         "//tensorflow/core:lib",
+    ] + if_cuda([
         "//tensorflow/core/platform/default/build_config:cublas_plugin",
         "@local_config_cuda//cuda:cublas",
         "@local_config_cuda//cuda:cusolver",
-    ],
+    ])
 )
 
 LINALG_DEPS = [
@@ -3132,7 +3137,7 @@ tf_kernel_library(
 
 tf_kernel_library(
     name = "bucketize_op",
-    gpu_srcs = ["cuda_device_array.h"],
+    gpu_srcs = ["gpu_device_array.h"],
     prefix = "bucketize_op",
     deps = ARRAY_DEPS,
 )
@@ -3207,15 +3212,17 @@ tf_kernel_library(
     name = "reduction_ops",
     gpu_srcs = ["reduction_gpu_kernels.cu.h"],
     prefix = "reduction_ops",
-    deps = MATH_DEPS + [":transpose_functor"] + if_cuda(["@cub_archive//:cub"]),
+    deps = MATH_DEPS + [":transpose_functor"] + if_cuda(["@cub_archive//:cub"]) + if_rocm(["@rocprim_archive//:rocprim"]),
 )
 
 tf_kernel_library(
     name = "segment_reduction_ops",
     prefix = "segment_reduction_ops",
-    deps = MATH_DEPS + if_cuda([
+    deps = MATH_DEPS + if_cuda_is_configured([
         ":cuda_solvers",
-    ]),
+    ]) + if_rocm_is_configured([
+        ":cuda_solvers",
+    ])
 )
 
 tf_kernel_library(
@@ -3739,10 +3746,13 @@ tf_kernel_library(
 tf_kernel_library(
     name = "bias_op",
     prefix = "bias_op",
-    deps = NN_DEPS + if_cuda([
+    deps = NN_DEPS + if_cuda_is_configured([
         ":reduction_ops",
         "@cub_archive//:cub",
-    ]),
+    ]) + if_rocm_is_configured([
+        ":reduction_ops",
+        "@rocprim_archive//:rocprim",
+    ])
 )
 
 tf_kernel_library(
@@ -3774,10 +3784,11 @@ tf_kernel_library(
 tf_kernel_library(
     name = "softmax_op",
     prefix = "softmax_op",
-    deps = NN_DEPS + if_cuda([
-        ":reduction_ops",
+    deps = NN_DEPS + [":reduction_ops",] + if_cuda([
         "@cub_archive//:cub",
-    ]),
+	]) + if_rocm([
+	"@rocprim_archive//:rocprim",
+	]),
 )
 
 tf_kernel_library(
@@ -3795,7 +3806,7 @@ tf_kernel_library(
 tf_kernel_library(
     name = "topk_op",
     prefix = "topk_op",
-    deps = NN_DEPS + if_cuda(["@cub_archive//:cub"]),
+    deps = NN_DEPS + if_cuda(["@cub_archive//:cub"]) + if_rocm(["@rocprim_archive//:rocprim"]),
 )
 
 tf_kernel_library(
@@ -3818,7 +3829,8 @@ tf_kernel_library(
         "//tensorflow/core:lib",
         "//tensorflow/core:lib_internal",
         "//third_party/eigen3",
-    ] + if_cuda(["@cub_archive//:cub"]),
+    ] + if_cuda(["@cub_archive//:cub"])
+    + if_rocm(["@rocprim_archive//:rocprim"]),
 )
 
 tf_kernel_library(
@@ -3829,7 +3841,8 @@ tf_kernel_library(
         "//tensorflow/core:lib",
         "//tensorflow/core:lib_internal",
         "//third_party/eigen3",
-    ] + if_cuda(["@cub_archive//:cub"]),
+    ] + if_cuda(["@cub_archive//:cub"])
+    + if_rocm(["@rocprim_archive//:rocprim"]),
 )
 
 tf_kernel_library(
@@ -3843,7 +3856,8 @@ tf_kernel_library(
         "//tensorflow/core:lib_internal",
         "//tensorflow/core:nn_grad",
         "//tensorflow/core:nn_ops_op_lib",
-    ] + if_cuda(["@cub_archive//:cub"]),
+    ] + if_cuda(["@cub_archive//:cub"])
+    + if_rocm(["@rocprim_archive//:rocprim"]),
 )
 
 tf_cuda_cc_test(
@@ -3912,7 +3926,7 @@ tf_kernel_library(
     name = "pooling_ops",
     srcs = [
         "avgpooling_op.cc",
-        "cudnn_pooling_gpu.cc",
+        "dnn_pooling_gpu.cc",
         "fractional_avg_pool_op.cc",
         "fractional_max_pool_op.cc",
         "fractional_pool_common.cc",
@@ -3922,7 +3936,7 @@ tf_kernel_library(
     ],
     hdrs = [
         "avgpooling_op.h",
-        "cudnn_pooling_gpu.h",
+        "dnn_pooling_gpu.h",
         "fractional_pool_common.h",
         "maxpooling_op.h",
         "pooling_ops_3d.h",
@@ -6900,6 +6914,26 @@ tf_kernel_library(
         "//tensorflow/core:framework",
         "//tensorflow/core:string_ops_op_lib",
         "@icu//:common",
+    ],
+)
+
+tf_kernel_library(
+    name = "gpu_fusion_ops",
+    prefix = "gpu_fusion_ops",
+    deps = [
+        ":bounds_check",
+        ":conv_2d",
+        ":conv_ops_gpu_hdrs",
+        ":image_resizer_state",
+        ":fill_functor",
+        ":ops_util",
+        ":gpu_util_hdrs",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:framework_internal",
+        "//tensorflow/core:lib",
+        "//tensorflow/core:lib_internal",
+        "//tensorflow/core:nn_ops_op_lib",
+        "//third_party/eigen3",
     ],
 )
 

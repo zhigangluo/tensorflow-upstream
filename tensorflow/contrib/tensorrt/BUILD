@@ -458,7 +458,7 @@ py_library(
     ],
 )
 
-cuda_py_test(
+cuda_py_tests(
     name = "trt_convert_test",
     srcs = ["python/trt_convert_test.py"],
     additional_deps = [
